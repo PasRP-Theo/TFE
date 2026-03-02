@@ -1,5 +1,3 @@
-Parfait. Voici ce que je vais construire :
-
 **Backend** — un service FFmpeg par caméra qui :
 - Convertit RTSP → HLS pour le live dans le navigateur
 - Enregistre simultanément en MP4 continu + segments de 10 min
