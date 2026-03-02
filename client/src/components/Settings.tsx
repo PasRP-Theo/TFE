@@ -51,6 +51,7 @@ function TabUsers() {
   const [newRole,  setNewRole]  = useState("user");
   const [error,    setError]    = useState("");
   const [success,  setSuccess]  = useState("");
+  const [confirmUser, setConfirmUser] = useState<User | null>(null); // ← ajoute
 
   async function fetchUsers() {
     try {
@@ -95,18 +96,22 @@ function TabUsers() {
     }
   }
 
-  async function toggleRole(user: User) {
-    const newRole = user.role === "admin" ? "user" : "admin";
+  async function confirmToggleRole() {
+    if (!confirmUser) return;
+    const newR = confirmUser.role === "admin" ? "user" : "admin";
     try {
-      const res  = await fetch(`${API}/api/users/${user.id}`, {
+      const res  = await fetch(`${API}/api/users/${confirmUser.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ role: newRole }),
+        body:    JSON.stringify({ role: newR }),
       });
       const data = await res.json();
-      setUsers(prev => prev.map(u => u.id === user.id ? data : u));
+      setUsers(prev => prev.map(u => u.id === confirmUser.id ? data : u));
+      setSuccess(`Rôle de ${confirmUser.email} changé en ${newR.toUpperCase()}`);
     } catch {
       setError("Erreur mise à jour rôle");
+    } finally {
+      setConfirmUser(null);
     }
   }
 
@@ -180,7 +185,7 @@ function TabUsers() {
                   <td className="sensor-td">
                     <button
                       className="sensor-status-btn"
-                      onClick={() => toggleRole(user)}
+                      onClick={() => setConfirmUser(user)}
                       title="Changer le rôle"
                     >
                       <span className={`sensor-badge ${user.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
@@ -203,6 +208,42 @@ function TabUsers() {
           </table>
         )}
       </div>
+      {confirmUser && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 300,
+          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(3px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setConfirmUser(null)}>
+          <div style={{
+            background: "var(--bg-elevated)", border: "1px solid var(--border)",
+            borderRadius: "4px", padding: "28px 32px", width: "380px",
+            fontFamily: "var(--font-mono)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: "var(--accent-blue)", marginBottom: "20px" }}>
+              MODIFIER LE RÔLE
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>
+              Utilisateur : <strong style={{ color: "var(--text-primary)" }}>{confirmUser.email}</strong>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
+              <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
+                <span className="sensor-badge-dot" />{confirmUser.role.toUpperCase()}
+              </span>
+              <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>→</span>
+              <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--ok" : "sensor-badge--alert"}`}>
+                <span className="sensor-badge-dot" />{confirmUser.role === "admin" ? "USER" : "ADMIN"}
+              </span>
+            </div>
+            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "20px" }}>
+              Cette action modifie les permissions de l'utilisateur immédiatement.
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button className="sensor-delete-btn" onClick={() => setConfirmUser(null)}>Annuler</button>
+              <button className="sensor-confirm-btn" onClick={confirmToggleRole}>Confirmer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
