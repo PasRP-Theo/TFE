@@ -6,6 +6,7 @@ import SensorList  from './components/SensorList';
 import CameraFeed  from './components/CameraFeed';
 import GroceryList from './components/Grocerylist';
 import Settings    from './components/Settings';
+import SystemInfo  from './components/SystemInfo';
 import './App.css';
 
 // ── Page 403 pour les accès refusés ───────────────────────
@@ -56,12 +57,12 @@ function AppShell() {
 
   const isAdmin = user.role === 'admin';
 
-  // L'onglet Paramètres n'apparaît que pour les admins
   const navLinks = [
-    { to: '/',         label: 'Capteurs',   show: true     },
-    { to: '/videos',   label: 'Caméras',    show: true     },
-    //{ to: '/courses',  label: 'Courses',    show: true     },
-    { to: '/settings', label: 'Paramètres', show: isAdmin  },
+    { to: '/',         label: 'Capteurs',   show: true    },
+    { to: '/videos',   label: 'Caméras',    show: true    },
+    { to: '/system',   label: 'Système',    show: isAdmin },
+    //{ to: '/courses',  label: 'Courses',    show: true    },
+    { to: '/settings', label: 'Paramètres', show: isAdmin },
   ].filter(l => l.show);
 
   return (
@@ -110,10 +111,13 @@ function AppShell() {
           <Route path="/"        element={<SensorList />} />
           <Route path="/videos"  element={<CameraFeed />} />
           {/* <Route path="/courses" element={<GroceryList />} />*/}
+          <Route path="/system"  element={
+            <AdminRoute><SystemInfo /></AdminRoute>
+          } />
           <Route path="/settings" element={
             <AdminRoute><Settings /></AdminRoute>
           } />
-          {/* Redirige / vers accueil si route inconnue */}
+          {/* Redirige vers accueil si route inconnue */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

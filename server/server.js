@@ -10,6 +10,7 @@ import { initDB, pool } from "./src/db/index.js";
 import sensorRoutes  from "./src/routes/sensors.js";
 import groceryRoutes from "./src/routes/grocery.js";
 import userRoutes    from "./src/routes/users.js";
+import systemRoutes from './src/routes/system.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -85,6 +86,7 @@ app.get("/auth/me", async (req, res) => {
 app.use("/api/sensors", sensorRoutes);
 app.use("/api/grocery", groceryRoutes);
 app.use("/api/users",   userRoutes);
+app.use('/api/system', systemRoutes);
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 const distPath = path.join(__dirname, "../client/dist");
