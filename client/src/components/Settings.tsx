@@ -119,7 +119,7 @@ function TabUsers() {
     <div>
       {/* Header section */}
       <div className="settings-section">
-        <div className="settings-section-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="settings-section-label settings-section-label--row">
           <span>UTILISATEURS ({users.length})</span>
           <button className="sensor-add-btn" onClick={() => { setShowAdd(v => !v); setError(""); setSuccess(""); }}>
             {showAdd ? "✕ Annuler" : "+ Ajouter"}
@@ -128,7 +128,7 @@ function TabUsers() {
 
         {/* Formulaire ajout */}
         {showAdd && (
-          <div className="sensor-add-form" style={{ marginBottom: "12px" }}>
+          <div className="sensor-add-form settings-add-form">
             <input
               className="sensor-input"
               type="email"
@@ -157,14 +157,14 @@ function TabUsers() {
         )}
 
         {/* Messages */}
-        {error   && <div style={{ color: "var(--accent-red)",   fontSize: "11px", padding: "6px 0", letterSpacing: "0.04em" }}>⚠ {error}</div>}
-        {success && <div style={{ color: "var(--accent-green)", fontSize: "11px", padding: "6px 0", letterSpacing: "0.04em" }}>✓ {success}</div>}
+        {error   && <div className="settings-msg settings-msg--error">⚠ {error}</div>}
+        {success && <div className="settings-msg settings-msg--success">✓ {success}</div>}
 
         {/* Liste des users */}
         {loading ? (
-          <div style={{ color: "var(--text-muted)", fontSize: "11px", padding: "12px 0" }}>Chargement...</div>
+          <div className="settings-loading">Chargement...</div>
         ) : (
-          <table className="sensor-table" style={{ marginTop: "8px" }}>
+          <table className="sensor-table settings-users-table">
             <thead>
               <tr>
                 <th className="sensor-th">EMAIL</th>
@@ -175,7 +175,7 @@ function TabUsers() {
             </thead>
             <tbody>
               {users.length === 0 && (
-                <tr><td colSpan={4} className="sensor-td" style={{ textAlign: "center", color: "var(--text-muted)" }}>Aucun utilisateur</td></tr>
+                <tr><td colSpan={4} className="sensor-td settings-users-empty">Aucun utilisateur</td></tr>
               )}
               {users.map((user, i) => (
                 <tr key={user.id} className={i % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
@@ -209,35 +209,27 @@ function TabUsers() {
         )}
       </div>
       {confirmUser && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 300,
-          background: "rgba(0,0,0,0.75)", backdropFilter: "blur(3px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }} onClick={() => setConfirmUser(null)}>
-          <div style={{
-            background: "var(--bg-elevated)", border: "1px solid var(--border)",
-            borderRadius: "4px", padding: "28px 32px", width: "380px",
-            fontFamily: "var(--font-mono)",
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: "var(--accent-blue)", marginBottom: "20px" }}>
+        <div className="settings-modal-overlay" onClick={() => setConfirmUser(null)}>
+          <div className="settings-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="settings-modal-title">
               MODIFIER LE RÔLE
             </div>
-            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "12px" }}>
-              Utilisateur : <strong style={{ color: "var(--text-primary)" }}>{confirmUser.email}</strong>
+            <div className="settings-modal-user">
+              Utilisateur : <strong>{confirmUser.email}</strong>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
+            <div className="settings-modal-roles">
               <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
                 <span className="sensor-badge-dot" />{confirmUser.role.toUpperCase()}
               </span>
-              <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>→</span>
+              <span className="settings-role-arrow">→</span>
               <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--ok" : "sensor-badge--alert"}`}>
                 <span className="sensor-badge-dot" />{confirmUser.role === "admin" ? "USER" : "ADMIN"}
               </span>
             </div>
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "20px" }}>
+            <div className="settings-modal-warning">
               Cette action modifie les permissions de l'utilisateur immédiatement.
             </div>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <div className="settings-modal-actions">
               <button className="sensor-delete-btn" onClick={() => setConfirmUser(null)}>Annuler</button>
               <button className="sensor-confirm-btn" onClick={confirmToggleRole}>Confirmer</button>
             </div>
@@ -260,7 +252,7 @@ export default function Settings() {
       </div>
 
       {/* Tabs */}
-      <div className="sensor-header-right" style={{ padding: "0 0 16px 0", gap: "8px", display: "flex" }}>
+      <div className="settings-tabs">
         <button className={`sensor-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>
           GÉNÉRAL
         </button>
