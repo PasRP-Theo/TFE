@@ -103,45 +103,22 @@ function GaugeBar({
 }) {
   const color = usageColor(pct);
   return (
-    <div style={{ marginBottom: "10px" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: "4px",
-        }}
-      >
-        <span style={{ fontSize: "11px", color: "#9ca3af", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+    <div className="sysinfo-gauge-wrap">
+      <div className="sysinfo-gauge-head">
+        <span className="sysinfo-gauge-label">
           {label}
         </span>
-        <span style={{ fontSize: "13px", fontFamily: "monospace", color: "#e2e8f0" }}>
+        <span className="sysinfo-gauge-value">
           {value}
-          {unit && <span style={{ color: "#6b7280", fontSize: "11px" }}> {unit}</span>}
-          {max && <span style={{ color: "#4b5563" }}> / {max}</span>}
+          {unit && <span> {unit}</span>}
+          {max && <span> / {max}</span>}
         </span>
       </div>
-      <div
-        style={{
-          height: "4px",
-          background: "#1e2a3a",
-          borderRadius: "2px",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${Math.min(pct, 100)}%`,
-            background: color,
-            borderRadius: "2px",
-            transition: "width 0.6s ease, background 0.3s ease",
-            boxShadow: `0 0 6px ${color}55`,
-          }}
-        />
+      <div className="sysinfo-gauge-track">
+        <div className="sysinfo-gauge-fill" style={{ width: `${Math.min(pct, 100)}%`, background: color, boxShadow: `0 0 6px ${color}55` }} />
       </div>
       {sublabel && (
-        <div style={{ fontSize: "10px", color: "#4b5563", marginTop: "3px" }}>
+        <div className="sysinfo-gauge-sub">
           {sublabel}
         </div>
       )}
@@ -161,37 +138,10 @@ function Card({
   accent?: string;
 }) {
   return (
-    <div
-      style={{
-        background: "#0d1117",
-        border: "1px solid #1e2a3a",
-        borderRadius: "6px",
-        padding: "16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "12px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          paddingBottom: "10px",
-          borderBottom: "1px solid #1e2a3a",
-        }}
-      >
-        <span style={{ fontSize: "16px" }}>{icon}</span>
-        <span
-          style={{
-            fontSize: "11px",
-            fontFamily: "monospace",
-            color: accent,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            fontWeight: 700,
-          }}
-        >
+    <div className="sysinfo-card-inline">
+      <div className="sysinfo-card-header-inline">
+        <span className="sysinfo-card-icon-inline">{icon}</span>
+        <span className="sysinfo-card-title-inline" style={{ color: accent }}>
           {title}
         </span>
       </div>
@@ -202,30 +152,11 @@ function Card({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "3px 0",
-        borderBottom: "1px solid #111827",
-      }}
-    >
-      <span style={{ fontSize: "11px", color: "#6b7280", letterSpacing: "0.04em" }}>
+    <div className="sysinfo-row-inline">
+      <span className="sysinfo-row-label-inline">
         {label}
       </span>
-      <span
-        style={{
-          fontSize: "12px",
-          fontFamily: "monospace",
-          color: "#e2e8f0",
-          textAlign: "right",
-          maxWidth: "60%",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <span className="sysinfo-row-value-inline">
         {value}
       </span>
     </div>
@@ -277,30 +208,9 @@ export default function SystemInfo() {
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "200px",
-          color: "#4b5563",
-          fontFamily: "monospace",
-          fontSize: "13px",
-          gap: "10px",
-        }}
-      >
-        <span
-          style={{
-            display: "inline-block",
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: "#60a5fa",
-            animation: "pulse-dot 1s infinite",
-          }}
-        />
+      <div className="sysinfo-loading">
+        <span className="sysinfo-loading-dot" />
         Récupération des infos système...
-        <style>{`@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.3;transform:scale(.7)} }`}</style>
       </div>
     );
   }
@@ -309,27 +219,12 @@ export default function SystemInfo() {
 
   if (error) {
     return (
-      <div
-        style={{
-          background: "#0d1117",
-          border: "1px solid #ef444444",
-          borderRadius: "6px",
-          padding: "16px",
-          color: "#ef4444",
-          fontFamily: "monospace",
-          fontSize: "13px",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-        }}
-      >
+      <div className="sysinfo-error">
         <span>⚠</span>
-        <div>
-          <div style={{ fontWeight: 700, marginBottom: "4px" }}>
-            Impossible de joindre /api/system/info
-          </div>
-          <div style={{ color: "#6b7280", fontSize: "11px" }}>{error}</div>
+        <div className="sysinfo-error-detail">
+          Impossible de joindre /api/system/info
         </div>
+        <div className="sysinfo-error-sub">{error}</div>
       </div>
     );
   }
@@ -341,24 +236,9 @@ export default function SystemInfo() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div
-      style={{
-        fontFamily: "'Segoe UI', sans-serif",
-        color: "#9ca3af",
-        display: "flex",
-        flexDirection: "column",
-        gap: "12px",
-      }}
-    >
+    <div className="sysinfo-main">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "0 2px",
-        }}
-      >
+      <div className="sysinfo-header">
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span
             style={{
@@ -383,20 +263,14 @@ export default function SystemInfo() {
           </span>
         </div>
         {lastUpdate && (
-          <span style={{ fontSize: "10px", fontFamily: "monospace", color: "#374151" }}>
+          <span className="sysinfo-header-time">
             {lastUpdate.toLocaleTimeString("fr-BE")}
           </span>
         )}
       </div>
 
       {/* Grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: "12px",
-        }}
-      >
+      <div className="sysinfo-grid">
         {/* CPU */}
         <Card title="Processeur" icon="⚙️" accent="#60a5fa">
           <InfoRow label="Modèle" value={`${cpu.manufacturer} ${cpu.model}`} />
@@ -528,15 +402,7 @@ export default function SystemInfo() {
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          fontSize: "10px",
-          fontFamily: "monospace",
-          color: "#1f2937",
-          textAlign: "right",
-          padding: "0 2px",
-        }}
-      >
+      <div className="sysinfo-footer">
         AUBEPINES — via Node.js systeminformation
       </div>
     </div>

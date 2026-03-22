@@ -421,6 +421,36 @@ a:focus-visible {
 }
 
 /* ══════════════════════════════════════════════════════════
+   ACCESS DENIED
+   ══════════════════════════════════════════════════════════ */
+.access-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  gap: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.access-denied-icon {
+  font-size: 32px;
+  color: var(--accent-red);
+}
+
+.access-denied-title {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--accent-red);
+}
+
+.access-denied-subtitle {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+/* ══════════════════════════════════════════════════════════
    SCROLLBAR
    ══════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar        { width: 6px; height: 6px; }
@@ -904,6 +934,10 @@ a:focus-visible {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
+}
+
+.sensor-badge--no-shrink {
+  flex-shrink: 0;
 }
 
 .sensor-badge-dot {
@@ -1545,9 +1579,89 @@ a:focus-visible {
   .app-logo-icon { display: none; }
 }
 
-/* ══════════════════════════════════════════════════════════
-   SYSTEM INFO
-   ══════════════════════════════════════════════════════════ */
+.sysinfo-main {
+  font-family: 'Segoe UI', sans-serif;
+  color: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sysinfo-card-inline {
+  background: #0d1117;
+  border: 1px solid #1e2a3a;
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sysinfo-card-header-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e2a3a;
+}
+
+.sysinfo-card-icon-inline { font-size: 16px; }
+
+.sysinfo-card-title-inline {
+  font-size: 11px;
+  font-family: monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.sysinfo-row-inline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: 1px solid #111827;
+}
+
+.sysinfo-row-label-inline {
+  font-size: 11px;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+}
+
+.sysinfo-row-value-inline {
+  font-size: 12px;
+  font-family: monospace;
+  color: #e2e8f0;
+  text-align: right;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sysinfo-error-inline {
+  background: #0d1117;
+  border: 1px solid #ef444444;
+  border-radius: 6px;
+  padding: 16px;
+  color: #ef4444;
+  font-family: monospace;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sysinfo-error-detail {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.sysinfo-error-sub {
+  color: #6b7280;
+  font-size: 11px;
+}
 .sysinfo-page {
   font-family: var(--font-ui);
   color: var(--text-muted);
@@ -1676,24 +1790,24 @@ a:focus-visible {
 }
 
 .sysinfo-gauge-label {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
+  font-size: 11px;
+  color: #9ca3af;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .sysinfo-gauge-value {
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
+  font-size: 13px;
+  color: #e2e8f0;
 }
 
-.sysinfo-gauge-value span { color: var(--text-muted); font-size: var(--text-xs); }
+.sysinfo-gauge-value span { color: #6b7280; font-size: 11px; }
 
 .sysinfo-gauge-track {
-  height: 5px;
-  background: var(--border-subtle);
-  border-radius: 3px;
+  height: 4px;
+  background: #1e2a3a;
+  border-radius: 2px;
   overflow: hidden;
 }
 
@@ -2447,8 +2561,8 @@ a:focus-visible {
 /* GroceryList — erreur API */
 .grocery-api-error {
   color: var(--accent-red);
-  font-size: var(--text-xs);
-  padding: 8px 20px;
+  font-size: 11px;
+  padding: 8px 16px;
   letter-spacing: 0.04em;
 }
 

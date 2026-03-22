@@ -201,7 +201,7 @@ export default function SensorList() {
               </div>
               {alerts.map(a => (
                 <div key={a.id} className="sensor-history-row">
-                  <span className="sensor-badge sensor-badge--alert" style={{ flexShrink: 0 }}>
+                  <span className="sensor-badge sensor-badge--alert sensor-badge--no-shrink">
                     <span className="sensor-badge-dot" />ALERTE
                   </span>
                   <span className="sensor-history-name">{a.sensorName}</span>

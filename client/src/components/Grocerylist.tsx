@@ -197,7 +197,7 @@ export default function GroceryList() {
 
       {/* Erreur API */}
       {apiError && (
-        <div style={{ color: "var(--accent-red)", fontSize: "11px", padding: "8px 16px", letterSpacing: "0.04em" }}>
+        <div className="grocery-api-error">
           ⚠ {apiError}
         </div>
       )}

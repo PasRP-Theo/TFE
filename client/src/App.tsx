@@ -12,14 +12,10 @@ import './App.css';
 // ── Page 403 pour les accès refusés ───────────────────────
 function AccessDenied() {
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '60vh', gap: '12px',
-      fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
-    }}>
-      <span style={{ fontSize: '32px', color: 'var(--accent-red)' }}>⊘</span>
-      <span style={{ fontSize: '11px', letterSpacing: '0.2em', color: 'var(--accent-red)' }}>ACCÈS REFUSÉ</span>
-      <span style={{ fontSize: '10px', letterSpacing: '0.1em' }}>Vous n'avez pas les permissions nécessaires.</span>
+    <div className="access-denied">
+      <span className="access-denied-icon">⊘</span>
+      <span className="access-denied-title">ACCÈS REFUSÉ</span>
+      <span className="access-denied-subtitle">Vous n'avez pas les permissions nécessaires.</span>
     </div>
   );
 }
