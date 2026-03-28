@@ -54,6 +54,15 @@ export async function initDB() {
         created_at TIMESTAMP   DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS cameras (
+        id         SERIAL PRIMARY KEY,
+        name       VARCHAR(100) NOT NULL,
+        rtsp_url   VARCHAR(500) NOT NULL,
+        location   VARCHAR(100) DEFAULT '',
+        active     BOOLEAN      DEFAULT true,
+        created_at TIMESTAMP    DEFAULT NOW()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_readings_sensor
         ON sensor_readings(sensor_id, recorded_at DESC);
     `);

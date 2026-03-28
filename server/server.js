@@ -1,20 +1,23 @@
 import "dotenv/config";
-import express   from "express";
-import cors      from "cors";
-import path      from "path";
+import express         from "express";
+import cors            from "cors";
+import path            from "path";
 import { fileURLToPath } from "url";
-import bcrypt    from "bcryptjs";
-import jwt       from "jsonwebtoken";
-import rateLimit from "express-rate-limit";
-import { initDB, pool } from "./src/db/index.js";
-import sensorRoutes  from "./src/routes/sensors.js";
-import groceryRoutes from "./src/routes/grocery.js";
-import userRoutes    from "./src/routes/users.js";
-import systemRoutes from './src/routes/system.js';
+import bcrypt          from "bcryptjs";
+import jwt             from "jsonwebtoken";
+import rateLimit       from "express-rate-limit";
+import { initDB, pool }      from "./src/db/index.js";
+import sensorRoutes          from "./src/routes/sensors.js";
+import groceryRoutes         from "./src/routes/grocery.js";
+import userRoutes            from "./src/routes/users.js";
+import systemRoutes          from "./src/routes/system.js";
+import cameraRoutes          from "./src/routes/cameras.js";
+import { startCamera, stopAllCameras } from "./src/camera/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// ── CORS ───────────────────────────────────────────────────
 app.use(cors({
   origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
   credentials: true,
@@ -24,6 +27,7 @@ app.use(cors({
 app.options("/{*path}", cors());
 app.use(express.json());
 
+// ── Rate limiting ──────────────────────────────────────────
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 10,
   message: { error: "Trop de tentatives, reessayez dans 15 minutes." },
@@ -37,6 +41,7 @@ const apiLimiter = rateLimit({
 });
 app.use("/api/", apiLimiter);
 
+// ── Auth ───────────────────────────────────────────────────
 app.post("/auth/register", async (req, res) => {
   const { email, password, role = "user" } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
@@ -83,22 +88,43 @@ app.get("/auth/me", async (req, res) => {
   } catch { res.status(401).json({ error: "Token invalide ou expire" }); }
 });
 
+// ── HLS static (flux vidéo live) ──────────────────────────
+const hlsDir = process.env.HLS_DIR || path.join(__dirname, '..', 'hls');
+app.use('/hls', express.static(hlsDir));
+
+// ── Routes API ─────────────────────────────────────────────
 app.use("/api/sensors", sensorRoutes);
 app.use("/api/grocery", groceryRoutes);
 app.use("/api/users",   userRoutes);
-app.use('/api/system', systemRoutes);
+app.use("/api/system",  systemRoutes);
+app.use("/api/cameras", cameraRoutes);
+
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
+// ── Frontend React (build) ────────────────────────────────
 const distPath = path.join(__dirname, "../client/dist");
 app.use(express.static(distPath));
-app.get("/{*path}", (_, res) => res.sendFile(path.join(distPath, "index.html")));
+app.get("/*", (_, res) => res.sendFile(path.join(distPath, "index.html")));
 
+// ── Démarrage ──────────────────────────────────────────────
 async function start() {
   await initDB();
+
+  // Auto-démarrer les caméras actives en base
+  try {
+    const { rows } = await pool.query("SELECT * FROM cameras WHERE active = true");
+    if (rows.length > 0) {
+      console.log(`[CAM] Auto-démarrage de ${rows.length} caméra(s)…`);
+      rows.forEach(cam => startCamera(cam));
+    }
+  } catch (e) {
+    console.warn('[CAM] Pas de caméras à démarrer:', e.message);
+  }
+
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
 }
 
 start().catch(err => { console.error(err); process.exit(1); });
-process.on("SIGINT",  () => process.exit(0));
-process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT",  () => { stopAllCameras(); process.exit(0); });
+process.on("SIGTERM", () => { stopAllCameras(); process.exit(0); });
