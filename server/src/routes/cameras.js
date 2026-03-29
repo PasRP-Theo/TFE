@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { pool }   from '../db/index.js';
+import path from 'path';
+import { existsSync, promises as fs } from 'fs';
+import { pool } from '../db/index.js';
 import {
   startCamera, pauseCamera, resumeCamera,
   stopCamera,  getState,    getAllStates,
   detectCameraStreamUrl, scanLocalNetworkForCameraStreams,
+  RECORDINGS_DIR,
 } from '../camera/manager.js';
 
 const router = Router();
@@ -45,7 +48,7 @@ router.get('/discover', async (req, res) => {
   req.on('close', () => abortController.abort());
   try {
     if (host) {
-      const streamUrl = await detectCameraStreamUrl(host, abortController.signal);
+      const streamUrl = await detectCameraStreamUrl(host, abortController.signal, { probeRtsp: true });
       if (!streamUrl) return res.status(404).json({ error: 'Aucun flux trouvé pour cette adresse' });
       return res.json({ streamUrl });
     }
@@ -111,6 +114,34 @@ router.post('/:id/stop', (req, res) => {
 // GET /api/cameras/:id/state
 router.get('/:id/state', (req, res) => {
   res.json(getState(req.params.id));
+});
+
+// GET /api/cameras/:id/history
+router.get('/:id/history', async (req, res) => {
+  const cameraId = String(req.params.id);
+  const camDir = path.join(RECORDINGS_DIR, cameraId);
+  if (!existsSync(camDir)) return res.json([]);
+
+  try {
+    const files = await fs.readdir(camDir);
+    const recordings = [];
+    for (const filename of files) {
+      const filePath = path.join(camDir, filename);
+      const stats = await fs.stat(filePath);
+      if (!stats.isFile()) continue;
+      recordings.push({
+        filename,
+        url: `/recordings/${cameraId}/${encodeURIComponent(filename)}`,
+        createdAt: stats.mtime.toISOString(),
+        size: stats.size,
+      });
+    }
+    recordings.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    res.json(recordings);
+  } catch (err) {
+    console.error('[CAM HISTORY]', err);
+    res.status(500).json({ error: 'Impossible de lire l’historique' });
+  }
 });
 
 export default router;

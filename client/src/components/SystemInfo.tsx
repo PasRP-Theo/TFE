@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ interface OsInfo {
   release: string;
   arch: string;
   hostname: string;
-  uptime: number; // seconds
+  uptime: number;
 }
 
 interface SystemInfoData {
@@ -105,9 +105,7 @@ function GaugeBar({
   return (
     <div className="sysinfo-gauge-wrap">
       <div className="sysinfo-gauge-head">
-        <span className="sysinfo-gauge-label">
-          {label}
-        </span>
+        <span className="sysinfo-gauge-label">{label}</span>
         <span className="sysinfo-gauge-value">
           {value}
           {unit && <span> {unit}</span>}
@@ -115,13 +113,16 @@ function GaugeBar({
         </span>
       </div>
       <div className="sysinfo-gauge-track">
-        <div className="sysinfo-gauge-fill" style={{ width: `${Math.min(pct, 100)}%`, background: color, boxShadow: `0 0 6px ${color}55` }} />
+        <div
+          className="sysinfo-gauge-fill"
+          style={{
+            width: `${Math.min(pct, 100)}%`,
+            background: color,
+            boxShadow: `0 0 6px ${color}55`,
+          }}
+        />
       </div>
-      {sublabel && (
-        <div className="sysinfo-gauge-sub">
-          {sublabel}
-        </div>
-      )}
+      {sublabel && <div className="sysinfo-gauge-sub">{sublabel}</div>}
     </div>
   );
 }
@@ -134,7 +135,7 @@ function Card({
 }: {
   title: string;
   icon: string;
-  children: React.ReactNode;
+  children: ReactNode;
   accent?: string;
 }) {
   return (
@@ -153,19 +154,15 @@ function Card({
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="sysinfo-row-inline">
-      <span className="sysinfo-row-label-inline">
-        {label}
-      </span>
-      <span className="sysinfo-row-value-inline">
-        {value}
-      </span>
+      <span className="sysinfo-row-label-inline">{label}</span>
+      <span className="sysinfo-row-value-inline">{value}</span>
     </div>
   );
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-const POLL_INTERVAL = 5000; // 5 secondes
+const POLL_INTERVAL = 5000;
 
 export default function SystemInfo() {
   const [data, setData] = useState<SystemInfoData | null>(null);
@@ -187,8 +184,6 @@ export default function SystemInfo() {
       setData(json);
       setError(null);
       setLastUpdate(new Date());
-
-      // Pulse animation on update
       setPulse(true);
       setTimeout(() => setPulse(false), 600);
     } catch (err) {
@@ -204,8 +199,6 @@ export default function SystemInfo() {
     return () => clearInterval(interval);
   }, [fetchInfo]);
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <div className="sysinfo-loading">
@@ -215,15 +208,11 @@ export default function SystemInfo() {
     );
   }
 
-  // ── Error ────────────────────────────────────────────────────────────────────
-
   if (error) {
     return (
       <div className="sysinfo-error">
         <span>⚠</span>
-        <div className="sysinfo-error-detail">
-          Impossible de joindre /api/system/info
-        </div>
+        <div className="sysinfo-error-detail">Impossible de joindre /api/system/info</div>
         <div className="sysinfo-error-sub">{error}</div>
       </div>
     );
@@ -231,13 +220,10 @@ export default function SystemInfo() {
 
   if (!data) return null;
 
-  const { cpu, ram, disks, network, os } = data;
-
-  // ── Render ───────────────────────────────────────────────────────────────────
+  const { cpu, ram, disks, network, os, battery } = data;
 
   return (
     <div className="sysinfo-main">
-      {/* Header */}
       <div className="sysinfo-header">
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span
@@ -269,18 +255,13 @@ export default function SystemInfo() {
         )}
       </div>
 
-      {/* Grid */}
       <div className="sysinfo-grid">
-        {/* CPU */}
         <Card title="Processeur" icon="⚙️" accent="#60a5fa">
           <InfoRow label="Modèle" value={`${cpu.manufacturer} ${cpu.model}`} />
           <InfoRow label="Cœurs" value={`${cpu.physicalCores} physiques / ${cpu.cores} logiques`} />
           <InfoRow label="Fréquence" value={`${cpu.speedGHz.toFixed(2)} GHz`} />
           {cpu.temperature !== null && (
-            <InfoRow
-              label="Température"
-              value={`${cpu.temperature.toFixed(1)} °C`}
-            />
+            <InfoRow label="Température" value={`${cpu.temperature.toFixed(1)} °C`} />
           )}
           <div style={{ marginTop: "6px" }}>
             <GaugeBar
@@ -292,7 +273,6 @@ export default function SystemInfo() {
           </div>
         </Card>
 
-        {/* RAM */}
         <Card title="Mémoire RAM" icon="🧠" accent="#a78bfa">
           <InfoRow label="Total" value={`${ram.totalGB.toFixed(1)} Go`} />
           <InfoRow label="Utilisée" value={`${ram.usedGB.toFixed(1)} Go`} />
@@ -307,39 +287,36 @@ export default function SystemInfo() {
           </div>
         </Card>
 
-        {/* Batterie */}
-        {data.battery.hasBattery && (() => {
-        const b = data.battery;
-        const pct = b.percent ?? 0;
-        const color = pct <= 15 ? "#ef4444" : pct <= 40 ? "#f59e0b" : "#22c55e";
-        const icon = b.isCharging ? "⚡" : pct <= 15 ? "🪫" : "🔋";
-        return (
+        {battery.hasBattery && (() => {
+          const pct = battery.percent ?? 0;
+          const color = pct <= 15 ? "#ef4444" : pct <= 40 ? "#f59e0b" : "#22c55e";
+          const icon = battery.isCharging ? "⚡" : pct <= 15 ? "🪫" : "🔋";
+          return (
             <Card title="Batterie" icon={icon} accent={color}>
-            <GaugeBar
+              <GaugeBar
                 label="Charge"
                 value={`${pct.toFixed(0)}%`}
                 pct={pct}
                 sublabel={
-                b.isCharging
+                  battery.isCharging
                     ? "En charge"
-                    : b.timeRemaining
-                    ? `${Math.floor(b.timeRemaining / 60)}h${String(b.timeRemaining % 60).padStart(2, "0")} restantes`
+                    : battery.timeRemaining
+                    ? `${Math.floor(battery.timeRemaining / 60)}h${String(battery.timeRemaining % 60).padStart(2, "0")} restantes`
                     : "Sur batterie"
                 }
-            />
-            {b.model     != null && <InfoRow label="Modèle"  value={b.model} />}
-            {b.type      != null && <InfoRow label="Type"    value={b.type} />}
-            {b.voltage   != null && <InfoRow label="Tension" value={`${b.voltage.toFixed(2)} V`} />}
-            {b.cycleCount != null && <InfoRow label="Cycles" value={`${b.cycleCount}`} />}
-            <InfoRow
+              />
+              {battery.model != null && <InfoRow label="Modèle" value={battery.model} />}
+              {battery.type != null && <InfoRow label="Type" value={battery.type} />}
+              {battery.voltage != null && <InfoRow label="Tension" value={`${battery.voltage.toFixed(2)} V`} />}
+              {battery.cycleCount != null && <InfoRow label="Cycles" value={`${battery.cycleCount}`} />}
+              <InfoRow
                 label="État"
-                value={b.isCharging ? "🟢 En charge" : "🔵 Sur batterie"}
-            />
+                value={battery.isCharging ? "🟢 En charge" : "🔵 Sur batterie"}
+              />
             </Card>
-        );
+          );
         })()}
 
-        {/* Disques */}
         <Card title="Stockage" icon="💾" accent="#34d399">
           {disks.length === 0 ? (
             <span style={{ fontSize: "12px", color: "#4b5563" }}>
@@ -365,7 +342,6 @@ export default function SystemInfo() {
           )}
         </Card>
 
-        {/* OS + Réseau */}
         <Card title="Système & Réseau" icon="🖥️" accent="#fb923c">
           <InfoRow label="OS" value={`${os.distro} ${os.release}`} />
           <InfoRow label="Architecture" value={os.arch} />
@@ -391,9 +367,7 @@ export default function SystemInfo() {
                 <div key={i}>
                   <InfoRow label={iface.iface} value={iface.ip4 || "—"} />
                   <InfoRow label="MAC" value={iface.mac} />
-                  {iface.speed && (
-                    <InfoRow label="Débit" value={`${iface.speed} Mbps`} />
-                  )}
+                  {iface.speed != null && <InfoRow label="Débit" value={`${iface.speed} Mbps`} />}
                 </div>
               ))}
             </>
@@ -401,10 +375,7 @@ export default function SystemInfo() {
         </Card>
       </div>
 
-      {/* Footer */}
-      <div className="sysinfo-footer">
-        AUBEPINES — via Node.js systeminformation
-      </div>
+      <div className="sysinfo-footer">AUBEPINES — via Node.js systeminformation</div>
     </div>
   );
 }

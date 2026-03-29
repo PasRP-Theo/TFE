@@ -12,7 +12,7 @@ import groceryRoutes         from "./src/routes/grocery.js";
 import userRoutes            from "./src/routes/users.js";
 import systemRoutes          from "./src/routes/system.js";
 import cameraRoutes          from "./src/routes/cameras.js";
-import { startCamera, stopAllCameras } from "./src/camera/manager.js";
+import { startCamera, stopAllCameras, cleanupOldRecordings } from "./src/camera/manager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -91,6 +91,8 @@ app.get("/auth/me", async (req, res) => {
 // ── HLS static (flux vidéo live) ──────────────────────────
 const hlsDir = process.env.HLS_DIR || path.join(__dirname, '..', 'hls');
 app.use('/hls', express.static(hlsDir));
+const recordingsDir = process.env.RECORDINGS_DIR || path.join(__dirname, '..', 'recordings');
+app.use('/recordings', express.static(recordingsDir));
 
 // ── Routes API ─────────────────────────────────────────────
 app.use("/api/sensors", sensorRoutes);
@@ -120,6 +122,9 @@ async function start() {
   } catch (e) {
     console.warn('[CAM] Pas de caméras à démarrer:', e.message);
   }
+
+  cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err));
+  setInterval(() => cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err)), 24 * 60 * 60 * 1000);
 
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));

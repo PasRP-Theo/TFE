@@ -1,5 +1,5 @@
 import { spawn }                  from 'child_process';
-import { existsSync, mkdirSync }  from 'fs';
+import { existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import os                         from 'os';
 import path                       from 'path';
 import { fileURLToPath }          from 'url';
@@ -8,19 +8,23 @@ import ffmpegPath                 from 'ffmpeg-static';
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
-const RECORDINGS_DIR  = process.env.RECORDINGS_DIR || path.join(PROJECT_ROOT, 'recordings');
+export const RECORDINGS_DIR  = process.env.RECORDINGS_DIR || path.join(PROJECT_ROOT, 'recordings');
 const HLS_DIR         = process.env.HLS_DIR        || path.join(PROJECT_ROOT, 'hls');
 const FFMPEG_BIN      = process.env.FFMPEG_PATH || ffmpegPath || 'ffmpeg';
+const { readdir, stat, unlink, rm } = fsPromises;
 const RTSP_TRANSPORT  = process.env.RTSP_TRANSPORT || 'tcp';
 const HTTP_STREAM_CANDIDATES = [
   '/stream', '/mjpeg', '/mjpeg/1', '/mjpeg/2', '/video', '/video.mjpg',
   '/capture', '/shot.jpg', '/jpg', '/jpeg', '/cam', '/axis-cgi/mjpg/video.cgi',
 ];
 const HTTP_SCAN_PORTS = ['', ':81', ':8080', ':8000'];
+const RTSP_SCAN_PORTS = [':554', ':8554'];
+const RTSP_STREAM_CANDIDATES = ['/stream', '/live', '/h264', '/mpeg4', '/video', '/video.sdp'];
+const RTSP_TEST_TIMEOUT = Number(process.env.CAMERA_RTSP_TIMEOUT || 1000);
 
-const SCAN_CONCURRENCY = Number(process.env.CAMERA_SCAN_CONCURRENCY || 15);
+const SCAN_CONCURRENCY = Number(process.env.CAMERA_SCAN_CONCURRENCY || 30);
 const SCAN_STOP_AFTER  = Number(process.env.CAMERA_SCAN_STOP_AFTER  || 3);
-const HTTP_TEST_TIMEOUT = Number(process.env.CAMERA_SCAN_TIMEOUT || 1000);
+const HTTP_TEST_TIMEOUT = Number(process.env.CAMERA_SCAN_TIMEOUT || 700);
 
 function isPrivateIpv4(address) {
   return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(address);
@@ -98,12 +102,12 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
       active += 1;
 
       (async () => {
-        let streamUrl = await detectCameraStreamUrl(host, signal);
-        if (!streamUrl) {
-          for (const port of HTTP_SCAN_PORTS.slice(1)) {
-            streamUrl = await detectCameraStreamUrl(`${host}${port}`, signal);
-            if (streamUrl) break;
-          }
+        let streamUrl = null;
+        const hostPorts = ['', ...HTTP_SCAN_PORTS.slice(1), ...RTSP_SCAN_PORTS];
+        for (const port of hostPorts) {
+          const target = `${host}${port}`;
+          streamUrl = await detectCameraStreamUrl(target, signal, { probeRtsp: true });
+          if (streamUrl) break;
         }
         return streamUrl;
       })().then(streamUrl => {
@@ -177,7 +181,47 @@ async function testHttpStreamUrl(candidate, signal) {
   }
 }
 
-export async function detectCameraStreamUrl(sourceUrl, signal) {
+function testRtspStreamUrl(candidate, signal) {
+  return new Promise((resolve) => {
+    const args = [
+      '-rtsp_transport', 'tcp',
+      '-stimeout', String(RTSP_TEST_TIMEOUT * 1000),
+      '-i', candidate,
+      '-t', '1',
+      '-f', 'null',
+      '-',
+    ];
+    const proc = spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'ignore', 'ignore'] });
+    let settled = false;
+
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      proc.kill('SIGKILL');
+      resolve(false);
+    };
+
+    const timeout = setTimeout(cleanup, RTSP_TEST_TIMEOUT);
+    signal?.addEventListener('abort', cleanup, { once: true });
+
+    proc.on('error', () => {
+      clearTimeout(timeout);
+      if (!settled) {
+        settled = true;
+        resolve(false);
+      }
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      if (settled) return;
+      settled = true;
+      resolve(code === 0);
+    });
+  });
+}
+
+export async function detectCameraStreamUrl(sourceUrl, signal, { probeRtsp = false } = {}) {
   if (typeof fetch !== 'function') return null;
   let normalized = String(sourceUrl || '').trim();
   if (!normalized) return null;
@@ -190,6 +234,10 @@ export async function detectCameraStreamUrl(sourceUrl, signal) {
     return null;
   }
 
+  if (url.protocol === 'rtsp:') {
+    return url.href;
+  }
+
   const directResult = await testHttpStreamUrl(url.href, signal);
   if (directResult === true) return url.href;
   if (typeof directResult === 'string') return directResult;
@@ -200,6 +248,15 @@ export async function detectCameraStreamUrl(sourceUrl, signal) {
     const result = await testHttpStreamUrl(candidate, signal);
     if (result === true) return candidate;
     if (typeof result === 'string') return result;
+  }
+
+  if (probeRtsp) {
+    const rtspBase = `rtsp://${url.host}`;
+    const rtspCandidates = [rtspBase, ...RTSP_STREAM_CANDIDATES.map(path => new URL(path, rtspBase).href)];
+    for (const candidate of rtspCandidates) {
+      const ok = await testRtspStreamUrl(candidate, signal);
+      if (ok) return candidate;
+    }
   }
 
   return null;
@@ -341,6 +398,34 @@ export function stopCamera(cameraId) {
   broadcast(id);
   console.log(`[CAM ${id}] Arrêtée`);
   return true;
+}
+
+export async function cleanupOldRecordings({ retentionDays = Number(process.env.RECORDINGS_RETENTION_DAYS || 30) } = {}) {
+  const days = Number(retentionDays);
+  if (!Number.isFinite(days) || days <= 0) return;
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  if (!existsSync(RECORDINGS_DIR)) return;
+
+  const cameraDirs = await readdir(RECORDINGS_DIR, { withFileTypes: true });
+  for (const cameraDir of cameraDirs) {
+    if (!cameraDir.isDirectory()) continue;
+    const camPath = path.join(RECORDINGS_DIR, cameraDir.name);
+    const files = await readdir(camPath, { withFileTypes: true });
+    for (const file of files) {
+      if (!file.isFile()) continue;
+      const filePath = path.join(camPath, file.name);
+      try {
+        const fileStats = await stat(filePath);
+        if (fileStats.mtimeMs < cutoff) await unlink(filePath);
+      } catch (err) {
+        console.error(`[REC CLEANUP] impossible de supprimer ${filePath}: ${err.message}`);
+      }
+    }
+    const remaining = await readdir(camPath);
+    if (remaining.length === 0) {
+      await rm(camPath, { recursive: true, force: true });
+    }
+  }
 }
 
 export function stopAllCameras() {

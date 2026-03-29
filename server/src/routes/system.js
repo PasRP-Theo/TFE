@@ -1,121 +1,92 @@
-// server/src/routes/system.js
-// Prérequis : npm install systeminformation
+import { Router } from 'express';
+import si from 'systeminformation';
 
-import si      from 'systeminformation';
-import express from 'express';
-import jwt     from 'jsonwebtoken';
+const router = Router();
 
-const router = express.Router();
-
-// ── Middleware JWT ─────────────────────────────────────────
-function auth(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer '))
-    return res.status(401).json({ error: 'Non authentifié' });
+router.get('/info', async (req, res) => {
   try {
-    req.user = jwt.verify(
-      header.slice(7),
-      process.env.JWT_SECRET || 'changeme_in_production'
-    );
-    next();
-  } catch {
-    res.status(401).json({ error: 'Token invalide ou expiré' });
-  }
-}
+    const [cpuData, loadData, tempData, memData, osData, fsData, netIfaces, batteryData] = await Promise.all([
+      si.cpu(),
+      si.currentLoad(),
+      si.cpuTemperature(),
+      si.mem(),
+      si.osInfo(),
+      si.fsSize(),
+      si.networkInterfaces(),
+      si.battery(),
+    ]);
 
-// ── GET /api/system/info ───────────────────────────────────
-router.get('/info', auth, async (req, res) => {
-  try {
-    const [cpuData, cpuLoad, mem, fsSize, networkIfaces, osInfo, time, batteryData] =
-      await Promise.all([
-        si.cpu(),
-        si.currentLoad(),
-        si.mem(),
-        si.fsSize(),
-        si.networkInterfaces(),
-        si.osInfo(),
-        si.time(),
-        si.battery(),          // ← ajout batterie
-      ]);
+    const cpu = {
+      model: cpuData.brand || cpuData.model || 'Inconnu',
+      manufacturer: cpuData.manufacturer || 'Inconnu',
+      cores: cpuData.cores ?? 0,
+      physicalCores: cpuData.physicalCores ?? cpuData.cores ?? 0,
+      speedGHz: Number(cpuData.speed) || 0,
+      usagePercent: Number(loadData.currentLoad) || 0,
+      temperature: tempData.main != null ? Number(tempData.main) : null,
+    };
 
-    // Température (peut être indisponible sur Windows)
-    let cpuTemp = null;
-    try {
-      const tempData = await si.cpuTemperature();
-      cpuTemp = tempData.main > 0 ? tempData.main : null;
-    } catch {
-      cpuTemp = null;
-    }
+    const availableMemory = memData.available ?? memData.free ?? 0;
+    const totalMemory = memData.total || 0;
+    const usedMemory = Math.max(totalMemory - availableMemory, 0);
 
-    const toGB = (bytes) => bytes / 1024 / 1024 / 1024;
+    const ram = {
+      totalGB: Number(totalMemory / 1024 / 1024 / 1024),
+      usedGB: Number(usedMemory / 1024 / 1024 / 1024),
+      freeGB: Number(availableMemory / 1024 / 1024 / 1024),
+      usagePercent: totalMemory ? Number((usedMemory / totalMemory) * 100) : 0,
+    };
 
-    const EXCLUDED_FS = ['tmpfs', 'devtmpfs', 'udev', 'overlay', 'squashfs', 'efivarfs'];
-    const disks = fsSize
-      .filter(fs => fs.size > 0 && !EXCLUDED_FS.includes(fs.type))
-      .map(fs => ({
-        mount:        fs.mount,
-        fs:           fs.type,
-        totalGB:      toGB(fs.size),
-        usedGB:       toGB(fs.used),
-        freeGB:       toGB(fs.available),
-        usagePercent: fs.use,
+    const disks = (fsData || []).map((disk) => ({
+      mount: disk.mount || disk.mountpoint || '—',
+      fs: disk.fs || disk.type || '—',
+      totalGB: Number((disk.size || 0) / 1024 / 1024 / 1024),
+      usedGB: Number((disk.used || 0) / 1024 / 1024 / 1024),
+      freeGB: Number(((disk.size || 0) - (disk.used || 0)) / 1024 / 1024 / 1024),
+      usagePercent: Number(disk.use || 0),
+    }));
+
+    const network = (netIfaces || [])
+      .filter((iface) => iface.ip4 && !iface.internal)
+      .map((iface) => ({
+        iface: iface.iface || 'unknown',
+        ip4: iface.ip4 || '',
+        mac: iface.mac || '',
+        speed: iface.speed != null ? Number(iface.speed) : null,
       }));
 
-    const ifaces = Array.isArray(networkIfaces) ? networkIfaces : [networkIfaces];
-    const network = ifaces
-      .filter(i => i.ip4 && i.ip4 !== '127.0.0.1' && !i.internal)
-      .map(i => ({
-        iface: i.iface,
-        ip4:   i.ip4,
-        mac:   i.mac,
-        speed: i.speed > 0 ? i.speed : null,
-      }));
+    const battery = {
+      hasBattery: batteryData.hasbattery === true || batteryData.hasBattery === true,
+      percent: batteryData.percent != null ? Number(batteryData.percent) : undefined,
+      isCharging: batteryData.ischarging === true || batteryData.isCharging === true,
+      timeRemaining: batteryData.timeremaining != null ? Number(batteryData.timeremaining) : batteryData.timeRemaining != null ? Number(batteryData.timeRemaining) : null,
+      model: batteryData.model || null,
+      type: batteryData.type || null,
+      voltage: batteryData.voltage != null ? Number(batteryData.voltage) : null,
+      cycleCount: batteryData.cyclecount != null ? Number(batteryData.cyclecount) : batteryData.cycleCount != null ? Number(batteryData.cycleCount) : null,
+    };
 
-    // Batterie — hasBattery=false sur PC fixe ou VM
-    const battery = batteryData.hasBattery ? {
-      hasBattery:    true,
-      percent:       batteryData.percent,
-      isCharging:    batteryData.isCharging,
-      timeRemaining: batteryData.timeRemaining ?? null,
-      model:         batteryData.model   || null,
-      type:          batteryData.type    || null,
-      voltage:       batteryData.voltage > 0 ? batteryData.voltage : null,
-      cycleCount:    batteryData.cycleCount > 0 ? batteryData.cycleCount : null,
-    } : { hasBattery: false };
+    const os = {
+      platform: osData.platform || 'unknown',
+      distro: osData.distro || 'unknown',
+      release: osData.release || 'unknown',
+      arch: osData.arch || 'unknown',
+      hostname: osData.hostname || 'unknown',
+      uptime: Number(osData.uptime) || 0,
+    };
 
     res.json({
-      cpu: {
-        model:         cpuData.brand,
-        manufacturer:  cpuData.manufacturer,
-        cores:         cpuData.cores,
-        physicalCores: cpuData.physicalCores,
-        speedGHz:      cpuData.speed,
-        usagePercent:  Math.round(cpuLoad.currentLoad * 10) / 10,
-        temperature:   cpuTemp,
-      },
-      ram: {
-        totalGB:      toGB(mem.total),
-        usedGB:       toGB(mem.used),
-        freeGB:       toGB(mem.free),
-        usagePercent: Math.round((mem.used / mem.total) * 1000) / 10,
-      },
+      cpu,
+      ram,
       disks,
       network,
+      os,
       battery,
-      os: {
-        platform: osInfo.platform,
-        distro:   osInfo.distro,
-        release:  osInfo.release,
-        arch:     osInfo.arch,
-        hostname: osInfo.hostname,
-        uptime:   Math.floor(time.uptime),
-      },
       fetchedAt: new Date().toISOString(),
     });
-
   } catch (err) {
-    console.error('[system/info]', err);
-    res.status(500).json({ error: 'Impossible de récupérer les infos système' });
+    console.error('[SYSTEM INFO]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des infos système' });
   }
 });
 
