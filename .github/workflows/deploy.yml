@@ -1,0 +1,27 @@
+name: Deploy AUBEPINES
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/TFE
+            git pull origin main
+            cd client
+            npm install
+            npm run build
+            cp -r dist ../server/public
+            cd ../server
+            npm install
+            pm2 restart aubepines
+            echo "Deploiement termine"
