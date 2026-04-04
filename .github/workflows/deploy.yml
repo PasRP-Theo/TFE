@@ -53,6 +53,18 @@ jobs:
           mkdir -p "$DEPLOY_PATH/server/public"
           rsync -a --delete "$GITHUB_WORKSPACE/client/dist/" "$DEPLOY_PATH/server/public/"
 
+      - name: Record deployed version
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > "$DEPLOY_PATH/.deploy-commit"
+          printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEPLOY_PATH/.deploy-time"
+          cat > "$DEPLOY_PATH/server/public/deploy-info.json" <<EOF
+          {
+            "commit": "$GITHUB_SHA",
+            "runNumber": "$GITHUB_RUN_NUMBER",
+            "deployedAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
       - name: Install production server deps on host
         working-directory: ${{ vars.DEPLOY_PATH }}/server
         run: npm ci --omit=dev
