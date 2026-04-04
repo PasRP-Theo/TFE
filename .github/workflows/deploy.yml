@@ -8,6 +8,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PM2_APP_NAME: aubepines
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+  REPOSITORY_URL: https://github.com/${{ github.repository }}.git
 
 jobs:
   deploy:
@@ -27,31 +28,31 @@ jobs:
             exit 1
           fi
 
-      - name: Install & build client
-        working-directory: client
+      - name: Prepare host repository
+        run: |
+          mkdir -p "$(dirname "$DEPLOY_PATH")"
+
+          if [ ! -d "$DEPLOY_PATH/.git" ]; then
+            git clone "$REPOSITORY_URL" "$DEPLOY_PATH"
+          fi
+
+          cd "$DEPLOY_PATH"
+          git fetch --prune origin
+          git reset --hard "$GITHUB_SHA"
+          git clean -fdx \
+            -e .env \
+            -e .env.* \
+            -e hls \
+            -e recordings \
+            -e server/recordings
+
+      - name: Install & build client on host
+        working-directory: ${{ vars.DEPLOY_PATH }}/client
         run: |
           npm ci
           npm run build
-
-      - name: Install server deps
-        working-directory: server
-        run: npm ci
-
-      - name: Sync files to host app directory
-        run: |
-          mkdir -p "$DEPLOY_PATH"
-          rsync -a --delete \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'client/node_modules' \
-            --exclude 'server/node_modules' \
-            --exclude 'server/public' \
-            --exclude 'recordings' \
-            --exclude 'hls' \
-            "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
-
-          mkdir -p "$DEPLOY_PATH/server/public"
-          rsync -a --delete "$GITHUB_WORKSPACE/client/dist/" "$DEPLOY_PATH/server/public/"
+          mkdir -p ../server/public
+          rsync -a --delete dist/ ../server/public/
 
       - name: Record deployed version
         run: |
