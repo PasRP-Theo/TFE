@@ -117,7 +117,7 @@ function AppShell() {
 
           <div className="app-status">
             <span className="app-status-dot" />
-            EN LIGNE
+            EN LIGNE · LOCAL
           </div>
 
           <div className="app-user">
