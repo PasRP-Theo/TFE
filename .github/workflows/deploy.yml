@@ -57,14 +57,12 @@ jobs:
         run: |
           npm ci
           npm run build
-          mkdir -p ../server/public
-          rsync -a --delete dist/ ../server/public/
 
       - name: Record deployed version
         run: |
           printf '%s\n' "$GITHUB_SHA" > "$DEPLOY_PATH/.deploy-commit"
           printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEPLOY_PATH/.deploy-time"
-          cat > "$DEPLOY_PATH/server/public/deploy-info.json" <<EOF
+          cat > "$DEPLOY_PATH/client/dist/deploy-info.json" <<EOF
           {
             "commit": "$GITHUB_SHA",
             "runNumber": "$GITHUB_RUN_NUMBER",
@@ -79,6 +77,6 @@ jobs:
       - name: Restart
         working-directory: ${{ vars.DEPLOY_PATH }}/server
         run: |
-          pm2 describe "$PM2_APP_NAME" > /dev/null 2>&1 \
-            && pm2 restart "$PM2_APP_NAME" \
-            || pm2 start server.js --name "$PM2_APP_NAME"
+          pm2 delete "$PM2_APP_NAME" > /dev/null 2>&1 || true
+          pm2 start "$DEPLOY_PATH/server/server.js" --name "$PM2_APP_NAME" --cwd "$DEPLOY_PATH/server"
+          pm2 save

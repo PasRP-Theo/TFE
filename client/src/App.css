@@ -803,9 +803,8 @@ a:focus-visible {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   font-weight: 500;
-  letter-spacing: 0.02em;
-  padding: 6px 14px;
-  min-height: 36px;
+  padding: 6px 12px;
+  min-height: 34px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
@@ -886,31 +885,8 @@ a:focus-visible {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.15s;
-  margin-left: 8px;
 }
 .sensor-cancel-btn:hover { background: var(--accent-red-bg); }
-
-.sensor-scan-log {
-  margin-top: 12px;
-  padding: 14px;
-  background: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: var(--radius-md);
-}
-.sensor-scan-log p {
-  margin: 0 0 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-.sensor-scan-log ol {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--text-muted);
-}
-.sensor-scan-log li {
-  margin-bottom: 6px;
-  font-size: 0.92rem;
-}
 
 .sensor-note {
   width: 100%;
@@ -923,23 +899,6 @@ a:focus-visible {
 
 .sensor-note p + p {
   margin-top: 8px;
-}
-
-.sensor-scan-results {
-  list-style: none;
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 0;
-}
-
-.sensor-scan-result-item {
-  padding: 12px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  display: grid;
-  gap: 6px;
 }
 
 .sensor-link-btn {
@@ -972,6 +931,70 @@ a:focus-visible {
   border-radius: var(--radius-md);
 }
 
+.cam-manual-panel {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.cam-add-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cam-add-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cam-add-subtitle,
+.cam-discovery-subtitle {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.cam-add-mode-switch {
+  display: inline-flex;
+  gap: 8px;
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.cam-add-mode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cam-add-mode-btn:hover {
+  color: var(--text-primary);
+  background: var(--nav-hover-bg);
+}
+
+.cam-add-mode-btn--active {
+  color: var(--accent-blue);
+  background: var(--nav-active-bg);
+}
+
 .cam-discovery-header {
   display: flex;
   align-items: flex-start;
@@ -980,22 +1003,10 @@ a:focus-visible {
   flex-wrap: wrap;
 }
 
-.cam-discovery-toolbar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .cam-discovery-title {
   font-size: var(--text-sm);
   font-weight: 700;
   color: var(--text-primary);
-}
-
-.cam-discovery-subtitle {
-  margin-top: 4px;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
 }
 
 .cam-discovery-list {
@@ -1012,6 +1023,13 @@ a:focus-visible {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+}
+
+.cam-add-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .cam-discovery-item-head {
@@ -1061,6 +1079,28 @@ a:focus-visible {
 
 .cam-discovery-error {
   color: var(--accent-red);
+}
+
+@media (max-width: 640px) {
+  .cam-add-topbar {
+    flex-direction: column;
+  }
+
+  .cam-add-mode-switch {
+    width: 100%;
+  }
+
+  .cam-add-mode-btn {
+    flex: 1;
+  }
+
+  .cam-add-actions {
+    justify-content: stretch;
+  }
+
+  .cam-add-actions > button {
+    flex: 1;
+  }
 }
 
 /* Tableau */

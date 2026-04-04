@@ -15,7 +15,7 @@ const { readdir, stat, unlink, rm } = fsPromises;
 const RTSP_TRANSPORT  = process.env.RTSP_TRANSPORT || 'tcp';
 const HTTP_STREAM_CANDIDATES = [
   '/stream', '/mjpeg', '/mjpeg/1', '/mjpeg/2', '/video', '/video.mjpg',
-  '/capture', '/shot.jpg', '/jpg', '/jpeg', '/cam', '/axis-cgi/mjpg/video.cgi',
+  '/cam', '/axis-cgi/mjpg/video.cgi',
 ];
 const HTTP_SCAN_PORTS = ['', ':81', ':8080', ':8000'];
 const RTSP_SCAN_PORTS = [':554', ':8554'];
@@ -27,9 +27,15 @@ const SCAN_STOP_AFTER  = Number(process.env.CAMERA_SCAN_STOP_AFTER  || 3);
 const HTTP_TEST_TIMEOUT = Number(process.env.CAMERA_SCAN_TIMEOUT || 700);
 const SCAN_RANGE_START = Number(process.env.CAMERA_SCAN_RANGE_START || 1);
 const SCAN_RANGE_END = Number(process.env.CAMERA_SCAN_RANGE_END || 254);
-const SCAN_SUBNETS = String(process.env.CAMERA_SCAN_SUBNETS || '')
+const COMMON_CAMERA_OCTET_RANGES = [
+  [100, 120],
+  [121, 140],
+  [80, 99],
+];
+const SCAN_SUBNETS = String(process.env.CAMERA_SCAN_SUBNETS || '192.168.0')
   .split(',')
   .map(value => value.trim())
+  .filter(value => /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(value))
   .filter(Boolean);
 
 function isPrivateIpv4(address) {
@@ -79,6 +85,10 @@ function buildPriorityOctets(localIp, rangeStart, rangeEnd) {
     values.push(octet);
   };
 
+  for (const [start, end] of COMMON_CAMERA_OCTET_RANGES) {
+    for (let octet = start; octet <= end; octet += 1) add(octet);
+  }
+
   for (let offset = 1; offset <= 20; offset += 1) {
     add(localOctet - offset);
     add(localOctet + offset);
@@ -115,14 +125,12 @@ function buildScanHosts({ localIps, preferredHosts = [], subnets = [] }) {
 
   for (const host of preferredHosts) addHost(host);
 
-  const subnetBases = [
-    ...subnets,
-    ...localIps.map(getSubnetBase).filter(Boolean),
-  ].filter((value, index, array) => array.indexOf(value) === index);
+  const subnetBases = subnets.filter((value, index, array) => array.indexOf(value) === index);
 
   for (const localIp of localIps) {
     const subnet = getSubnetBase(localIp);
     if (!subnet) continue;
+    if (!subnetBases.includes(subnet)) continue;
     const octets = buildPriorityOctets(localIp, start, end);
     for (const octet of octets) addHost(`${subnet}.${octet}`);
   }
@@ -139,29 +147,42 @@ function buildScanHosts({ localIps, preferredHosts = [], subnets = [] }) {
 export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_AFTER, concurrency = SCAN_CONCURRENCY, signal, preferredHosts = [], subnets = SCAN_SUBNETS } = {}) {
   if (signal?.aborted) return [];
   const localIps = getLocalPrivateIpv4s();
-  if (!localIps.length) return [];
-  const subnetList = [
-    ...subnets,
-    ...localIps.map(getSubnetBase).filter(Boolean),
-  ].filter((value, index, array) => array.indexOf(value) === index);
-  if (!subnetList.length) return [];
+  const subnetList = (Array.isArray(subnets) ? subnets : [])
+    .map(value => String(value || '').trim())
+    .filter(value => /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(value))
+    .filter((value, index, array) => array.indexOf(value) === index);
+  if (!subnetList.length && !localIps.length) return [];
+  const effectiveSubnets = subnetList.length
+    ? subnetList
+    : localIps.map(getSubnetBase).filter(Boolean).filter((value, index, array) => array.indexOf(value) === index);
+  if (!effectiveSubnets.length) return [];
+  const scopedLocalIps = localIps.filter(localIp => effectiveSubnets.includes(getSubnetBase(localIp)));
 
-  const hosts = buildScanHosts({ localIps, preferredHosts, subnets: subnetList });
-  console.log(`[CAM SCAN] démarrage scan local sur ${subnetList.join(', ')} (${hosts.length} adresses, ${preferredHosts.length} prioritaires)`);
+  const hosts = buildScanHosts({ localIps: scopedLocalIps, preferredHosts, subnets: effectiveSubnets });
+  const startedAt = Date.now();
+  console.log(`[CAM SCAN] démarrage scan local sur ${effectiveSubnets.join(', ')} (${hosts.length} adresses, ${preferredHosts.length} prioritaires, concurrence=${concurrency}, stopAfter=${stopAfter})`);
 
   const results = [];
   let index = 0;
   let active = 0;
   let finished = false;
+  let completed = 0;
+
+  const logCompletion = (reason) => {
+    const elapsedMs = Date.now() - startedAt;
+    console.log(`[CAM SCAN] fin (${reason}) en ${Math.round(elapsedMs / 1000)}s, ${completed}/${hosts.length} adresses testées, ${results.length} résultat(s)`);
+  };
 
   return new Promise((resolve) => {
     const maybeResolve = () => {
       if (finished) return;
       if (results.length >= stopAfter) {
         finished = true;
+        logCompletion('stopAfter atteint');
         resolve(results);
       } else if (index >= hosts.length && active === 0) {
         finished = true;
+        logCompletion('scan terminé');
         resolve(results);
       }
     };
@@ -169,6 +190,7 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
     const onAbort = () => {
       if (finished) return;
       finished = true;
+      logCompletion('scan annulé');
       resolve(results);
     };
 
@@ -193,10 +215,16 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
       })().then(streamUrl => {
         if (streamUrl && results.length < stopAfter) {
           results.push({ host, streamUrl });
+          console.log(`[CAM SCAN] trouvé ${streamUrl} sur ${host} (${results.length}/${stopAfter})`);
         }
       }).catch(() => {
       }).finally(() => {
         active -= 1;
+        completed += 1;
+        if (completed % 20 === 0 || completed === hosts.length) {
+          const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+          console.log(`[CAM SCAN] progression ${completed}/${hosts.length} adresses testées en ${elapsedSeconds}s (${active} actives, ${results.length} trouvées)`);
+        }
         maybeResolve();
         if (!finished) next();
       });
@@ -243,12 +271,16 @@ async function testHttpStreamUrl(candidate, signal) {
     clearTimeout(timeout);
     if (!res.ok) return false;
     const type = (res.headers.get('content-type') || '').toLowerCase();
-    if (type.includes('multipart/x-mixed-replace') || type.includes('mjpeg') || type.includes('image/jpeg') || type.includes('video')) {
+    if (type.includes('multipart/x-mixed-replace') || type.includes('mjpeg') || type.includes('video')) {
       return true;
+    }
+    if (type.includes('image/jpeg')) {
+      console.log(`[CAM SCAN] image fixe ignorée pour ${candidate}`);
+      return false;
     }
     if (type.includes('text/html')) {
       const text = await res.text();
-      const found = text.match(/(?:src|href)=["']([^"']*(stream|mjpeg|video|capture|shot\.jpg|jpg|jpeg)[^"']*)["']/i);
+      const found = text.match(/(?:src|href)=["']([^"']*(stream|mjpeg|video|video\.mjpg|axis-cgi\/mjpg\/video\.cgi|cam)[^"']*)["']/i);
       if (found && found[1]) {
         const parsed = new URL(found[1], candidate).href;
         return parsed;

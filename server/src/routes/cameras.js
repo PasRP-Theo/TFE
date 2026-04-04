@@ -8,9 +8,11 @@ import {
   detectCameraStreamUrl, scanLocalNetworkForCameraStreams,
   RECORDINGS_DIR,
 } from '../camera/manager.js';
+import { discoverMdnsEsp32Cameras } from '../camera/mdns.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
+const ENABLE_SCAN_FALLBACK = process.env.CAMERA_DISCOVERY_ENABLE_SCAN_FALLBACK !== 'false';
 
 function normalizeDiscoveryPayload(body = {}) {
   const host = String(body.host || body.ip || '').trim();
@@ -184,9 +186,11 @@ router.get('/discoveries', async (_req, res) => {
 router.get('/discover', async (req, res) => {
   const host = String(req.query.host || '').trim();
   const abortController = new AbortController();
+  const startedAt = Date.now();
   req.on('close', () => abortController.abort());
   try {
     if (host) {
+      console.log(`[CAM DISCOVER] détection ciblée pour ${host}`);
       const streamUrl = await detectCameraStreamUrl(host, abortController.signal, { probeRtsp: true });
       if (!streamUrl) return res.status(404).json({ error: 'Aucun flux trouvé pour cette adresse' });
       await upsertDiscovery({
@@ -196,16 +200,34 @@ router.get('/discover', async (req, res) => {
         streamUrl,
         source: 'probe',
       }).catch(err => console.error('[CAM DISCOVER UPSERT]', err));
+      console.log(`[CAM DISCOVER] flux trouvé pour ${host} en ${Math.round((Date.now() - startedAt) / 1000)}s -> ${streamUrl}`);
       return res.json({ streamUrl });
     }
 
+    console.log('[CAM DISCOVER] recherche mDNS ESP32-CAM lancée');
+    const mdnsResults = await discoverMdnsEsp32Cameras();
+    if (mdnsResults.length > 0) {
+      await Promise.all(mdnsResults.map((result) => (
+        upsertDiscovery(result).catch(err => console.error('[CAM DISCOVER UPSERT]', err))
+      )));
+      console.log(`[CAM DISCOVER] ${mdnsResults.length} ESP32-CAM trouvée(s) via mDNS en ${Math.round((Date.now() - startedAt) / 1000)}s`);
+      return res.json({ results: mdnsResults, method: 'mdns' });
+    }
+
+    if (!ENABLE_SCAN_FALLBACK) {
+      return res.status(404).json({
+        error: 'Aucune ESP32-CAM trouvée via mDNS. Activez l’annonce HTTP ou le fallback de scan si nécessaire.',
+      });
+    }
+
     const preferredHosts = await getPreferredScanHosts().catch(() => []);
-    const results = await scanLocalNetworkForCameraStreams({
+    console.log(`[CAM DISCOVER] fallback scan réseau lancé (${preferredHosts.length} hôtes prioritaires)`);
+    const scanResults = await scanLocalNetworkForCameraStreams({
       signal: abortController.signal,
       preferredHosts,
     });
-    if (!results.length) return res.status(404).json({ error: 'Aucun flux trouvé sur le réseau local' });
-    await Promise.all(results.map(result => (
+    if (!scanResults.length) return res.status(404).json({ error: 'Aucune ESP32-CAM trouvée sur le réseau local' });
+    await Promise.all(scanResults.map(result => (
       upsertDiscovery({
         deviceId: `probe:${result.host}`,
         name: `ESP32-CAM ${result.host}`,
@@ -214,7 +236,8 @@ router.get('/discover', async (req, res) => {
         source: 'probe',
       }).catch(err => console.error('[CAM DISCOVER UPSERT]', err))
     )));
-    return res.json({ results, preferredHostsUsed: preferredHosts.length });
+    console.log(`[CAM DISCOVER] ${scanResults.length} flux trouvé(s) via scan en ${Math.round((Date.now() - startedAt) / 1000)}s`);
+    return res.json({ results: scanResults, preferredHostsUsed: preferredHosts.length, method: 'scan' });
   } catch (err) {
     if (err?.name === 'AbortError') return;
     console.error('[CAM DISCOVER]', err);

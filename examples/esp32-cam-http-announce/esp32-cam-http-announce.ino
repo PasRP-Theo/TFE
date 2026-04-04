@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <ESPmDNS.h>
 #include "esp_camera.h"
 
 // Adaptez ces constantes a votre environnement.
@@ -11,6 +12,7 @@ static const char* DEVICE_ID = "esp32cam-salon";
 static const char* DEVICE_NAME = "ESP32 Salon";
 static const char* DEVICE_LOCATION = "Salon";
 static const char* DEVICE_MODEL = "AI Thinker ESP32-CAM";
+static const char* MDNS_HOSTNAME = "esp32cam-salon";
 
 // URL du flux servi par l'ESP32-CAM.
 // La plupart des firmwares CameraWebServer exposent le MJPEG sur :81/stream.
@@ -96,6 +98,21 @@ String buildStreamUrl() {
   return String("http://") + WiFi.localIP().toString() + ":" + String(STREAM_PORT) + STREAM_PATH;
 }
 
+void startMdns() {
+  if (!MDNS.begin(MDNS_HOSTNAME)) {
+    Serial.println("[MDNS] Echec du demarrage mDNS");
+    return;
+  }
+
+  MDNS.addService("http", "tcp", STREAM_PORT);
+  MDNS.addServiceTxt("http", "tcp", "deviceId", DEVICE_ID);
+  MDNS.addServiceTxt("http", "tcp", "name", DEVICE_NAME);
+  MDNS.addServiceTxt("http", "tcp", "location", DEVICE_LOCATION);
+  MDNS.addServiceTxt("http", "tcp", "model", DEVICE_MODEL);
+  MDNS.addServiceTxt("http", "tcp", "path", STREAM_PATH);
+  Serial.printf("[MDNS] Service publie: http://%s.local:%u%s\n", MDNS_HOSTNAME, STREAM_PORT, STREAM_PATH);
+}
+
 bool announceToServer() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
@@ -139,6 +156,7 @@ void setup() {
   }
 
   connectWifi();
+  startMdns();
 
   // Votre firmware doit aussi exposer le flux MJPEG sur STREAM_PORT/STREAM_PATH.
   // Si vous utilisez l'exemple CameraWebServer d'Espressif, adaptez seulement

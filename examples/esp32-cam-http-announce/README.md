@@ -3,6 +3,7 @@ Exemple ESP32-CAM: annonce HTTP vers le serveur surveillance
 But:
 - connecter l'ESP32-CAM au Wi-Fi
 - annoncer automatiquement son IP et son URL de flux au backend
+- publier un service mDNS pour eviter le scan IP massif
 - faire apparaitre la camera dans la section ESP32 vues recemment
 
 Fichiers:
@@ -20,6 +21,7 @@ Constantes a adapter dans le sketch:
 - `DEVICE_ID`
 - `DEVICE_NAME`
 - `DEVICE_LOCATION`
+- `MDNS_HOSTNAME`
 - `STREAM_PORT`
 - `STREAM_PATH`
 
@@ -42,4 +44,5 @@ Payload envoye:
 Important:
 - le serveur doit etre joignable depuis l'ESP32 sur le reseau local
 - l'URL du flux doit correspondre a votre firmware
+- le sketch publie maintenant un service mDNS `_http._tcp` pour que le serveur puisse detecter l'ESP32-CAM sans scan IP complet
 - le backend garde la camera visible pendant la duree definie par `CAMERA_DISCOVERY_TTL_MINUTES`
