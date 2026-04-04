@@ -125,10 +125,10 @@ function AppShell() {
   const navLinks = [
     // Vue capteurs désactivée à la demande.
     // { to: '/',         label: 'Capteurs',   show: true    },
-    { to: '/videos',   label: 'Caméras',    show: true    },
-    { to: '/system',   label: 'Système',    show: isAdmin },
+    { to: '/videos',   label: 'Caméras',    shortLabel: 'Cam',  icon: '◉', show: true    },
+    { to: '/system',   label: 'Système',    shortLabel: 'Infos', icon: '⌁', show: isAdmin },
     //{ to: '/courses',  label: 'Courses',    show: true    },
-    { to: '/settings', label: 'Paramètres', show: isAdmin },
+    { to: '/settings', label: 'Paramètres', shortLabel: 'Config', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
   return (
@@ -141,11 +141,13 @@ function AppShell() {
             <span className="app-logo-version">v2.4.1</span>
           </div>
 
-          <nav className="app-nav">
-            {navLinks.map(({ to, label }) => (
+          <nav className="app-nav" aria-label="Navigation principale">
+            {navLinks.map(({ to, label, shortLabel, icon }) => (
               <Link key={to} to={to}
                 className={`app-nav-link ${location.pathname === to ? 'active' : ''}`}>
-                {label}
+                <span className="app-nav-link-icon" aria-hidden="true">{icon}</span>
+                <span className="app-nav-link-text app-nav-link-text--full">{label}</span>
+                <span className="app-nav-link-text app-nav-link-text--short">{shortLabel}</span>
               </Link>
             ))}
           </nav>
