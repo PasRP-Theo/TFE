@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import LoginPage   from './components/Loginpage';
+import LoginPage   from './components/LoginPage';
 // import SensorList  from './components/SensorList';
 import CameraFeed  from './components/CameraFeed';
 import Settings    from './components/Settings';
