@@ -4,22 +4,62 @@ on:
   push:
     branches: [ main ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  PM2_APP_NAME: aubepines
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Validate deploy path
+        run: |
+          if [ -z "$DEPLOY_PATH" ]; then
+            echo "DEPLOY_PATH GitHub variable is not set."
+            echo "Set Settings > Secrets and variables > Actions > Variables > DEPLOY_PATH"
+            exit 1
+          fi
 
       - name: Install & build client
+        working-directory: client
         run: |
-          cd client
-          npm install
+          npm ci
           npm run build
-          cp -r dist ../server/public
 
       - name: Install server deps
-        run: cd server && npm install
+        working-directory: server
+        run: npm ci
+
+      - name: Sync files to host app directory
+        run: |
+          mkdir -p "$DEPLOY_PATH"
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'client/node_modules' \
+            --exclude 'server/node_modules' \
+            --exclude 'server/public' \
+            --exclude 'recordings' \
+            --exclude 'hls' \
+            "$GITHUB_WORKSPACE/" "$DEPLOY_PATH/"
+
+          mkdir -p "$DEPLOY_PATH/server/public"
+          rsync -a --delete "$GITHUB_WORKSPACE/client/dist/" "$DEPLOY_PATH/server/public/"
+
+      - name: Install production server deps on host
+        working-directory: ${{ vars.DEPLOY_PATH }}/server
+        run: npm ci --omit=dev
 
       - name: Restart
-        run: pm2 restart aubepines
+        working-directory: ${{ vars.DEPLOY_PATH }}/server
+        run: |
+          pm2 describe "$PM2_APP_NAME" > /dev/null 2>&1 \
+            && pm2 restart "$PM2_APP_NAME" \
+            || pm2 start server.js --name "$PM2_APP_NAME"
