@@ -36,23 +36,28 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
         runtimeCaching: [
           {
-            urlPattern: ({ request }) => request.destination === 'document',
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')),
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: ({ request, sameOrigin }) => sameOrigin && request.destination === 'document',
             handler: 'NetworkFirst',
             options: {
               cacheName: 'pages',
             },
           },
           {
-            urlPattern: ({ request }) => ['style', 'script', 'worker'].includes(request.destination),
+            urlPattern: ({ request, sameOrigin }) => sameOrigin && ['style', 'script', 'worker'].includes(request.destination),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'assets',
             },
           },
           {
-            urlPattern: ({ request }) => request.destination === 'image',
+            urlPattern: ({ request, sameOrigin }) => sameOrigin && request.destination === 'image',
             handler: 'CacheFirst',
             options: {
               cacheName: 'images',
@@ -65,7 +70,7 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: false,
+        enabled: true,
       },
     }),
   ],
