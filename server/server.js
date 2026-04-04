@@ -7,7 +7,7 @@ import bcrypt          from "bcryptjs";
 import jwt             from "jsonwebtoken";
 import rateLimit       from "express-rate-limit";
 import { initDB, pool }      from "./src/db/index.js";
-import sensorRoutes          from "./src/routes/sensors.js";
+// import sensorRoutes          from "./src/routes/sensors.js";
 import groceryRoutes         from "./src/routes/grocery.js";
 import userRoutes            from "./src/routes/users.js";
 import systemRoutes          from "./src/routes/system.js";
@@ -95,7 +95,8 @@ const recordingsDir = process.env.RECORDINGS_DIR || path.join(__dirname, '..', '
 app.use('/recordings', express.static(recordingsDir));
 
 // ── Routes API ─────────────────────────────────────────────
-app.use("/api/sensors", sensorRoutes);
+// Intégration capteurs désactivée à la demande.
+// app.use("/api/sensors", sensorRoutes);
 app.use("/api/grocery", groceryRoutes);
 app.use("/api/users",   userRoutes);
 app.use("/api/system",  systemRoutes);

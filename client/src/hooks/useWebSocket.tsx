@@ -1,5 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
-
+// Hook WebSocket capteurs désactivé à la demande.
 export interface SensorUpdate {
   sensorId:   number;
   sensorName: string;
@@ -23,45 +22,8 @@ interface Options {
   onSensorAlert:  (data: SensorAlert)  => void;
 }
 
-const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:4000';
-
 export function useWebSocket({ token, onSensorUpdate, onSensorAlert }: Options) {
-  const ws        = useRef<WebSocket | null>(null);
-  const reconnect = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const connect = useCallback(() => {
-    if (!token) return;
-    if (ws.current?.readyState === WebSocket.OPEN) return;
-
-    const socket = new WebSocket(`${WS_BASE}/ws?token=${token}`);
-    ws.current   = socket;
-
-    socket.onopen = () => {
-      console.log('🔌 WebSocket connecté');
-      if (reconnect.current) clearTimeout(reconnect.current);
-    };
-
-    socket.onmessage = ({ data }) => {
-      try {
-        const msg = JSON.parse(data);
-        if (msg.type === 'sensor_update') onSensorUpdate(msg.payload);
-        if (msg.type === 'sensor_alert')  onSensorAlert(msg.payload);
-      } catch { /* ignoré */ }
-    };
-
-    socket.onclose = () => {
-      console.log('🔌 WS déconnecté, retry dans 5s...');
-      reconnect.current = setTimeout(connect, 5000);
-    };
-
-    socket.onerror = () => socket.close();
-  }, [token, onSensorUpdate, onSensorAlert]);
-
-  useEffect(() => {
-    connect();
-    return () => {
-      if (reconnect.current) clearTimeout(reconnect.current);
-      ws.current?.close();
-    };
-  }, [connect]);
+  void token;
+  void onSensorUpdate;
+  void onSensorAlert;
 }

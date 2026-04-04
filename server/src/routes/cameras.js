@@ -10,6 +10,98 @@ import {
 } from '../camera/manager.js';
 
 const router = Router();
+const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
+
+function normalizeDiscoveryPayload(body = {}) {
+  const host = String(body.host || body.ip || '').trim();
+  const streamUrl = String(body.streamUrl || body.rtsp_url || '').trim();
+  const deviceId = String(body.deviceId || body.device_id || host || '').trim();
+  const name = String(body.name || body.hostname || body.deviceName || deviceId || 'ESP32-CAM').trim();
+  const location = String(body.location || '').trim();
+  const model = String(body.model || '').trim();
+  const source = String(body.source || 'announce').trim() || 'announce';
+
+  if (!host || !streamUrl || !deviceId) return null;
+
+  return {
+    deviceId,
+    name,
+    host,
+    streamUrl,
+    location,
+    model,
+    source,
+  };
+}
+
+function getHostFromStreamUrl(streamUrl) {
+  const value = String(streamUrl || '').trim();
+  if (!value) return '';
+  try {
+    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
+    return parsed.hostname || parsed.host || '';
+  } catch {
+    return '';
+  }
+}
+
+async function upsertDiscovery(payload) {
+  const normalized = normalizeDiscoveryPayload(payload);
+  if (!normalized) return null;
+
+  const { rows } = await pool.query(
+    `INSERT INTO camera_discoveries (device_id, name, host, stream_url, location, model, source, last_seen_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (device_id) DO UPDATE SET
+       name = EXCLUDED.name,
+       host = EXCLUDED.host,
+       stream_url = EXCLUDED.stream_url,
+       location = EXCLUDED.location,
+       model = EXCLUDED.model,
+       source = EXCLUDED.source,
+       last_seen_at = NOW()
+     RETURNING *`,
+    [normalized.deviceId, normalized.name, normalized.host, normalized.streamUrl, normalized.location, normalized.model, normalized.source]
+  );
+
+  return rows[0] || null;
+}
+
+async function getPreferredScanHosts() {
+  const preferred = new Set();
+  const add = (host) => {
+    const value = String(host || '').trim();
+    if (value) preferred.add(value);
+  };
+
+  const [discoveriesResult, camerasResult] = await Promise.all([
+    pool.query(
+      `SELECT host
+       FROM camera_discoveries
+       ORDER BY last_seen_at DESC
+       LIMIT 25`
+    ),
+    pool.query(
+      `SELECT rtsp_url
+       FROM cameras
+       ORDER BY created_at DESC
+       LIMIT 25`
+    ),
+  ]);
+
+  discoveriesResult.rows.forEach(row => add(row.host));
+  camerasResult.rows.forEach(row => add(getHostFromStreamUrl(row.rtsp_url)));
+
+  return [...preferred];
+}
+
+async function deleteExpiredDiscoveries() {
+  await pool.query(
+    `DELETE FROM camera_discoveries
+     WHERE last_seen_at < NOW() - ($1::int * INTERVAL '1 minute')`,
+    [DISCOVERY_TTL_MINUTES]
+  );
+}
 
 // GET /api/cameras — liste + état live
 router.get('/', async (req, res) => {
@@ -34,9 +126,56 @@ router.post('/', async (req, res) => {
     );
     const camera = rows[0];
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
+    const host = getHostFromStreamUrl(rtsp_url);
+    if (host) {
+      await upsertDiscovery({
+        deviceId: `manual:${host}`,
+        name,
+        host,
+        streamUrl: rtsp_url,
+        location: location || '',
+        source: 'manual',
+      }).catch(err => console.error('[CAM DISCOVERY UPSERT]', err));
+    }
     res.status(201).json({ ...camera, ...getState(camera.id) });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/cameras/announce — annonce d'une ESP32-CAM au démarrage
+router.post('/announce', async (req, res) => {
+  const payload = normalizeDiscoveryPayload(req.body);
+  if (!payload) {
+    return res.status(400).json({ error: 'deviceId, host et streamUrl sont requis' });
+  }
+
+  try {
+    const discovery = await upsertDiscovery(payload);
+
+    res.status(200).json({
+      message: 'Annonce enregistrée',
+      discovery,
+    });
+  } catch (err) {
+    console.error('[CAM ANNOUNCE]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de l’annonce' });
+  }
+});
+
+// GET /api/cameras/discoveries — liste des ESP32-CAM vues récemment
+router.get('/discoveries', async (_req, res) => {
+  try {
+    await deleteExpiredDiscoveries();
+    const { rows } = await pool.query(
+      `SELECT id, device_id, name, host, stream_url, location, model, source, last_seen_at, created_at
+       FROM camera_discoveries
+       ORDER BY last_seen_at DESC, created_at DESC`
+    );
+    res.json({ ttlMinutes: DISCOVERY_TTL_MINUTES, devices: rows });
+  } catch (err) {
+    console.error('[CAM DISCOVERIES]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la lecture des appareils détectés' });
   }
 });
 
@@ -50,12 +189,32 @@ router.get('/discover', async (req, res) => {
     if (host) {
       const streamUrl = await detectCameraStreamUrl(host, abortController.signal, { probeRtsp: true });
       if (!streamUrl) return res.status(404).json({ error: 'Aucun flux trouvé pour cette adresse' });
+      await upsertDiscovery({
+        deviceId: `probe:${host}`,
+        name: `ESP32-CAM ${host}`,
+        host,
+        streamUrl,
+        source: 'probe',
+      }).catch(err => console.error('[CAM DISCOVER UPSERT]', err));
       return res.json({ streamUrl });
     }
 
-    const results = await scanLocalNetworkForCameraStreams({ signal: abortController.signal });
+    const preferredHosts = await getPreferredScanHosts().catch(() => []);
+    const results = await scanLocalNetworkForCameraStreams({
+      signal: abortController.signal,
+      preferredHosts,
+    });
     if (!results.length) return res.status(404).json({ error: 'Aucun flux trouvé sur le réseau local' });
-    return res.json({ results });
+    await Promise.all(results.map(result => (
+      upsertDiscovery({
+        deviceId: `probe:${result.host}`,
+        name: `ESP32-CAM ${result.host}`,
+        host: result.host,
+        streamUrl: result.streamUrl,
+        source: 'probe',
+      }).catch(err => console.error('[CAM DISCOVER UPSERT]', err))
+    )));
+    return res.json({ results, preferredHostsUsed: preferredHosts.length });
   } catch (err) {
     if (err?.name === 'AbortError') return;
     console.error('[CAM DISCOVER]', err);

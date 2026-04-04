@@ -24,6 +24,7 @@ export async function initDB() {
         created_at TIMESTAMP    DEFAULT NOW()
       );
 
+      /* Intégration capteurs désactivée à la demande.
       CREATE TABLE IF NOT EXISTS sensors (
         id         SERIAL PRIMARY KEY,
         name       VARCHAR(100) NOT NULL,
@@ -43,6 +44,7 @@ export async function initDB() {
         status      VARCHAR(20) DEFAULT 'OK',
         recorded_at TIMESTAMP   DEFAULT NOW()
       );
+      */
 
       CREATE TABLE IF NOT EXISTS grocery_items (
         id         SERIAL PRIMARY KEY,
@@ -63,8 +65,26 @@ export async function initDB() {
         created_at TIMESTAMP    DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS camera_discoveries (
+        id            SERIAL PRIMARY KEY,
+        device_id     VARCHAR(120) UNIQUE NOT NULL,
+        name          VARCHAR(120) NOT NULL,
+        host          VARCHAR(120) NOT NULL,
+        stream_url    VARCHAR(500) NOT NULL,
+        location      VARCHAR(120) DEFAULT '',
+        model         VARCHAR(120) DEFAULT '',
+        source        VARCHAR(30)  DEFAULT 'announce',
+        last_seen_at  TIMESTAMP    DEFAULT NOW(),
+        created_at    TIMESTAMP    DEFAULT NOW()
+      );
+
+      /* Intégration capteurs désactivée à la demande.
       CREATE INDEX IF NOT EXISTS idx_readings_sensor
         ON sensor_readings(sensor_id, recorded_at DESC);
+      */
+
+      CREATE INDEX IF NOT EXISTS idx_camera_discoveries_last_seen
+        ON camera_discoveries(last_seen_at DESC);
     `);
     console.log('✅ Base de données "aubepines" initialisée');
   } finally {

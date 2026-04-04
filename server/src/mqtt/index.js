@@ -1,5 +1,5 @@
 import mqtt     from 'mqtt';
-import { pool } from '../db/index.js';
+// import { pool } from '../db/index.js';
 
 let mqttClient   = null;
 const wsClients  = new Set();
@@ -14,6 +14,7 @@ function broadcast(type, payload) {
   wsClients.forEach(ws => { if (ws.readyState === 1) ws.send(msg); });
 }
 
+/*
 async function handleMessage(topic, message) {
   const value = parseFloat(message.toString().trim());
   if (isNaN(value)) return;
@@ -48,8 +49,14 @@ async function handleMessage(topic, message) {
     console.error('❌ MQTT handler:', err.message);
   }
 }
+*/
 
 export function connectMQTT() {
+  // Intégration MQTT capteurs désactivée à la demande.
+  console.log('ℹ️ MQTT capteurs désactivé');
+  return null;
+
+  /*
   const opts = {
     clientId:        `surveillance_${Math.random().toString(16).slice(2, 8)}`,
     clean:           true,
@@ -73,9 +80,11 @@ export function connectMQTT() {
   mqttClient.on('reconnect', ()  => console.log('🔄 MQTT reconnexion...'));
 
   return mqttClient;
+  */
 }
 
 export function publish(topic, message) {
-  if (mqttClient?.connected)
-    mqttClient.publish(topic, String(message), { qos: 1 });
+  // Publication capteurs désactivée à la demande.
+  void topic;
+  void message;
 }

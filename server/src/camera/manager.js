@@ -25,6 +25,12 @@ const RTSP_TEST_TIMEOUT = Number(process.env.CAMERA_RTSP_TIMEOUT || 1000);
 const SCAN_CONCURRENCY = Number(process.env.CAMERA_SCAN_CONCURRENCY || 30);
 const SCAN_STOP_AFTER  = Number(process.env.CAMERA_SCAN_STOP_AFTER  || 3);
 const HTTP_TEST_TIMEOUT = Number(process.env.CAMERA_SCAN_TIMEOUT || 700);
+const SCAN_RANGE_START = Number(process.env.CAMERA_SCAN_RANGE_START || 1);
+const SCAN_RANGE_END = Number(process.env.CAMERA_SCAN_RANGE_END || 254);
+const SCAN_SUBNETS = String(process.env.CAMERA_SCAN_SUBNETS || '')
+  .split(',')
+  .map(value => value.trim())
+  .filter(Boolean);
 
 function isPrivateIpv4(address) {
   return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(address);
@@ -50,24 +56,98 @@ function getSubnetBase(address) {
   return `${parts[0]}.${parts[1]}.${parts[2]}`;
 }
 
-export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_AFTER, concurrency = SCAN_CONCURRENCY, signal } = {}) {
+function isIpv4(address) {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(address);
+}
+
+function getLastOctet(address) {
+  const parts = String(address).split('.');
+  return Number(parts[3]);
+}
+
+function buildPriorityOctets(localIp, rangeStart, rangeEnd) {
+  const localOctet = getLastOctet(localIp);
+  const values = [];
+  const seen = new Set();
+
+  const add = (octet) => {
+    if (!Number.isInteger(octet)) return;
+    if (octet < rangeStart || octet > rangeEnd) return;
+    if (octet === localOctet) return;
+    if (seen.has(octet)) return;
+    seen.add(octet);
+    values.push(octet);
+  };
+
+  for (let offset = 1; offset <= 20; offset += 1) {
+    add(localOctet - offset);
+    add(localOctet + offset);
+  }
+
+  const ranges = [
+    [2, 60],
+    [100, 180],
+    [61, 99],
+    [181, 254],
+  ];
+
+  for (const [start, end] of ranges) {
+    for (let octet = start; octet <= end; octet += 1) add(octet);
+  }
+
+  for (let octet = rangeStart; octet <= rangeEnd; octet += 1) add(octet);
+  return values;
+}
+
+function buildScanHosts({ localIps, preferredHosts = [], subnets = [] }) {
+  const start = Math.max(1, Math.min(254, SCAN_RANGE_START));
+  const end = Math.max(start, Math.min(254, SCAN_RANGE_END));
+  const hosts = [];
+  const seen = new Set();
+
+  const addHost = (host) => {
+    if (!isIpv4(host)) return;
+    if (localIps.includes(host)) return;
+    if (seen.has(host)) return;
+    seen.add(host);
+    hosts.push(host);
+  };
+
+  for (const host of preferredHosts) addHost(host);
+
+  const subnetBases = [
+    ...subnets,
+    ...localIps.map(getSubnetBase).filter(Boolean),
+  ].filter((value, index, array) => array.indexOf(value) === index);
+
+  for (const localIp of localIps) {
+    const subnet = getSubnetBase(localIp);
+    if (!subnet) continue;
+    const octets = buildPriorityOctets(localIp, start, end);
+    for (const octet of octets) addHost(`${subnet}.${octet}`);
+  }
+
+  for (const subnet of subnetBases) {
+    for (let octet = start; octet <= end; octet += 1) {
+      addHost(`${subnet}.${octet}`);
+    }
+  }
+
+  return hosts;
+}
+
+export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_AFTER, concurrency = SCAN_CONCURRENCY, signal, preferredHosts = [], subnets = SCAN_SUBNETS } = {}) {
   if (signal?.aborted) return [];
   const localIps = getLocalPrivateIpv4s();
   if (!localIps.length) return [];
-  const subnets = localIps
-    .map(getSubnetBase)
-    .filter(Boolean)
-    .filter((value, index, self) => self.indexOf(value) === index);
-  if (!subnets.length) return [];
+  const subnetList = [
+    ...subnets,
+    ...localIps.map(getSubnetBase).filter(Boolean),
+  ].filter((value, index, array) => array.indexOf(value) === index);
+  if (!subnetList.length) return [];
 
-  const hosts = [];
-  for (const subnet of subnets) {
-    for (let i = 1; i < 255; i += 1) {
-      const host = `${subnet}.${i}`;
-      if (!localIps.includes(host)) hosts.push(host);
-    }
-  }
-  console.log(`[CAM SCAN] démarrage scan local sur ${subnets.join(', ')} (${hosts.length} adresses)`);
+  const hosts = buildScanHosts({ localIps, preferredHosts, subnets: subnetList });
+  console.log(`[CAM SCAN] démarrage scan local sur ${subnetList.join(', ')} (${hosts.length} adresses, ${preferredHosts.length} prioritaires)`);
 
   const results = [];
   let index = 0;

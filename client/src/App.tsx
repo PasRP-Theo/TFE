@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import LoginPage   from './components/LoginPage';
-import SensorList  from './components/SensorList';
+import LoginPage   from './components/Loginpage';
+// import SensorList  from './components/SensorList';
 import CameraFeed  from './components/CameraFeed';
-import GroceryList from './components/Grocerylist';
 import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
 import './App.css';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
 
 // ── Page 403 pour les accès refusés ───────────────────────
 function AccessDenied() {
@@ -30,11 +34,41 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function AppShell() {
   const { user, logout, loading } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const location = useLocation();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
   }, [theme]);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) return;
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  async function installApp() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    setInstallPrompt(null);
+  }
 
   if (loading) {
     return (
@@ -54,7 +88,8 @@ function AppShell() {
   const isAdmin = user.role === 'admin';
 
   const navLinks = [
-    { to: '/',         label: 'Capteurs',   show: true    },
+    // Vue capteurs désactivée à la demande.
+    // { to: '/',         label: 'Capteurs',   show: true    },
     { to: '/videos',   label: 'Caméras',    show: true    },
     { to: '/system',   label: 'Système',    show: isAdmin },
     //{ to: '/courses',  label: 'Courses',    show: true    },
@@ -98,13 +133,20 @@ function AppShell() {
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
 
+          {installPrompt && (
+            <button className="app-install-btn" onClick={installApp} title="Installer l'application sur cet appareil">
+              Installer
+            </button>
+          )}
+
           <button className="app-logout-btn" onClick={logout} title="Se déconnecter">⏻</button>
         </div>
       </header>
 
       <main className="app-main">
         <Routes>
-          <Route path="/"        element={<SensorList />} />
+          {/* Route capteurs désactivée à la demande. */}
+          <Route path="/"        element={<Navigate to="/videos" replace />} />
           <Route path="/videos"  element={<CameraFeed />} />
           {/* <Route path="/courses" element={<GroceryList />} />*/}
           <Route path="/system"  element={
@@ -114,7 +156,7 @@ function AppShell() {
             <AdminRoute><Settings /></AdminRoute>
           } />
           {/* Redirige vers accueil si route inconnue */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/videos" replace />} />
         </Routes>
       </main>
     </div>

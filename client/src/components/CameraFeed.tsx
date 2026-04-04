@@ -1,11 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import type Hls from "hls.js";
+import type { ErrorData } from "hls.js";
 
-interface HlsInstance {
-  loadSource(source: string): void;
-  attachMedia(video: HTMLVideoElement): void;
-  on(event: string, callback: () => void): void;
-  destroy(): void;
-}
+type HlsConstructor = typeof import("hls.js").default;
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -27,6 +24,19 @@ interface RecordingEntry {
   size:      number;
 }
 
+interface DiscoveredCamera {
+  id: number;
+  device_id: string;
+  name: string;
+  host: string;
+  stream_url: string;
+  location: string;
+  model: string;
+  source: string;
+  last_seen_at: string;
+  created_at: string;
+}
+
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl }: { hlsUrl: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -36,7 +46,7 @@ function HlsPlayer({ hlsUrl }: { hlsUrl: string }) {
     const video = videoRef.current;
     if (!video) return;
 
-    let hls: any = null;
+    let hls: Hls | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let destroyed = false;
 
@@ -56,31 +66,31 @@ function HlsPlayer({ hlsUrl }: { hlsUrl: string }) {
       }
     };
 
-    const setupHls = (Hls: any) => {
-      if (destroyed || !video || !Hls.isSupported()) return;
+    const setupHls = (HlsLib: HlsConstructor) => {
+      if (destroyed || !video || !HlsLib.isSupported()) return;
       if (hls) {
         hls.destroy();
         hls = null;
       }
-      hls = new Hls({
+      hls = new HlsLib({
         lowLatencyMode: true,
         liveSyncDurationCount: 3,
         maxBufferLength: 30,
         backBufferLength: 15,
       });
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.on(HlsLib.Events.MANIFEST_PARSED, () => {
         video.play().catch(() => {});
       });
-      hls.on(Hls.Events.ERROR, (_event: any, data: any) => {
+      hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
         if (!data || !data.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && retryTimer == null) {
+        if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR && retryTimer == null) {
           cleanup();
           retryTimer = setTimeout(() => {
             if (!destroyed) import('hls.js').then(({ default: HlsLib }) => setupHls(HlsLib)).catch(() => {});
           }, 2000);
           return;
         }
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
           hls?.recoverMediaError();
           return;
         }
@@ -108,26 +118,18 @@ function HlsPlayer({ hlsUrl }: { hlsUrl: string }) {
   }, [fullUrl]);
 
   return (
-    <video ref={videoRef} autoPlay muted playsInline
-      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+    <video ref={videoRef} autoPlay muted playsInline className="cam-video" />
   );
 }
 
 // ── Écran offline ─────────────────────────────────────────
 function OfflineScreen({ status }: { status: Camera["status"] }) {
-  const [scanY, setScanY] = useState(0);
-  useEffect(() => {
-    if (status !== 'reconnecting') return;
-    const t = setInterval(() => setScanY(y => (y + 2) % 100), 30);
-    return () => clearInterval(t);
-  }, [status]);
-
   const text = status === 'paused' ? 'EN PAUSE'
              : status === 'reconnecting' ? 'RECONNEXION...'
              : 'FLUX INACTIF';
   return (
     <div className="cam-screen">
-      {status === 'reconnecting' && <div className="cam-scanline" style={{ top: `${scanY}%` }} />}
+      {status === 'reconnecting' && <div className="cam-scanline" />}
       <div className="cam-offline">
         <div className="cam-offline-icon">⊘</div>
         <p className="cam-offline-text">{text}</p>
@@ -212,6 +214,10 @@ export default function CameraFeed() {
   const [discovering, setDiscovering] = useState(false);
   const [scanningLocal, setScanningLocal] = useState(false);
   const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
+  const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredCamera[]>([]);
+  const [discoveriesLoading, setDiscoveriesLoading] = useState(false);
+  const [discoveriesError, setDiscoveriesError] = useState<string | null>(null);
+  const [discoveriesTtlMinutes, setDiscoveriesTtlMinutes] = useState(10);
   const [scanResults, setScanResults] = useState<Array<{ host: string; streamUrl: string }>>([]);
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const [scanElapsed, setScanElapsed] = useState(0);
@@ -221,6 +227,23 @@ export default function CameraFeed() {
   const [historyRecords, setHistoryRecords] = useState<RecordingEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  async function fetchDiscoveries(silent = false) {
+    if (!silent) setDiscoveriesLoading(true);
+    try {
+      const res = await fetch(`${API}/api/cameras/discoveries`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Impossible de charger les ESP32 détectées');
+      setDiscoveredDevices(Array.isArray(data.devices) ? data.devices : []);
+      setDiscoveriesTtlMinutes(typeof data.ttlMinutes === 'number' ? data.ttlMinutes : 10);
+      setDiscoveriesError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setDiscoveriesError(message);
+    } finally {
+      if (!silent) setDiscoveriesLoading(false);
+    }
+  }
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -235,6 +258,26 @@ export default function CameraFeed() {
     const interval = setInterval(() => setScanElapsed(seconds => seconds + 1), 1000);
     return () => clearInterval(interval);
   }, [scanningLocal]);
+
+  useEffect(() => {
+    if (!showAdd) return;
+
+    let stopped = false;
+
+    fetchDiscoveries();
+    const interval = setInterval(() => {
+      if (!stopped) fetchDiscoveries(true);
+    }, 5000);
+
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [showAdd]);
+
+  async function refreshDiscoveries() {
+    await fetchDiscoveries();
+  }
 
   async function fetchCameras() {
     try {
@@ -272,6 +315,7 @@ export default function CameraFeed() {
       if (!res.ok) throw new Error(data.error || 'Erreur de découverte');
       setNewRtsp(data.streamUrl);
       setDiscoverMessage(`Flux détecté : ${data.streamUrl}`);
+      if (showAdd) fetchDiscoveries(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setDiscoverMessage(message || 'Erreur de découverte');
@@ -312,6 +356,7 @@ export default function CameraFeed() {
         setNewRtsp(data.results[0].streamUrl);
         setDiscoverMessage(`Flux détecté sur ${data.results[0].host}`);
         setScanLogs(prev => [...prev, `Flux détecté sur ${data.results[0].host}`]);
+        if (showAdd) fetchDiscoveries(true);
       } else {
         setDiscoverMessage('Aucun flux détecté sur le réseau local.');
         setScanLogs(prev => [...prev, 'Aucun flux trouvé sur le réseau local.']);
@@ -343,6 +388,39 @@ export default function CameraFeed() {
       setCameras(prev => [...prev, data]);
       setNewName(''); setNewRtsp(''); setNewLoc(''); setDiscoverMessage(null); setScanResults([]); setShowAdd(false);
     } catch { /* ignore */ }
+  }
+
+  function selectDiscoveredDevice(device: DiscoveredCamera) {
+    setNewName(device.name || device.device_id);
+    setNewRtsp(device.stream_url);
+    setNewLoc(device.location || device.host);
+    setDiscoverMessage(`ESP32 détectée sélectionnée : ${device.name} (${device.host})`);
+  }
+
+  async function addDiscoveredDevice(device: DiscoveredCamera) {
+    try {
+      const res  = await fetch(`${API}/api/cameras`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: device.name || device.device_id,
+          rtsp_url: device.stream_url,
+          location: device.location || device.host,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Impossible d’ajouter la caméra détectée');
+      setCameras(prev => [...prev, data]);
+      setNewName('');
+      setNewRtsp('');
+      setNewLoc('');
+      setDiscoverMessage(`Caméra ajoutée depuis ${device.host}`);
+      setScanResults([]);
+      setShowAdd(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setDiscoverMessage(message);
+    }
   }
 
   async function deleteCamera(id: number) {
@@ -405,6 +483,65 @@ export default function CameraFeed() {
       {/* Formulaire ajout */}
       {showAdd && (
         <div className="cam-add-form">
+          <section className="cam-discovery-panel">
+            <div className="cam-discovery-header">
+              <div>
+                <h3 className="cam-discovery-title">ESP32 vues récemment</h3>
+                <p className="cam-discovery-subtitle">Fenêtre de visibilité : {discoveriesTtlMinutes} min</p>
+              </div>
+              <div className="cam-discovery-toolbar">
+                <button
+                  type="button"
+                  className="sensor-link-btn"
+                  onClick={scanLocalNetwork}
+                  disabled={scanningLocal}
+                >
+                  {scanningLocal ? 'Scan...' : 'Scanner et remplir'}
+                </button>
+                <button type="button" className="sensor-link-btn" onClick={refreshDiscoveries} disabled={discoveriesLoading}>
+                  {discoveriesLoading ? 'Actualisation...' : 'Actualiser'}
+                </button>
+              </div>
+            </div>
+            {discoveriesLoading && <p>Chargement des annonces ESP32…</p>}
+            {scanningLocal && <p className="cam-discovery-empty">Scan réseau en cours. Les résultats trouvés seront ajoutés à cette liste.</p>}
+            {discoveriesError && <p className="cam-discovery-error">{discoveriesError}</p>}
+            {!discoveriesLoading && !discoveriesError && discoveredDevices.length === 0 && (
+              <p className="cam-discovery-empty">Aucune annonce reçue. Un scan manuel ou l’ajout d’une caméra alimentera aussi cette liste.</p>
+            )}
+            {discoveredDevices.length > 0 && (
+              <ul className="cam-discovery-list">
+                {discoveredDevices.map(device => (
+                  <li key={device.device_id} className="cam-discovery-item">
+                    <div className="cam-discovery-item-head">
+                      <strong>{device.name}</strong>
+                      <span className={`cam-discovery-source cam-discovery-source--${device.source}`}>{device.source}</span>
+                    </div>
+                    <div className="cam-discovery-meta">{device.host}</div>
+                    <div className="cam-discovery-meta">{device.stream_url}</div>
+                    <div className="cam-discovery-meta">Vu le {new Date(device.last_seen_at).toLocaleString('fr-FR')}</div>
+                    <div className="cam-inline-actions">
+                      <button
+                        type="button"
+                        className="sensor-link-btn"
+                        onClick={() => selectDiscoveredDevice(device)}
+                      >
+                        Utiliser
+                      </button>
+                      <button
+                        type="button"
+                        className="sensor-confirm-btn"
+                        onClick={() => addDiscoveredDevice(device)}
+                      >
+                        Ajouter directement
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <input className="sensor-input" placeholder="Nom de la caméra"
             value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
           <input className="sensor-input" placeholder="IP ou URL de flux (rtsp://... / http://... )"
@@ -417,14 +554,6 @@ export default function CameraFeed() {
               disabled={discovering}
             >
               {discovering ? 'Détection...' : 'Détecter'}
-            </button>
-            <button
-              type="button"
-              className="sensor-confirm-btn"
-              onClick={scanLocalNetwork}
-              disabled={scanningLocal}
-            >
-              {scanningLocal ? 'Scan...' : 'Scanner le réseau'}
             </button>
             {scanningLocal && (
               <button
@@ -496,7 +625,7 @@ export default function CameraFeed() {
                 <span className="cam-card-name">{focusedCam.name}</span>
                 {focusedCam.location && <span className="cam-card-loc">· {focusedCam.location}</span>}
               </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div className="cam-card-actions cam-card-actions--wide-gap">
                 <StatusBadge status={focusedCam.status} />
                 <button className="cam-card-history" onClick={() => loadCameraHistory(focusedCam.id)}>📁 Historique</button>
                 <button className="cam-card-delete" onClick={() => deleteCamera(focusedCam.id)}>✕</button>
@@ -505,7 +634,7 @@ export default function CameraFeed() {
             <CameraScreen cam={focusedCam} time={time} />
             <CameraControls cam={focusedCam} onAction={handleAction} />
           </div>
-          <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:8, letterSpacing:'0.08em' }}>
+          <div className="cam-focus-hint">
             ← Clic en dehors pour revenir à la grille
           </div>
         </div>
@@ -528,7 +657,7 @@ export default function CameraFeed() {
                   <span className="cam-card-id">CAM {String(cam.id).padStart(2, '0')}</span>
                   <span className="cam-card-name">{cam.name}</span>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <div className="cam-card-actions">
                   <StatusBadge status={cam.status} />
                   <button className="cam-card-history"
                     onClick={e => { e.stopPropagation(); loadCameraHistory(cam.id); }}>
@@ -551,14 +680,14 @@ export default function CameraFeed() {
             <div className="cam-history-header">
               <div>
                 <strong>Historique caméra {historyCameraId}</strong>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                <div className="cam-history-meta">
                   {historyRecords.length} enregistrement{historyRecords.length > 1 ? 's' : ''}
                 </div>
               </div>
               <button className="cam-card-delete" onClick={closeHistory}>✕</button>
             </div>
             {historyLoading && <p>Chargement de l’historique…</p>}
-            {historyError && <p style={{ color: 'var(--danger)' }}>{historyError}</p>}
+            {historyError && <p className="cam-history-error">{historyError}</p>}
             {!historyLoading && !historyError && historyRecords.length === 0 && (
               <p>Aucun enregistrement disponible pour cette caméra.</p>
             )}
@@ -568,7 +697,7 @@ export default function CameraFeed() {
                   <div key={entry.filename} className="cam-history-row">
                     <div>
                       <strong>{entry.filename}</strong>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      <div className="cam-history-meta">
                         {new Date(entry.createdAt).toLocaleString('fr-FR')} · {Math.round(entry.size / 1024)} KB
                       </div>
                     </div>

@@ -1,8 +1,11 @@
 import { Router }                    from 'express';
-import { pool }                      from '../db/index.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+// import { pool }                      from '../db/index.js';
+// import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
+
+/*
+// Intégration capteurs désactivée à la demande.
 
 // GET /api/sensors
 router.get('/', requireAuth, async (req, res) => {
@@ -92,5 +95,6 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+*/
 
 export default router;
