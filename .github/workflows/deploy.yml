@@ -30,13 +30,19 @@ jobs:
 
       - name: Prepare host repository
         run: |
-          mkdir -p "$(dirname "$DEPLOY_PATH")"
+          mkdir -p "$DEPLOY_PATH"
+          cd "$DEPLOY_PATH"
 
-          if [ ! -d "$DEPLOY_PATH/.git" ]; then
-            git clone "$REPOSITORY_URL" "$DEPLOY_PATH"
+          if [ ! -d .git ]; then
+            git init
           fi
 
-          cd "$DEPLOY_PATH"
+          if git remote get-url origin > /dev/null 2>&1; then
+            git remote set-url origin "$REPOSITORY_URL"
+          else
+            git remote add origin "$REPOSITORY_URL"
+          fi
+
           git fetch --prune origin
           git reset --hard "$GITHUB_SHA"
           git clean -fdx \
