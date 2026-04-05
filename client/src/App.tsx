@@ -6,7 +6,7 @@ import LoginPage   from './components/LoginPage';
 import CameraFeed  from './components/CameraFeed';
 import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
-import surveillanceLogo from './assets/surveillance-logo.svg';
+import BrandLogo from './components/BrandLogo.tsx';
 import './App.css';
 
 // ── Page 403 pour les accès refusés ───────────────────────
@@ -41,7 +41,12 @@ function AppShell() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-logo">
-            <img className="login-logo-icon" src={surveillanceLogo} alt="" aria-hidden="true" />
+            <BrandLogo
+              wrapperClassName="login-logo-mark"
+              imageClassName="login-logo-icon"
+              fallbackClassName="login-logo-fallback"
+              fallbackText="A"
+            />
             <span className="login-logo-text">Chargement...</span>
           </div>
         </div>
@@ -67,7 +72,12 @@ function AppShell() {
       <header className="app-header">
         <div className="app-header-inner">
           <div className="app-logo">
-            <img className="app-logo-icon" src={surveillanceLogo} alt="" aria-hidden="true" />
+            <BrandLogo
+              wrapperClassName="app-logo-mark"
+              imageClassName="app-logo-icon"
+              fallbackClassName="app-logo-fallback"
+              fallbackText="A"
+            />
             <span className="app-logo-text">AUBEPINES</span>
             <span className="app-logo-version">v2.4.1</span>
           </div>

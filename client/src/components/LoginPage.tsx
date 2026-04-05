@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import surveillanceLogo from '../assets/surveillance-logo.svg';
+import BrandLogo from './BrandLogo.tsx';
 
 export default function LoginPage() {
   const { login }  = useAuth();
@@ -73,7 +73,12 @@ export default function LoginPage() {
 
         <div className="lp-card-body">
           <div className="lp-logo">
-            <img className="lp-logo-icon" src={surveillanceLogo} alt="" aria-hidden="true" />
+            <BrandLogo
+              wrapperClassName="lp-logo-mark"
+              imageClassName="lp-logo-icon"
+              fallbackClassName="lp-logo-fallback"
+              fallbackText="A"
+            />
             <div className="lp-logo-text">SURVEILLANCE</div>
           </div>
           <div className="lp-subtitle">ACCÈS SÉCURISÉ AU SYSTÈME</div>
