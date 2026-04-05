@@ -56,10 +56,10 @@ function AppShell() {
   const navLinks = [
     // Vue capteurs désactivée à la demande.
     // { to: '/',         label: 'Capteurs',   show: true    },
-    { to: '/videos',   label: 'Caméras',    shortLabel: 'Cam',  icon: '◉', show: true    },
-    { to: '/system',   label: 'Système',    shortLabel: 'Infos', icon: '⌁', show: isAdmin },
+    { to: '/videos',   label: 'Caméras',    shortLabel: 'Caméras',  icon: '◉', show: true    },
+    { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: isAdmin },
     //{ to: '/courses',  label: 'Courses',    show: true    },
-    { to: '/settings', label: 'Paramètres', shortLabel: 'Config', icon: '⚙', show: isAdmin },
+    { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
   return (

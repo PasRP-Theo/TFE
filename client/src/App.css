@@ -3875,21 +3875,34 @@ a:focus-visible {
   }
 
   .app-nav-link {
-    min-height: 50px;
+    min-height: 58px;
     min-width: 0;
-    padding: 0 8px;
-    gap: 6px;
-    font-size: 13px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    padding: 6px 8px;
+    gap: 3px;
+    font-size: 12px;
+    line-height: 1.1;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
     flex-shrink: 1;
+    flex-direction: column;
+    text-align: center;
   }
 
   .app-nav-link-icon {
     width: 20px;
     height: 20px;
     background: rgba(255, 255, 255, 0.07);
+  }
+
+  .app-nav-link-text {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .app-nav-link-text--short {
+    display: none;
   }
 
   .app-user-role,
@@ -4029,18 +4042,10 @@ a:focus-visible {
   }
 
   .app-nav-link {
-    min-height: 46px;
+    min-height: 54px;
     padding: 0 6px;
-    gap: 4px;
-    font-size: 12px;
-  }
-
-  .app-nav-link-text--full {
-    display: none;
-  }
-
-  .app-nav-link-text--short {
-    display: inline;
+    gap: 3px;
+    font-size: 11px;
   }
 
   .app-logo-text {
