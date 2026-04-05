@@ -9,6 +9,11 @@ import SystemInfo  from './components/SystemInfo';
 import surveillanceLogo from './assets/surveillance-logo.svg';
 import './App.css';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 // ── Page 403 pour les accès refusés ───────────────────────
 function AccessDenied() {
   return (
@@ -30,11 +35,75 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function AppShell() {
   const { user, logout, loading } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installHint, setInstallHint] = useState<string | null>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
   }, [theme]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(display-mode: standalone)');
+    const updateStandalone = () => {
+      const standalone = media.matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+      setIsStandalone(standalone);
+      if (standalone) {
+        setInstallPrompt(null);
+        setInstallHint(null);
+      }
+    };
+
+    updateStandalone();
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+      setInstallHint(null);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
+      setInstallHint(null);
+      setIsStandalone(true);
+    };
+
+    media.addEventListener('change', updateStandalone);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      media.removeEventListener('change', updateStandalone);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  async function installApp() {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => null);
+      setInstallPrompt(null);
+      return;
+    }
+
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(userAgent);
+    const isAndroid = /android/.test(userAgent);
+
+    if (isIos) {
+      setInstallHint('Sur iPhone: ouvrez Partager puis Ajouter a l\'ecran d\'accueil.');
+      return;
+    }
+
+    if (isAndroid) {
+      setInstallHint('Sur Android: ouvrez le menu du navigateur puis Installer l\'application ou Ajouter a l\'ecran d\'accueil.');
+      return;
+    }
+
+    setInstallHint('Utilisez le menu du navigateur pour installer cette application sur l\'appareil.');
+  }
 
   if (loading) {
     return (
@@ -52,6 +121,7 @@ function AppShell() {
   if (!user) return <LoginPage />;
 
   const isAdmin = user.role === 'admin';
+  const showInstallButton = !isStandalone;
 
   const navLinks = [
     // Vue capteurs désactivée à la demande.
@@ -101,8 +171,20 @@ function AppShell() {
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
 
+          {showInstallButton && (
+            <button className="app-install-btn" onClick={installApp} title="Installer l'application sur cet appareil">
+              Installer
+            </button>
+          )}
+
           <button className="app-logout-btn" onClick={logout} title="Se déconnecter">⏻</button>
         </div>
+
+        {installHint && (
+          <div className="app-install-hint" role="status">
+            {installHint}
+          </div>
+        )}
       </header>
 
       <main className="app-main">
