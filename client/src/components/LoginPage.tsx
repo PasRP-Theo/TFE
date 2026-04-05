@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import surveillanceLogo from '../assets/surveillance-logo.svg';
 
 export default function LoginPage() {
   const { login }  = useAuth();
@@ -72,7 +73,7 @@ export default function LoginPage() {
 
         <div className="lp-card-body">
           <div className="lp-logo">
-            <div className="lp-logo-icon">⬡</div>
+            <img className="lp-logo-icon" src={surveillanceLogo} alt="" aria-hidden="true" />
             <div className="lp-logo-text">SURVEILLANCE</div>
           </div>
           <div className="lp-subtitle">ACCÈS SÉCURISÉ AU SYSTÈME</div>

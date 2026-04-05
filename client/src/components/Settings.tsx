@@ -8,7 +8,7 @@ function SettingToggle({ label, description, defaultChecked = false }: {
 }) {
   const [checked, setChecked] = useState(defaultChecked);
   return (
-    <div className="settings-row" onClick={() => setChecked(v => !v)}>
+    <button type="button" className={`settings-row ${checked ? 'settings-row--active' : ''}`} onClick={() => setChecked(v => !v)}>
       <div className="settings-row-text">
         <span className="settings-row-label">{label}</span>
         {description && <span className="settings-row-desc">{description}</span>}
@@ -16,7 +16,7 @@ function SettingToggle({ label, description, defaultChecked = false }: {
       <div className={`settings-toggle ${checked ? "settings-toggle--on" : "settings-toggle--off"}`}>
         <div className="settings-toggle-knob" />
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -121,8 +121,13 @@ function TabUsers() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>UTILISATEURS ({users.length})</span>
-          <button className="sensor-add-btn" onClick={() => { setShowAdd(v => !v); setError(""); setSuccess(""); }}>
-            {showAdd ? "✕ Annuler" : "+ Ajouter"}
+          <button
+            type="button"
+            className={`panel-action-btn ${showAdd ? 'panel-action-btn--active' : ''}`}
+            onClick={() => { setShowAdd(v => !v); setError(""); setSuccess(""); }}
+          >
+            <span className="panel-action-btn__icon" aria-hidden="true">{showAdd ? '×' : '+'}</span>
+            <span>{showAdd ? 'Fermer' : 'Ajouter un utilisateur'}</span>
           </button>
         </div>
 
@@ -146,6 +151,7 @@ function TabUsers() {
             />
             <select
               className="sensor-input sensor-select"
+              aria-label="Role du nouvel utilisateur"
               value={newRole}
               onChange={e => setNewRole(e.target.value)}
             >

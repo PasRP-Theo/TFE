@@ -501,8 +501,13 @@ export default function CameraFeed() {
         </div>
         <div className="cam-header-right">
           <span className="cam-clock">{time.toLocaleTimeString('fr-FR')}</span>
-          <button className="sensor-add-btn" onClick={toggleAddPanel}>
-            {showAdd ? '✕' : ' Ajouter'}
+          <button
+            type="button"
+            className={`panel-action-btn ${showAdd ? 'panel-action-btn--active' : ''}`}
+            onClick={toggleAddPanel}
+          >
+            <span className="panel-action-btn__icon" aria-hidden="true">{showAdd ? '×' : '+'}</span>
+            <span>{showAdd ? 'Fermer' : 'Ajouter une camera'}</span>
           </button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import LoginPage   from './components/LoginPage';
 import CameraFeed  from './components/CameraFeed';
 import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
+import surveillanceLogo from './assets/surveillance-logo.svg';
 import './App.css';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -109,7 +110,7 @@ function AppShell() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-logo">
-            <span className="login-logo-icon">⬡</span>
+            <img className="login-logo-icon" src={surveillanceLogo} alt="" aria-hidden="true" />
             <span className="login-logo-text">Chargement...</span>
           </div>
         </div>
@@ -136,7 +137,7 @@ function AppShell() {
       <header className="app-header">
         <div className="app-header-inner">
           <div className="app-logo">
-            <span className="app-logo-icon">⬡</span>
+            <img className="app-logo-icon" src={surveillanceLogo} alt="" aria-hidden="true" />
             <span className="app-logo-text">AUBEPINES</span>
             <span className="app-logo-version">v2.4.1</span>
           </div>

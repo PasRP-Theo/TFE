@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-6e08a099'], (function (workbox) { 'use strict';
+define(['./workbox-1ca034b5'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -79,27 +79,35 @@ define(['./workbox-6e08a099'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.ou08bl8a4pg"
+    "revision": "0.lmcnbopi7c8"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
-    allowlist: [/^\/$/]
+    allowlist: [/^\/$/],
+    denylist: [/^\/api\//, /^\/auth\//]
   }));
   workbox.registerRoute(({
-    request
-  }) => request.destination === "document", new workbox.NetworkFirst({
+    url,
+    sameOrigin
+  }) => sameOrigin && (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")), new workbox.NetworkOnly(), 'GET');
+  workbox.registerRoute(({
+    request,
+    sameOrigin
+  }) => sameOrigin && request.destination === "document", new workbox.NetworkFirst({
     "cacheName": "pages",
     plugins: []
   }), 'GET');
   workbox.registerRoute(({
-    request
-  }) => ["style", "script", "worker"].includes(request.destination), new workbox.StaleWhileRevalidate({
+    request,
+    sameOrigin
+  }) => sameOrigin && ["style", "script", "worker"].includes(request.destination), new workbox.StaleWhileRevalidate({
     "cacheName": "assets",
     plugins: []
   }), 'GET');
   workbox.registerRoute(({
-    request
-  }) => request.destination === "image", new workbox.CacheFirst({
+    request,
+    sameOrigin
+  }) => sameOrigin && request.destination === "image", new workbox.CacheFirst({
     "cacheName": "images",
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 40,
