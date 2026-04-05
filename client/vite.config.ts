@@ -16,9 +16,9 @@ export default defineConfig({
         description: 'Surveillance locale de la maison avec cameras, capteurs et supervision systeme.',
         theme_color: '#0b0f1a',
         background_color: '#0b0f1a',
-        display: 'fullscreen',
-        display_override: ['fullscreen', 'window-controls-overlay', 'standalone', 'minimal-ui'],
-        orientation: 'portrait',
+        display: 'standalone',
+        display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         icons: [
