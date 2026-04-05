@@ -30,11 +30,50 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function AppShell() {
   const { user, logout, loading } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [isInstalledMode, setIsInstalledMode] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
   }, [theme]);
+
+  useEffect(() => {
+    type LegacyMediaQueryList = MediaQueryList & {
+      addListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+      removeListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+    };
+
+    const detectStandaloneMode = () => {
+      const nav = window.navigator as Navigator & { standalone?: boolean };
+      return window.matchMedia('(display-mode: standalone)').matches
+        || window.matchMedia('(display-mode: window-controls-overlay)').matches
+        || nav.standalone === true;
+    };
+
+    const standaloneMedia = window.matchMedia('(display-mode: standalone)') as LegacyMediaQueryList;
+    const overlayMedia = window.matchMedia('(display-mode: window-controls-overlay)') as LegacyMediaQueryList;
+    const updateInstalledMode = () => setIsInstalledMode(detectStandaloneMode());
+    const addMediaListener = (query: LegacyMediaQueryList, handler: (event: MediaQueryListEvent) => void) => {
+      if (typeof query.addEventListener === 'function') {
+        query.addEventListener('change', handler);
+        return () => query.removeEventListener('change', handler);
+      }
+
+      query.addListener?.(handler);
+      return () => query.removeListener?.(handler);
+    };
+
+    updateInstalledMode();
+    const removeStandaloneListener = addMediaListener(standaloneMedia, updateInstalledMode);
+    const removeOverlayListener = addMediaListener(overlayMedia, updateInstalledMode);
+    window.addEventListener('appinstalled', updateInstalledMode);
+
+    return () => {
+      removeStandaloneListener();
+      removeOverlayListener();
+      window.removeEventListener('appinstalled', updateInstalledMode);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -68,7 +107,7 @@ function AppShell() {
   ].filter(l => l.show);
 
   return (
-    <div className="app">
+    <div className={`app ${isInstalledMode ? 'app--installed' : ''}`}>
       <header className="app-header">
         <div className="app-header-inner">
           <div className="app-logo">
@@ -93,9 +132,17 @@ function AppShell() {
             ))}
           </nav>
 
-          <div className="app-status">
-            <span className="app-status-dot" />
-            EN LIGNE · LOCAL
+          <div className="app-status-group">
+            <div className="app-status">
+              <span className="app-status-dot" />
+              EN LIGNE · LOCAL
+            </div>
+            {isInstalledMode && (
+              <div className="app-installed-badge">
+                <span className="app-installed-badge-dot" />
+                MODE APP
+              </div>
+            )}
           </div>
 
           <div className="app-user">
