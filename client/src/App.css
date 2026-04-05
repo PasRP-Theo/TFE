@@ -438,39 +438,6 @@ a:focus-visible {
   transform: translateY(-1px);
 }
 
-.app-install-btn {
-  background: linear-gradient(135deg, rgba(108, 199, 255, 0.2), rgba(108, 199, 255, 0.1));
-  border: 1px solid var(--accent-blue-border);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  min-height: var(--touch-target);
-  padding: 0 16px;
-  border-radius: 999px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
-}
-
-.app-install-btn:hover {
-  background: linear-gradient(135deg, rgba(108, 199, 255, 0.28), rgba(108, 199, 255, 0.14));
-  border-color: var(--accent-blue);
-  color: var(--text-primary);
-  transform: translateY(-1px);
-}
-
-.app-install-hint {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 1.5rem 0.9rem;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-
 /* Utilisateur */
 .app-user {
   display: flex;
@@ -3830,7 +3797,6 @@ a:focus-visible {
   }
 
   .app-user-role,
-  .app-install-btn,
   .app-theme-btn,
   .app-logout-btn,
   .panel-action-btn,
@@ -3838,17 +3804,8 @@ a:focus-visible {
     min-height: 40px;
   }
 
-  .app-install-btn {
-    padding: 0 12px;
-  }
-
   .app-main {
     padding: 0.85rem 0.75rem 1.25rem;
-  }
-
-  .app-install-hint {
-    padding: 0 0.75rem 0.75rem;
-    font-size: var(--text-xs);
   }
 
   .cam-page {
