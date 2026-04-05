@@ -325,7 +325,10 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: min(100%, 760px);
+  margin-right: auto;
   padding: 5px;
   background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
   border: 1px solid var(--border-subtle);
@@ -2995,43 +2998,87 @@ a:focus-visible {
 
 @media (max-width: 640px) {
   .lp-root {
-    padding: 1rem;
+    align-items: stretch;
+    justify-content: center;
+    padding: max(0.9rem, env(safe-area-inset-top)) 0.9rem max(1rem, env(safe-area-inset-bottom));
+    overflow-y: auto;
   }
 
   .lp-card {
     width: 100%;
+    max-width: 100%;
     border-radius: 24px;
+    margin: auto;
   }
 
   .lp-card-body {
-    padding: 26px 20px 22px;
+    padding: 24px 18px 20px;
   }
 
   .lp-subtitle {
     padding-left: 0;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
   }
 
   .lp-card-footer {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 8px;
   }
 
   .lp-sysinfo,
   .lp-clock {
-    position: static;
-    width: 100%;
-    text-align: left;
-    padding: 0 4px;
-  }
-
-  .lp-clock {
-    margin-top: 12px;
+    display: none;
   }
 
   .lp-corner {
     display: none;
+  }
+
+  .lp-scanlines {
+    opacity: 0.4;
+  }
+
+  .lp-card-topbar {
+    padding: 12px 14px;
+  }
+
+  .lp-card-topbar-label {
+    max-width: 180px;
+    font-size: 8px;
+    text-align: right;
+    line-height: 1.5;
+  }
+
+  .lp-logo {
+    gap: 10px;
+  }
+
+  .lp-logo-text {
+    font-size: 16px;
+    letter-spacing: 0.16em;
+  }
+
+  .lp-sep {
+    margin-bottom: 22px;
+  }
+
+  .lp-input {
+    font-size: 16px;
+    min-height: 48px;
+  }
+
+  .lp-btn {
+    min-height: 48px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+  }
+
+  .lp-footer-text,
+  .lp-footer-status {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 }
 
@@ -3935,6 +3982,42 @@ a:focus-visible {
 }
 
 @media (max-width: 420px) {
+  .lp-root {
+    padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem max(0.85rem, env(safe-area-inset-bottom));
+  }
+
+  .lp-card {
+    border-radius: 22px;
+  }
+
+  .lp-card-body {
+    padding: 22px 16px 18px;
+  }
+
+  .lp-card-topbar-label {
+    max-width: 140px;
+    font-size: 7px;
+    letter-spacing: 0.16em;
+  }
+
+  .lp-logo {
+    justify-content: center;
+  }
+
+  .lp-subtitle {
+    margin-bottom: 18px;
+    padding-left: 0;
+    text-align: center;
+  }
+
+  .lp-label {
+    font-size: 8px;
+  }
+
+  .lp-input {
+    padding-left: 32px;
+  }
+
   .cam-clock {
     display: none;
   }
