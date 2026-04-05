@@ -9,6 +9,11 @@ import SystemInfo  from './components/SystemInfo';
 import BrandLogo from './components/BrandLogo.tsx';
 import './App.css';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 // ── Page 403 pour les accès refusés ───────────────────────
 function AccessDenied() {
   return (
@@ -31,6 +36,9 @@ function AppShell() {
   const { user, logout, loading } = useAuth();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isInstalledMode, setIsInstalledMode] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isSecureInstallContext, setIsSecureInstallContext] = useState(true);
+  const [installHint, setInstallHint] = useState('');
   const location = useLocation();
 
   useEffect(() => {
@@ -50,9 +58,48 @@ function AppShell() {
         || nav.standalone === true;
     };
 
+    const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent);
+
+    const refreshInstallState = () => {
+      const installed = detectStandaloneMode();
+      const secure = window.isSecureContext;
+
+      setIsInstalledMode(installed);
+      setIsSecureInstallContext(secure);
+
+      if (installed) {
+        setInstallHint('');
+        return;
+      }
+
+      if (!secure) {
+        setInstallHint('Pas de pop-up d\'installation: ouvre l\'app en HTTPS, pas en http://IP:4000.');
+        return;
+      }
+
+      if (isIos) {
+        setInstallHint('Sur iPhone: utiliser Partager puis Ajouter à l\'écran d\'accueil.');
+        return;
+      }
+
+      setInstallHint('');
+    };
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      const promptEvent = event as BeforeInstallPromptEvent;
+      promptEvent.preventDefault();
+      setInstallPromptEvent(promptEvent);
+      setInstallHint('');
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPromptEvent(null);
+      refreshInstallState();
+    };
+
     const standaloneMedia = window.matchMedia('(display-mode: standalone)') as LegacyMediaQueryList;
     const overlayMedia = window.matchMedia('(display-mode: window-controls-overlay)') as LegacyMediaQueryList;
-    const updateInstalledMode = () => setIsInstalledMode(detectStandaloneMode());
+    const updateInstalledMode = () => refreshInstallState();
     const addMediaListener = (query: LegacyMediaQueryList, handler: (event: MediaQueryListEvent) => void) => {
       if (typeof query.addEventListener === 'function') {
         query.addEventListener('change', handler);
@@ -66,14 +113,28 @@ function AppShell() {
     updateInstalledMode();
     const removeStandaloneListener = addMediaListener(standaloneMedia, updateInstalledMode);
     const removeOverlayListener = addMediaListener(overlayMedia, updateInstalledMode);
-    window.addEventListener('appinstalled', updateInstalledMode);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
       removeStandaloneListener();
       removeOverlayListener();
-      window.removeEventListener('appinstalled', updateInstalledMode);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPromptEvent) return;
+
+    await installPromptEvent.prompt();
+    const choice = await installPromptEvent.userChoice;
+    setInstallPromptEvent(null);
+
+    if (choice.outcome !== 'accepted') {
+      setInstallHint('Installation annulée. Le bouton réapparaîtra si le navigateur repropose l\'installation.');
+    }
+  };
 
   if (loading) {
     return (
@@ -137,6 +198,11 @@ function AppShell() {
               <span className="app-status-dot" />
               EN LIGNE · LOCAL
             </div>
+            {!isInstalledMode && installPromptEvent && (
+              <button className="app-install-btn" onClick={handleInstallClick} type="button">
+                Installer
+              </button>
+            )}
             {isInstalledMode && (
               <div className="app-installed-badge">
                 <span className="app-installed-badge-dot" />
@@ -163,6 +229,11 @@ function AppShell() {
       </header>
 
       <main className="app-main">
+        {!isInstalledMode && installHint && (
+          <div className={`app-install-hint ${isSecureInstallContext ? '' : 'app-install-hint--warning'}`}>
+            {installHint}
+          </div>
+        )}
         <Routes>
           {/* Route capteurs désactivée à la demande. */}
           <Route path="/"        element={<Navigate to="/videos" replace />} />

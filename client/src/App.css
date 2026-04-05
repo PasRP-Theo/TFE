@@ -469,6 +469,44 @@ a:focus-visible {
   box-shadow: 0 14px 30px rgba(1, 8, 20, 0.34);
 }
 
+.app-install-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(108, 199, 255, 0.3);
+  background: linear-gradient(135deg, rgba(108, 199, 255, 0.18), rgba(29, 78, 216, 0.1));
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.app-install-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(108, 199, 255, 0.46);
+  background: linear-gradient(135deg, rgba(108, 199, 255, 0.24), rgba(29, 78, 216, 0.14));
+}
+
+.app-install-hint {
+  width: min(1400px, calc(100% - 32px));
+  margin: 18px auto 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-card);
+}
+
+.app-install-hint--warning {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.08);
+  color: var(--text-primary);
+}
+
 .app-status-dot {
   width: 8px;
   height: 8px;
