@@ -9,6 +9,7 @@ import {
   RECORDINGS_DIR,
 } from '../camera/manager.js';
 import { discoverMdnsEsp32Cameras } from '../camera/mdns.js';
+import { normalizeTapoCameraInput } from '../camera/tapo.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -45,6 +46,62 @@ function getHostFromStreamUrl(streamUrl) {
   } catch {
     return '';
   }
+}
+
+function maskStreamUrl(streamUrl) {
+  const value = String(streamUrl || '').trim();
+  if (!value) return value;
+
+  try {
+    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
+    if (parsed.username) parsed.username = '***';
+    if (parsed.password) parsed.password = '***';
+    return parsed.toString();
+  } catch {
+    return value.replace(/\/\/([^:@/]+):([^@/]+)@/g, '//***:***@');
+  }
+}
+
+function serializeCamera(camera) {
+  return {
+    ...camera,
+    rtsp_url: maskStreamUrl(camera.rtsp_url),
+    ...getState(camera.id),
+  };
+}
+
+function normalizeCreateCameraPayload(body = {}) {
+  const provider = String(body.provider || body.camera_type || body.brand || '').trim().toLowerCase();
+  const name = String(body.name || '').trim();
+  const location = String(body.location || '').trim();
+  const looksLikeTapo = provider === 'tapo'
+    || Boolean(body.tapoHost || body.tapoUsername || body.tapoPassword || body.tapoStream);
+
+  if (looksLikeTapo) {
+    const tapo = normalizeTapoCameraInput(body);
+    if (!tapo.ok) return tapo;
+
+    return {
+      ok: true,
+      name: name || tapo.model,
+      rtspUrl: tapo.rtspUrl,
+      location: location || tapo.host,
+      discoverySource: 'manual-tapo',
+    };
+  }
+
+  const rtspUrl = String(body.rtsp_url || body.streamUrl || '').trim();
+  if (!name || !rtspUrl) {
+    return { ok: false, error: 'Nom et URL RTSP requis' };
+  }
+
+  return {
+    ok: true,
+    name,
+    rtspUrl,
+    location,
+    discoverySource: 'manual',
+  };
 }
 
 async function upsertDiscovery(payload) {
@@ -109,7 +166,7 @@ async function deleteExpiredDiscoveries() {
 router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras ORDER BY id');
-    const result   = rows.map(cam => ({ ...cam, ...getState(cam.id) }));
+    const result   = rows.map(cam => serializeCamera(cam));
     res.json(result);
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -118,28 +175,31 @@ router.get('/', async (req, res) => {
 
 // POST /api/cameras — ajouter
 router.post('/', async (req, res) => {
-  const { name, rtsp_url, location } = req.body;
-  if (!name || !rtsp_url)
-    return res.status(400).json({ error: 'Nom et URL RTSP requis' });
+  const normalized = normalizeCreateCameraPayload(req.body);
+  if (!normalized.ok) {
+    return res.status(400).json({ error: normalized.error || 'Parametres camera invalides' });
+  }
+
+  const { name, rtspUrl, location, discoverySource } = normalized;
   try {
     const { rows } = await pool.query(
       'INSERT INTO cameras (name, rtsp_url, location) VALUES ($1,$2,$3) RETURNING *',
-      [name, rtsp_url, location || '']
+      [name, rtspUrl, location || '']
     );
     const camera = rows[0];
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
-    const host = getHostFromStreamUrl(rtsp_url);
+    const host = getHostFromStreamUrl(rtspUrl);
     if (host) {
       await upsertDiscovery({
         deviceId: `manual:${host}`,
         name,
         host,
-        streamUrl: rtsp_url,
+        streamUrl: rtspUrl,
         location: location || '',
-        source: 'manual',
+        source: discoverySource,
       }).catch(err => console.error('[CAM DISCOVERY UPSERT]', err));
     }
-    res.status(201).json({ ...camera, ...getState(camera.id) });
+    res.status(201).json(serializeCamera(camera));
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
   }

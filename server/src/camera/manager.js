@@ -38,6 +38,26 @@ const SCAN_SUBNETS = String(process.env.CAMERA_SCAN_SUBNETS || '192.168.0')
   .filter(value => /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(value))
   .filter(Boolean);
 
+function redactStreamUrl(value) {
+  const input = String(value || '').trim();
+  if (!input) return input;
+
+  try {
+    const parsed = /^[a-z]+:/i.test(input) ? new URL(input) : new URL(`http://${input}`);
+    if (parsed.username) parsed.username = '***';
+    if (parsed.password) parsed.password = '***';
+    return /^[a-z]+:/i.test(input)
+      ? parsed.toString()
+      : `${parsed.hostname}${parsed.port ? `:${parsed.port}` : ''}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+  } catch {
+    return input.replace(/\/\/([^:@/]+):([^@/]+)@/g, '//***:***@');
+  }
+}
+
+function redactCommandArgs(args) {
+  return args.map(arg => (/^(rtsp|https?):/i.test(String(arg)) ? redactStreamUrl(String(arg)) : arg));
+}
+
 function isPrivateIpv4(address) {
   return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(address);
 }
@@ -433,7 +453,7 @@ export async function startCamera(camera) {
   const argsFinal = [...args, ...outArgs];
 
   const proc = spawn(FFMPEG_BIN, argsFinal, { stdio: ['ignore', 'pipe', 'pipe'] });
-  console.log(`[CAM ${id}] lancement ffmpeg ${FFMPEG_BIN} ${argsFinal.join(' ')}`);
+  console.log(`[CAM ${id}] lancement ffmpeg ${FFMPEG_BIN} ${redactCommandArgs(argsFinal).join(' ')}`);
 
   proc.on('error', err => {
     console.error(`[CAM ${id}] impossible de démarrer ffmpeg (${FFMPEG_BIN}): ${err.message}`);
@@ -472,7 +492,7 @@ export async function startCamera(camera) {
     }
   });
 
-  console.log(`[CAM ${id}] Démarré → ${sourceUrl} transport=${isRtsp ? RTSP_TRANSPORT : 'http'}`);
+  console.log(`[CAM ${id}] Démarré → ${redactStreamUrl(sourceUrl)} transport=${isRtsp ? RTSP_TRANSPORT : 'http'}`);
 }
 
 export function pauseCamera(cameraId) {

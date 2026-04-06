@@ -37,7 +37,7 @@ interface DiscoveredCamera {
   created_at: string;
 }
 
-type AddMode = 'discover' | 'manual';
+type AddMode = 'tapo' | 'discover' | 'manual';
 
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
@@ -294,8 +294,12 @@ export default function CameraFeed() {
   const [newName, setNewName] = useState('');
   const [newRtsp, setNewRtsp] = useState('');
   const [newLoc,  setNewLoc]  = useState('');
+  const [tapoHost, setTapoHost] = useState('');
+  const [tapoUsername, setTapoUsername] = useState('');
+  const [tapoPassword, setTapoPassword] = useState('');
+  const [tapoStream, setTapoStream] = useState<'main' | 'sub'>('main');
   const [loading, setLoading] = useState(true);
-  const [addMode, setAddMode] = useState<AddMode>('discover');
+  const [addMode, setAddMode] = useState<AddMode>('tapo');
   const [searchingEsp32, setSearchingEsp32] = useState(false);
   const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredCamera[]>([]);
@@ -334,7 +338,7 @@ export default function CameraFeed() {
     if (!showAdd) return;
 
     let stopped = false;
-    setAddMode('discover');
+    setAddMode('tapo');
 
     fetchDiscoveries();
     const interval = setInterval(() => {
@@ -402,6 +406,43 @@ export default function CameraFeed() {
       setCameras(prev => [...prev, data]);
       setNewName(''); setNewRtsp(''); setNewLoc(''); setDiscoverMessage(null); setShowAdd(false);
     } catch { /* ignore */ }
+  }
+
+  async function addTapoCamera() {
+    if (!tapoHost.trim() || !tapoUsername.trim() || !tapoPassword.trim()) return;
+    try {
+      const cameraName = newName.trim() || 'Tapo C220';
+      const cameraLocation = newLoc.trim() || tapoHost.trim();
+      const res = await fetch(`${API}/api/cameras`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'tapo',
+          model: 'Tapo C220',
+          name: cameraName,
+          location: cameraLocation,
+          tapoHost,
+          tapoUsername,
+          tapoPassword,
+          tapoStream,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Impossible d’ajouter la Tapo C220');
+      setCameras(prev => [...prev, data]);
+      setNewName('');
+      setNewRtsp('');
+      setNewLoc('');
+      setTapoHost('');
+      setTapoUsername('');
+      setTapoPassword('');
+      setTapoStream('main');
+      setDiscoverMessage(null);
+      setShowAdd(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setDiscoverMessage(message);
+    }
   }
 
   function selectDiscoveredDevice(device: DiscoveredCamera) {
@@ -474,12 +515,13 @@ export default function CameraFeed() {
   const recCount    = cameras.filter(c => c.recording).length;
   const focusedCam  = cameras.find(c => c.id === focused);
   const canAddManually = Boolean(newName.trim() && newRtsp.trim());
+  const canAddTapo = Boolean(tapoHost.trim() && tapoUsername.trim() && tapoPassword.trim());
 
   function toggleAddPanel() {
     setShowAdd((current) => {
       const next = !current;
       if (next) {
-        setAddMode('discover');
+        setAddMode('tapo');
       } else {
         setDiscoverMessage(null);
       }
@@ -518,9 +560,16 @@ export default function CameraFeed() {
           <div className="cam-add-topbar">
             <div>
               <h3 className="cam-add-title">Ajouter une caméra</h3>
-              <p className="cam-add-subtitle">Choisissez un mode simple puis validez.</p>
+              <p className="cam-add-subtitle">Tapo C220, ESP32-CAM ou flux manuel.</p>
             </div>
             <div className="cam-add-mode-switch">
+              <button
+                type="button"
+                className={`cam-add-mode-btn ${addMode === 'tapo' ? 'cam-add-mode-btn--active' : ''}`}
+                onClick={() => setAddMode('tapo')}
+              >
+                Tapo C220
+              </button>
               <button
                 type="button"
                 className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
@@ -537,6 +586,49 @@ export default function CameraFeed() {
               </button>
             </div>
           </div>
+
+          {addMode === 'tapo' && (
+            <section className="cam-manual-panel">
+              <div>
+                <h3 className="cam-discovery-title">Ajouter une Tapo C220</h3>
+                <p className="cam-discovery-subtitle">Le serveur construit l’URL RTSP Tapo automatiquement.</p>
+              </div>
+              <div className="sensor-note">
+                <p>Dans l’app Tapo: active RTSP/ONVIF puis cree un compte camera dedie. Utilise ensuite l’IP locale de la camera ici.</p>
+              </div>
+              <input className="sensor-input" placeholder="Nom de la caméra (optionnel, défaut: Tapo C220)"
+                value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
+              <input className="sensor-input" placeholder="Adresse IP locale de la caméra (ex: 192.168.0.58)"
+                value={tapoHost} onChange={e => setTapoHost(e.target.value)} />
+              <input className="sensor-input" placeholder="Identifiant du compte caméra Tapo"
+                value={tapoUsername} onChange={e => setTapoUsername(e.target.value)} />
+              <input className="sensor-input" placeholder="Mot de passe du compte caméra Tapo"
+                type="password"
+                value={tapoPassword} onChange={e => setTapoPassword(e.target.value)} />
+              <select
+                className="sensor-input"
+                aria-label="Qualite du flux Tapo"
+                value={tapoStream}
+                onChange={e => setTapoStream(e.target.value === 'sub' ? 'sub' : 'main')}
+              >
+                <option value="main">Flux principal (stream1)</option>
+                <option value="sub">Flux secondaire (stream2)</option>
+              </select>
+              <input className="sensor-input" placeholder="Emplacement (optionnel)"
+                value={newLoc} onChange={e => setNewLoc(e.target.value)} />
+              {discoverMessage && (
+                <div className="sensor-note">
+                  <p>{discoverMessage}</p>
+                </div>
+              )}
+              <div className="cam-add-actions">
+                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('manual')}>
+                  Saisir une URL manuellement
+                </button>
+                <button className="sensor-confirm-btn" onClick={addTapoCamera} disabled={!canAddTapo}>Ajouter la Tapo</button>
+              </div>
+            </section>
+          )}
 
           {addMode === 'discover' && (
             <section className="cam-discovery-panel">
@@ -615,8 +707,8 @@ export default function CameraFeed() {
                 </div>
               )}
               <div className="cam-add-actions">
-                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('discover')}>
-                  Retour aux ESP32
+                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('tapo')}>
+                  Retour a Tapo C220
                 </button>
                 <button className="sensor-confirm-btn" onClick={addCamera} disabled={!canAddManually}>Ajouter</button>
               </div>
