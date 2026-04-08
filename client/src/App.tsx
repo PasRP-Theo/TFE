@@ -8,7 +8,9 @@ import LoginPage   from './components/LoginPage';
 import CameraFeed  from './components/CameraFeed';
 import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
+import AlertsPage  from './components/AlertsPage';
 import BrandLogo from './components/BrandLogo.tsx';
+import { apiUrl, readJsonResponse } from './lib/api';
 import './App.css';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -40,8 +42,7 @@ function AppShell() {
   const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isSecureInstallContext, setIsSecureInstallContext] = useState(true);
-  const [installHint, setInstallHint] = useState('');
+  const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
   const location = useLocation();
 
   useEffect(() => {
@@ -57,38 +58,15 @@ function AppShell() {
         || nav.standalone === true;
     };
 
-    const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent);
-
     const refreshInstallState = () => {
       const installed = detectStandaloneMode();
-      const secure = window.isSecureContext;
-
       setIsInstalledMode(installed);
-      setIsSecureInstallContext(secure);
-
-      if (installed) {
-        setInstallHint('');
-        return;
-      }
-
-      if (!secure) {
-        setInstallHint('Pas de pop-up d\'installation: ouvre l\'app en HTTPS, pas en http://IP:4000.');
-        return;
-      }
-
-      if (isIos) {
-        setInstallHint('Sur iPhone: utiliser Partager puis Ajouter à l\'écran d\'accueil.');
-        return;
-      }
-
-      setInstallHint('');
     };
 
     const handleBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as BeforeInstallPromptEvent;
       promptEvent.preventDefault();
       setInstallPromptEvent(promptEvent);
-      setInstallHint('');
     };
 
     const handleAppInstalled = () => {
@@ -127,13 +105,38 @@ function AppShell() {
     if (!installPromptEvent) return;
 
     await installPromptEvent.prompt();
-    const choice = await installPromptEvent.userChoice;
+    await installPromptEvent.userChoice;
     setInstallPromptEvent(null);
-
-    if (choice.outcome !== 'accepted') {
-      setInstallHint('Installation annulée. Le bouton réapparaîtra si le navigateur repropose l\'installation.');
-    }
   };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let stopped = false;
+
+    const refreshAlertsSummary = async () => {
+      try {
+        const response = await fetch(apiUrl('/api/alerts/summary'), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await readJsonResponse<{ pending_count?: number } & { error?: string }>(response);
+        if (!response.ok || stopped) return;
+        setPendingAlertsCount(data.pending_count || 0);
+      } catch {
+        if (!stopped) setPendingAlertsCount(0);
+      }
+    };
+
+    refreshAlertsSummary().catch(() => {});
+    const interval = setInterval(() => refreshAlertsSummary().catch(() => {}), 15000);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [user]);
 
   if (loading) {
     return (
@@ -161,6 +164,7 @@ function AppShell() {
     // Vue capteurs désactivée à la demande.
     // { to: '/',         label: 'Capteurs',   show: true    },
     { to: '/videos',   label: 'Caméras',    shortLabel: 'Caméras',  icon: '◉', show: true    },
+    { to: '/alerts',   label: 'Alertes',    shortLabel: 'Alertes',  icon: '⚠', show: true, badge: pendingAlertsCount > 0 ? String(pendingAlertsCount) : '' },
     { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: true },
     //{ to: '/courses',  label: 'Courses',    show: true    },
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
@@ -182,12 +186,13 @@ function AppShell() {
           </div>
 
           <nav className="app-nav" aria-label="Navigation principale">
-            {navLinks.map(({ to, label, shortLabel, icon }) => (
+            {navLinks.map(({ to, label, shortLabel, icon, badge }) => (
               <Link key={to} to={to}
                 className={`app-nav-link ${location.pathname === to ? 'active' : ''}`}>
                 <span className="app-nav-link-icon" aria-hidden="true">{icon}</span>
                 <span className="app-nav-link-text app-nav-link-text--full">{label}</span>
                 <span className="app-nav-link-text app-nav-link-text--short">{shortLabel}</span>
+                {badge ? <span className="app-nav-link-badge">{badge}</span> : null}
               </Link>
             ))}
           </nav>
@@ -230,15 +235,11 @@ function AppShell() {
       </header>
 
       <main className="app-main">
-        {!isInstalledMode && installHint && (
-          <div className={`app-install-hint ${isSecureInstallContext ? '' : 'app-install-hint--warning'}`}>
-            {installHint}
-          </div>
-        )}
         <Routes>
           {/* Route capteurs désactivée à la demande. */}
           <Route path="/"        element={<Navigate to="/videos" replace />} />
           <Route path="/videos"  element={<CameraFeed />} />
+          <Route path="/alerts"  element={<AlertsPage />} />
           {/* <Route path="/courses" element={<GroceryList />} />*/}
           <Route path="/system"  element={<SystemInfo />} />
           <Route path="/settings" element={

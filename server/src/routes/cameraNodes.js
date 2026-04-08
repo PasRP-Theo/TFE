@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { startCamera, getState } from '../camera/manager.js';
+import { createAlert } from '../alerts/service.js';
 
 const router = Router();
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
@@ -177,6 +178,23 @@ router.post('/motion', async (req, res) => {
          VALUES ($1, $2, $3)`,
         [deviceId, true, detectedAt.toISOString()]
       );
+
+      await createAlert({
+        sourceType: 'camera-node',
+        sourceId: deviceId,
+        alertType: 'motion_detected',
+        level: 'warning',
+        title: `Mouvement detecte - ${rows[0].name}`,
+        message: `Un mouvement a ete detecte sur le noeud camera ${rows[0].name}.`,
+        metadata: {
+          deviceId,
+          host: rows[0].host,
+          location: rows[0].location,
+          detectedAt: detectedAt.toISOString(),
+        },
+        dedupeKey: `motion:${deviceId}`,
+        cooldownSeconds: 300,
+      }).catch((err) => console.error('[ALERT MOTION]', err));
     }
 
     const connectedHosts = await getConnectedHosts();

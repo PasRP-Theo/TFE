@@ -14,8 +14,10 @@ import systemRoutes          from "./src/routes/system.js";
 import cameraRoutes          from "./src/routes/cameras.js";
 import cameraNodeRoutes      from "./src/routes/cameraNodes.js";
 import appConfigRoutes       from "./src/routes/appConfig.js";
-import { startCamera, stopAllCameras, cleanupOldRecordings } from "./src/camera/manager.js";
+import alertsRoutes          from "./src/routes/alerts.js";
+import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
+import { createAlert } from "./src/alerts/service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -124,6 +126,7 @@ app.use("/api/system",  systemRoutes);
 app.use("/api/camera-nodes", cameraNodeRoutes);
 app.use("/api/cameras", cameraRoutes);
 app.use("/api/app-config", appConfigRoutes);
+app.use("/api/alerts", alertsRoutes);
 
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
@@ -135,6 +138,60 @@ app.get("/*", (_, res) => res.sendFile(path.join(distPath, "index.html")));
 // ── Démarrage ──────────────────────────────────────────────
 async function start() {
   await initDB();
+
+  const runOfflineAlertsCheck = async () => {
+    try {
+      const [cameraResult, nodeResult] = await Promise.all([
+        pool.query('SELECT id, name, location FROM cameras WHERE active = true'),
+        pool.query(`SELECT device_id, name, host, location, last_seen_at FROM camera_nodes`),
+      ]);
+      const states = getAllStates();
+
+      await Promise.all(cameraResult.rows.map(async (camera) => {
+        const state = states[String(camera.id)] || { status: 'stopped' };
+        if (state.status === 'running') return;
+        await createAlert({
+          sourceType: 'camera',
+          sourceId: String(camera.id),
+          cameraId: camera.id,
+          alertType: 'camera_offline',
+          level: 'critical',
+          title: `Camera hors ligne - ${camera.name}`,
+          message: `La camera ${camera.name} n'est actuellement pas en cours d'execution (${state.status}).`,
+          metadata: {
+            cameraId: camera.id,
+            location: camera.location,
+            status: state.status,
+          },
+          dedupeKey: `camera-offline:${camera.id}`,
+          cooldownSeconds: 1800,
+        });
+      }));
+
+      await Promise.all(nodeResult.rows.map(async (node) => {
+        const lastSeen = node.last_seen_at ? new Date(node.last_seen_at).getTime() : 0;
+        if (!lastSeen || Date.now() - lastSeen <= 90_000) return;
+        await createAlert({
+          sourceType: 'camera-node',
+          sourceId: node.device_id,
+          alertType: 'node_offline',
+          level: 'critical',
+          title: `Noeud hors ligne - ${node.name}`,
+          message: `Le noeud camera ${node.name} n'a pas donne de nouvelles depuis plus de 90 secondes.`,
+          metadata: {
+            deviceId: node.device_id,
+            host: node.host,
+            location: node.location,
+            lastSeenAt: node.last_seen_at,
+          },
+          dedupeKey: `node-offline:${node.device_id}`,
+          cooldownSeconds: 1800,
+        });
+      }));
+    } catch (error) {
+      console.error('[ALERT OFFLINE MONITOR]', error);
+    }
+  };
 
   // Auto-démarrer les caméras actives en base
   try {
@@ -153,6 +210,8 @@ async function start() {
 
   cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err));
   setInterval(() => cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err)), 24 * 60 * 60 * 1000);
+  runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err));
+  setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
 
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
