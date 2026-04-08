@@ -128,6 +128,23 @@ export async function initDB() {
         created_at  TIMESTAMP    DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS alerts (
+        id               SERIAL PRIMARY KEY,
+        source_type      VARCHAR(40)  NOT NULL,
+        source_id        VARCHAR(120),
+        camera_id        INTEGER REFERENCES cameras(id) ON DELETE SET NULL,
+        alert_type       VARCHAR(60)  NOT NULL,
+        level            VARCHAR(20)  NOT NULL DEFAULT 'info',
+        title            VARCHAR(180) NOT NULL,
+        message          TEXT         NOT NULL,
+        metadata         JSONB        NOT NULL DEFAULT '{}'::jsonb,
+        dedupe_key       VARCHAR(160),
+        status           VARCHAR(20)  NOT NULL DEFAULT 'new',
+        acknowledged_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        acknowledged_at  TIMESTAMP,
+        created_at       TIMESTAMP    NOT NULL DEFAULT NOW()
+      );
+
       /* Intégration capteurs désactivée à la demande.
       CREATE INDEX IF NOT EXISTS idx_readings_sensor
         ON sensor_readings(sensor_id, recorded_at DESC);
@@ -144,6 +161,18 @@ export async function initDB() {
 
       CREATE INDEX IF NOT EXISTS idx_camera_node_motion_events_device_time
         ON camera_node_motion_events(device_id, detected_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_alerts_created_at
+        ON alerts(created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_alerts_status_level
+        ON alerts(status, level);
+
+      CREATE INDEX IF NOT EXISTS idx_alerts_type_source
+        ON alerts(alert_type, source_type, source_id);
+
+      CREATE INDEX IF NOT EXISTS idx_alerts_dedupe_key
+        ON alerts(dedupe_key);
     `);
 
     await client.query(`

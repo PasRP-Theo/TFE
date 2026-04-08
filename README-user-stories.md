@@ -99,6 +99,40 @@ Les stories sont organisees par epic et priorisees selon leur importance pour le
 
 ---
 
+## Epic 6 - Centre d'Alertes
+
+| ID | User story | Criteres d'acceptation | Prio | Etat |
+| --- | --- | --- | --- | --- |
+| US-27 | En tant qu'utilisateur, je veux consulter un centre d'alertes unifie, afin de voir rapidement tous les incidents du systeme. | Liste centralisee des alertes cameras/systeme ; tri par date ; filtre par criticite et statut ; acces protege JWT. | P1 | A faire |
+| US-28 | En tant qu'utilisateur, je veux accuser reception d'une alerte, afin de distinguer les alertes vues des alertes en attente. | Bouton `Confirmer` par alerte ; statut `nouvelle`, `vue`, `confirmee` ; persistance en base ; mise a jour immediate dans l'UI. | P1 | A faire |
+| US-29 | En tant qu'utilisateur, je veux exporter l'historique des alertes, afin de faire un suivi ou un rapport. | Export CSV ; filtres conserves dans l'export ; colonnes date/type/niveau/source/statut. | P2 | A faire |
+| US-30 | En tant qu'utilisateur, je veux recevoir les alertes critiques en temps reel, afin de reagir sans rafraichir l'interface. | Push temps reel via WebSocket ou SSE ; badge de compteur ; notification visuelle dans le dashboard. | P1 | A faire |
+| US-31 | En tant qu'administrateur, je veux configurer les canaux d'alerte, afin d'adapter la notification au contexte d'installation. | Activation/desactivation par canal ; support local UI, son, email ou webhook ; test d'envoi depuis les parametres. | P2 | A faire |
+
+### Notes d'adaptation
+
+- Cet epic est le prolongement naturel des reglages d'alertes deja presents dans l'application.
+- Il manque aujourd'hui la vraie couche metier : stockage, consultation, acquittement et diffusion multi-canaux.
+
+---
+
+## Epic 7 - Intelligence Legere et Analyse
+
+| ID | User story | Criteres d'acceptation | Prio | Etat |
+| --- | --- | --- | --- | --- |
+| US-32 | En tant qu'utilisateur, je veux voir les cameras les plus actives, afin d'identifier rapidement les zones sensibles. | Classement par nombre d'evenements de mouvement sur 24 h / 7 jours ; affichage top 5 ; mise a jour automatique. | P2 | A faire |
+| US-33 | En tant qu'utilisateur, je veux recevoir un resume quotidien du systeme, afin d'avoir une vue synthese sans ouvrir chaque ecran. | Resume du nombre d'alertes, mouvements, cameras offline et enregistrements ; affichage dashboard et export texte/CSV. | P2 | A faire |
+| US-34 | En tant qu'utilisateur, je veux visualiser les plages horaires les plus actives, afin de comprendre les habitudes de mouvement. | Histogramme ou vue par tranche horaire ; filtre par camera et periode ; donnees calculees depuis l'historique mouvement. | P2 | A faire |
+| US-35 | En tant qu'utilisateur, je veux detecter les anomalies simples, afin d'etre alerte quand un comportement sort de l'ordinaire. | Regle simple sur camera anormalement silencieuse ou anormalement active ; seuil configurable ; generation d'alerte associee. | P2 | A faire |
+| US-36 | En tant qu'administrateur, je veux activer ou desactiver les rapports d'analyse, afin de garder un systeme leger sur les petites installations. | Toggle de module dans les parametres ; calcul des statistiques desactive si option OFF ; impact visible dans l'interface. | P2 | A faire |
+
+### Notes d'adaptation
+
+- Cet epic reste volontairement leger : pas de modele IA lourd, seulement des statistiques et des regles simples exploitables dans le TFE.
+- Il s'appuie sur les donnees deja presentes ou prevues : mouvements, etat des cameras, historique des alertes et enregistrements.
+
+---
+
 ## Priorisation recommandee
 
 Si l'objectif est de terminer le projet de facon pragmatique, l'ordre conseille est :
@@ -113,6 +147,10 @@ Si l'objectif est de terminer le projet de facon pragmatique, l'ordre conseille 
    - US-15
    - US-16
    - US-22
+   - US-27
+   - US-28
+   - US-30
+   - US-31
 
 3. Gerer la robustesse des noeuds autonomes ESP32-S3.
    - US-01
@@ -127,6 +165,13 @@ Si l'objectif est de terminer le projet de facon pragmatique, l'ordre conseille 
    - US-21
    - US-23
    - US-26
+
+5. Ajouter une couche d'analyse simple et exploitable.
+   - US-32
+   - US-33
+   - US-34
+   - US-35
+   - US-36
 
 ---
 
@@ -145,8 +190,11 @@ Fonctionnalites deja bien avancees :
 Fonctionnalites encore structurantes a faire :
 
 - vraie pile d'alertes metier
+- centre d'alertes avec acquittement et export
 - upload de videos depuis coupure WiFi
 - notifications push
+- resumes et statistiques d'activite
+- detection d'anomalies simples
 - mode boitier de controle PIN
 - firmware autonome ESP32-S3 complet
 - securisation d'acces externe via Tailscale
