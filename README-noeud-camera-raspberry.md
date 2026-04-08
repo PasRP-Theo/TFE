@@ -463,6 +463,32 @@ Exemple d'endpoint a prevoir cote serveur principal :
 POST /api/camera-nodes/motion
 ```
 
+## Annonce automatique du noeud au serveur principal
+
+Pour avoir un bouton `Connecter` dans l'interface, le Raspberry Pi doit d'abord s'annoncer au serveur principal.
+
+Un script d'exemple est fourni ici :
+
+- [examples/raspberry-pi-node/announce_node.py](/c:/Users/theom/Desktop/surveillance/examples/raspberry-pi-node/announce_node.py)
+
+Execution type :
+
+```bash
+python3 examples/raspberry-pi-node/announce_node.py --server http://IP_DU_SERVEUR:4000 --device-id pi-cam-01 --name "Noeud salon" --location "Salon"
+```
+
+Flux de connexion recommande :
+
+1. le Raspberry Pi demarre
+2. il expose son flux local
+3. il annonce sa presence au serveur principal
+4. l'interface detecte le noeud
+5. l'utilisateur clique sur `Connecter`
+
+Procedure de test detaillee :
+
+- [examples/raspberry-pi-node/README-test-procedure.md](/c:/Users/theom/Desktop/surveillance/examples/raspberry-pi-node/README-test-procedure.md)
+
 ## Script Python d'exemple pour le PIR
 
 Un exemple de script est fourni dans le depot ici :
@@ -486,22 +512,32 @@ python3 examples/raspberry-pi-node/pir_sender.py --server http://IP_DU_SERVEUR:4
 Pour une version propre du TFE, il faut prevoir au minimum deux services au boot du Raspberry Pi :
 
 1. le service video
-2. le script PIR
+2. le script d'annonce du noeud
+3. le script PIR
 
 Exemple de logique :
 
 1. au demarrage, le Pi lance le flux video
-2. au demarrage, le Pi lance aussi l'ecoute du PIR
-3. si le Pi redemarre apres une coupure, il reprend seul son fonctionnement
+2. au demarrage, le Pi annonce aussi sa presence au serveur principal
+3. au demarrage, le Pi lance aussi l'ecoute du PIR
+4. si le Pi redemarre apres une coupure, il reprend seul son fonctionnement
+
+## Ce qui est deja prevu dans le projet principal
+
+Le projet principal contient maintenant cette base :
+
+1. annonce d'un noeud Raspberry Pi
+2. liste des noeuds detectes
+3. bouton `Connecter` dans l'interface
+4. endpoint de remontee du mouvement
 
 ## Ce qu'il faudra adapter ensuite dans le projet principal
 
 Pour exploiter pleinement le noeud camera, il faudra ensuite ajouter au projet principal :
 
-1. un endpoint pour recevoir l'etat mouvement
-2. un stockage simple du dernier etat mouvement par noeud camera
-3. un affichage de cet etat dans l'interface
-4. eventuellement un historique des evenements
+1. eventuellement un historique des evenements
+2. eventuellement une notification visuelle plus poussee
+3. eventuellement des services systemd documentes pour le Raspberry Pi
 
 ## Repartition du travail code / systeme / electronique
 
@@ -548,6 +584,34 @@ Si le but est d'avoir un systeme defensable, stable et pas trop risqué, le meil
 5. 1 liaison reseau vers le serveur principal
 
 Ce choix est plus pertinent qu'une camera cloud grand public, et plus realiste qu'un systeme sur batterie des la premiere version.
+
+## Liste d'achat finale simple
+
+Si tu veux quelque chose de coherent, simple et defensable pour le TFE, voici la liste d'achat que je recommande.
+
+Version la plus simple :
+
+1. 1 Raspberry Pi 3 ou 4
+2. 1 alimentation stable compatible Raspberry Pi
+3. 1 carte microSD de 32 Go minimum
+4. 1 webcam USB UVC, idealement Logitech ou modele Linux-compatible
+5. 1 capteur PIR HC-SR501
+6. 3 a 4 fils Dupont
+7. 1 acces reseau Wi-Fi ou Ethernet
+
+Version un peu plus propre :
+
+1. 1 boitier Raspberry Pi
+2. 1 dissipateur thermique
+3. 1 cable Ethernet
+4. 1 petite alimentation de secours pour le Raspberry Pi et le routeur
+
+Si tu dois acheter sans trop te tromper :
+
+1. Raspberry Pi 3 ou 4 d'occasion si possible
+2. webcam Logitech UVC ou webcam USB UVC bien supportee
+3. PIR HC-SR501
+4. alimentation filaire
 
 ## Mise en place recommandee
 

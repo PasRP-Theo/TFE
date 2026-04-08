@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+import { apiUrl } from "../lib/api";
 
 interface GroceryItem {
   id:       number;
@@ -31,7 +30,7 @@ export default function GroceryList() {
 
   // ── Chargement ─────────────────────────────────────────────
   useEffect(() => {
-    fetch(`${API}/api/grocery`)
+    fetch(apiUrl('/api/grocery'))
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) setItems(data);
@@ -44,7 +43,7 @@ export default function GroceryList() {
   async function addItem() {
     if (!newName.trim()) return;
     try {
-      const res  = await fetch(`${API}/api/grocery`, {
+      const res  = await fetch(apiUrl('/api/grocery'), {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -68,7 +67,7 @@ export default function GroceryList() {
     // Mise à jour optimiste
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, checked: !i.checked } : i));
     try {
-      const res = await fetch(`${API}/api/grocery/${item.id}`, {
+      const res = await fetch(apiUrl(`/api/grocery/${item.id}`), {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ checked: !item.checked }),
@@ -87,7 +86,7 @@ export default function GroceryList() {
     const qty = Math.max(1, item.quantity + delta);
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, quantity: qty } : i));
     try {
-      await fetch(`${API}/api/grocery/${item.id}`, {
+      await fetch(apiUrl(`/api/grocery/${item.id}`), {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ quantity: qty }),
@@ -99,7 +98,7 @@ export default function GroceryList() {
   async function remove(id: number) {
     setItems(prev => prev.filter(i => i.id !== id));
     try {
-      await fetch(`${API}/api/grocery/${id}`, { method: "DELETE" });
+      await fetch(apiUrl(`/api/grocery/${id}`), { method: "DELETE" });
     } catch { /* ignore */ }
   }
 
@@ -107,7 +106,7 @@ export default function GroceryList() {
   async function clearDone() {
     setItems(prev => prev.filter(i => !i.checked));
     try {
-      await fetch(`${API}/api/grocery/checked/all`, { method: "DELETE" });
+      await fetch(apiUrl('/api/grocery/checked/all'), { method: "DELETE" });
     } catch { /* ignore */ }
   }
 

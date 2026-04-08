@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { apiUrl, readJsonResponse } from '../lib/api';
 
 interface User {
   id:    number;
@@ -16,7 +17,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const API = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 function decodeJWT(token: string): { exp?: number } | null {
   try {
@@ -48,10 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    fetch(`${API}/auth/me`, {
+    fetch(apiUrl('/auth/me'), {
       headers: { Authorization: `Bearer ${saved}` },
     })
-      .then(r => r.ok ? r.json() : null)
+      .then(async r => (r.ok ? readJsonResponse<{ user?: User }>(r) : null))
       .then(data => {
         if (data?.user) { setUser(data.user); setToken(saved); }
         else localStorage.removeItem('token');
@@ -76,12 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token, logout]);
 
   async function login(username: string, password: string) {
-    const res  = await fetch(`${API}/auth/login`, {
+    const res  = await fetch(apiUrl('/auth/login'), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ username: username.toLowerCase().trim(), password }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse<{ error?: string; token: string; user: User }>(res);
     if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
     localStorage.setItem('token', data.token);
     setToken(data.token);

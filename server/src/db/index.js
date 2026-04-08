@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import pg from 'pg';
+import bcrypt from 'bcryptjs';
 const { Pool } = pg;
 
 export const pool = new Pool({
@@ -22,6 +23,16 @@ export async function initDB() {
         password   VARCHAR(255) NOT NULL,
         role       VARCHAR(20)  DEFAULT 'user',
         created_at TIMESTAMP    DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id                      SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        app_name                VARCHAR(120) NOT NULL DEFAULT 'AUBEPINES',
+        app_subtitle            VARCHAR(180) NOT NULL DEFAULT 'Système de surveillance',
+        system_version          VARCHAR(40)  NOT NULL DEFAULT 'v2.4.1',
+        bootstrap_admin_user_id INTEGER,
+        default_admin_active    BOOLEAN      NOT NULL DEFAULT false,
+        updated_at              TIMESTAMP    NOT NULL DEFAULT NOW()
       );
 
       /* Intégration capteurs désactivée à la demande.
@@ -78,6 +89,29 @@ export async function initDB() {
         created_at    TIMESTAMP    DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS camera_nodes (
+        id              SERIAL PRIMARY KEY,
+        device_id       VARCHAR(120) UNIQUE NOT NULL,
+        name            VARCHAR(120) NOT NULL,
+        host            VARCHAR(120) NOT NULL,
+        stream_url      VARCHAR(500) NOT NULL,
+        location        VARCHAR(120) DEFAULT '',
+        model           VARCHAR(120) DEFAULT '',
+        source          VARCHAR(30)  DEFAULT 'pi-node',
+        motion_detected BOOLEAN      DEFAULT false,
+        last_motion_at  TIMESTAMP,
+        last_seen_at    TIMESTAMP    DEFAULT NOW(),
+        created_at      TIMESTAMP    DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS camera_node_motion_events (
+        id          SERIAL PRIMARY KEY,
+        device_id   VARCHAR(120) NOT NULL,
+        motion      BOOLEAN      DEFAULT true,
+        detected_at TIMESTAMP    DEFAULT NOW(),
+        created_at  TIMESTAMP    DEFAULT NOW()
+      );
+
       /* Intégration capteurs désactivée à la demande.
       CREATE INDEX IF NOT EXISTS idx_readings_sensor
         ON sensor_readings(sensor_id, recorded_at DESC);
@@ -85,7 +119,47 @@ export async function initDB() {
 
       CREATE INDEX IF NOT EXISTS idx_camera_discoveries_last_seen
         ON camera_discoveries(last_seen_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_camera_nodes_last_seen
+        ON camera_nodes(last_seen_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_camera_nodes_host
+        ON camera_nodes(host);
+
+      CREATE INDEX IF NOT EXISTS idx_camera_node_motion_events_device_time
+        ON camera_node_motion_events(device_id, detected_at DESC);
     `);
+
+    await client.query(
+      `INSERT INTO app_settings (id, app_name, app_subtitle, system_version)
+       VALUES (1, 'AUBEPINES', 'Système de surveillance', 'v2.4.1')
+       ON CONFLICT (id) DO NOTHING`
+    );
+
+    const userCountResult = await client.query('SELECT COUNT(*)::int AS count FROM users');
+    const userCount = userCountResult.rows[0]?.count ?? 0;
+
+    if (userCount === 0) {
+      const passwordHash = await bcrypt.hash('root', 12);
+      const { rows } = await client.query(
+        `INSERT INTO users (email, password, role)
+         VALUES ($1, $2, 'admin')
+         RETURNING id`,
+        ['root', passwordHash]
+      );
+
+      await client.query(
+        `UPDATE app_settings
+         SET bootstrap_admin_user_id = $1,
+             default_admin_active = true,
+             updated_at = NOW()
+         WHERE id = 1`,
+        [rows[0].id]
+      );
+
+      console.log('✅ Compte administrateur initial créé: root / root');
+    }
+
     console.log('✅ Base de données "aubepines" initialisée');
   } finally {
     client.release();

@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
+import { apiUrl } from "../lib/api";
 
 type HlsConstructor = typeof import("hls.js").default;
-
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 interface Camera {
   id:        number;
   name:      string;
   rtsp_url:  string;
   location:  string;
+  motionActive?: boolean;
+  lastMotionAt?: string | null;
+  nodeDeviceId?: string | null;
   status:    "running" | "paused" | "stopped" | "reconnecting";
   recording: boolean;
   startedAt: string | null;
@@ -37,12 +39,37 @@ interface DiscoveredCamera {
   created_at: string;
 }
 
-type AddMode = 'tapo' | 'discover' | 'manual';
+interface CameraNode {
+  id: number;
+  device_id: string;
+  name: string;
+  host: string;
+  stream_url: string;
+  location: string;
+  model: string;
+  source: string;
+  motion_detected: boolean;
+  motionActive: boolean;
+  last_motion_at: string | null;
+  last_seen_at: string;
+  created_at: string;
+  connected: boolean;
+}
+
+interface MotionEventEntry {
+  id: number;
+  device_id: string;
+  motion: boolean;
+  detected_at: string;
+  created_at: string;
+}
+
+type AddMode = 'node' | 'discover' | 'manual';
 
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fullUrl  = `${API}${hlsUrl}${hlsUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(streamKey)}`;
+  const fullUrl  = `${apiUrl(hlsUrl)}${hlsUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(streamKey)}`;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -263,6 +290,29 @@ function StatusBadge({ status }: { status: Camera["status"] }) {
   );
 }
 
+function MotionBadge({ active }: { active?: boolean }) {
+  if (!active) return null;
+  return (
+    <span className="cam-badge cam-badge--paused">
+      <span className="cam-badge-dot" />MOUVEMENT
+    </span>
+  );
+}
+
+function getCameraStatusText(cam: Camera) {
+  const base = cam.status === 'running'
+    ? `Actif depuis ${new Date(cam.startedAt!).toLocaleTimeString('fr-FR')}`
+    : cam.status === 'paused'
+      ? 'En pause'
+      : cam.status === 'reconnecting'
+        ? 'Reconnexion…'
+        : 'Inactif';
+
+  if (cam.motionActive) return `${base} · Mouvement detecte`;
+  if (cam.lastMotionAt) return `${base} · Dernier mouvement ${new Date(cam.lastMotionAt).toLocaleTimeString('fr-FR')}`;
+  return base;
+}
+
 // ── Contrôles ─────────────────────────────────────────────
 function CameraControls({ cam, onAction }: {
   cam: Camera;
@@ -272,10 +322,7 @@ function CameraControls({ cam, onAction }: {
   return (
     <div className="cam-footer" onClick={e => e.stopPropagation()}>
       <span className="cam-footer-status">
-        {status === 'running'      ? `Actif depuis ${new Date(cam.startedAt!).toLocaleTimeString('fr-FR')}`
-        : status === 'paused'      ? 'En pause'
-        : status === 'reconnecting'? 'Reconnexion…'
-        : 'Inactif'}
+        {getCameraStatusText(cam)}
       </span>
       {status === 'stopped'      && <button className="cam-btn-start" onClick={() => onAction(id, 'start')}>▶ START</button>}
       {status === 'running'      && <button className="cam-btn-pause" onClick={() => onAction(id, 'pause')}>⏸ PAUSE</button>}
@@ -294,12 +341,12 @@ export default function CameraFeed() {
   const [newName, setNewName] = useState('');
   const [newRtsp, setNewRtsp] = useState('');
   const [newLoc,  setNewLoc]  = useState('');
-  const [tapoHost, setTapoHost] = useState('');
-  const [tapoUsername, setTapoUsername] = useState('');
-  const [tapoPassword, setTapoPassword] = useState('');
-  const [tapoStream, setTapoStream] = useState<'main' | 'sub'>('main');
   const [loading, setLoading] = useState(true);
-  const [addMode, setAddMode] = useState<AddMode>('tapo');
+  const [addMode, setAddMode] = useState<AddMode>('node');
+  const [cameraNodes, setCameraNodes] = useState<CameraNode[]>([]);
+  const [cameraNodesLoading, setCameraNodesLoading] = useState(false);
+  const [cameraNodesError, setCameraNodesError] = useState<string | null>(null);
+  const [nodeMotionWindowSeconds, setNodeMotionWindowSeconds] = useState(20);
   const [searchingEsp32, setSearchingEsp32] = useState(false);
   const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredCamera[]>([]);
@@ -311,11 +358,16 @@ export default function CameraFeed() {
   const [historyRecords, setHistoryRecords] = useState<RecordingEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [motionHistoryDeviceId, setMotionHistoryDeviceId] = useState<string | null>(null);
+  const [motionHistoryTitle, setMotionHistoryTitle] = useState('');
+  const [motionHistoryRecords, setMotionHistoryRecords] = useState<MotionEventEntry[]>([]);
+  const [motionHistoryLoading, setMotionHistoryLoading] = useState(false);
+  const [motionHistoryError, setMotionHistoryError] = useState<string | null>(null);
 
   async function fetchDiscoveries(silent = false) {
     if (!silent) setDiscoveriesLoading(true);
     try {
-      const res = await fetch(`${API}/api/cameras/discoveries`);
+      const res = await fetch(apiUrl('/api/cameras/discoveries'));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Impossible de charger les ESP32 détectées');
       setDiscoveredDevices(Array.isArray(data.devices) ? data.devices : []);
@@ -329,6 +381,23 @@ export default function CameraFeed() {
     }
   }
 
+  async function fetchCameraNodes(silent = false) {
+    if (!silent) setCameraNodesLoading(true);
+    try {
+      const res = await fetch(apiUrl('/api/camera-nodes'));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Impossible de charger les noeuds camera');
+      setCameraNodes(Array.isArray(data.nodes) ? data.nodes : []);
+      setNodeMotionWindowSeconds(typeof data.motionActiveWindowSeconds === 'number' ? data.motionActiveWindowSeconds : 20);
+      setCameraNodesError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setCameraNodesError(message);
+    } finally {
+      if (!silent) setCameraNodesLoading(false);
+    }
+  }
+
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
@@ -338,11 +407,15 @@ export default function CameraFeed() {
     if (!showAdd) return;
 
     let stopped = false;
-    setAddMode('tapo');
+    setAddMode('node');
 
     fetchDiscoveries();
+    fetchCameraNodes();
     const interval = setInterval(() => {
-      if (!stopped) fetchDiscoveries(true);
+      if (!stopped) {
+        fetchDiscoveries(true);
+        fetchCameraNodes(true);
+      }
     }, 5000);
 
     return () => {
@@ -353,7 +426,7 @@ export default function CameraFeed() {
 
   async function fetchCameras() {
     try {
-      const res  = await fetch(`${API}/api/cameras`);
+      const res  = await fetch(apiUrl('/api/cameras'));
       const data = await res.json();
       if (Array.isArray(data)) setCameras(data);
     } catch { /* ignore */ }
@@ -368,7 +441,7 @@ export default function CameraFeed() {
 
   async function handleAction(id: number, action: "start" | "pause" | "resume" | "stop") {
     try {
-      await fetch(`${API}/api/cameras/${id}/${action}`, { method: 'POST' });
+      await fetch(apiUrl(`/api/cameras/${id}/${action}`), { method: 'POST' });
       fetchCameras();
     } catch { /* ignore */ }
   }
@@ -377,7 +450,7 @@ export default function CameraFeed() {
     setSearchingEsp32(true);
     setDiscoverMessage('Recherche des ESP32-CAM en cours…');
     try {
-      const res = await fetch(`${API}/api/cameras/discover`);
+      const res = await fetch(apiUrl('/api/cameras/discover'));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur de recherche ESP32-CAM');
       await fetchDiscoveries(true);
@@ -397,7 +470,7 @@ export default function CameraFeed() {
   async function addCamera() {
     if (!newName.trim() || !newRtsp.trim()) return;
     try {
-      const res  = await fetch(`${API}/api/cameras`, {
+      const res  = await fetch(apiUrl('/api/cameras'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, rtsp_url: newRtsp, location: newLoc }),
@@ -408,37 +481,20 @@ export default function CameraFeed() {
     } catch { /* ignore */ }
   }
 
-  async function addTapoCamera() {
-    if (!tapoHost.trim() || !tapoUsername.trim() || !tapoPassword.trim()) return;
+  async function connectCameraNode(node: CameraNode) {
     try {
-      const cameraName = newName.trim() || 'Tapo C220';
-      const cameraLocation = newLoc.trim() || tapoHost.trim();
-      const res = await fetch(`${API}/api/cameras`, {
+      const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(node.device_id)}/connect`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: 'tapo',
-          model: 'Tapo C220',
-          name: cameraName,
-          location: cameraLocation,
-          tapoHost,
-          tapoUsername,
-          tapoPassword,
-          tapoStream,
-        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible d’ajouter la Tapo C220');
-      setCameras(prev => [...prev, data]);
-      setNewName('');
-      setNewRtsp('');
-      setNewLoc('');
-      setTapoHost('');
-      setTapoUsername('');
-      setTapoPassword('');
-      setTapoStream('main');
-      setDiscoverMessage(null);
-      setShowAdd(false);
+      if (!res.ok) throw new Error(data.error || 'Impossible de connecter le noeud camera');
+
+      const camera = data.camera as Camera | undefined;
+      if (camera) {
+        setCameras(prev => prev.some(item => item.id === camera.id) ? prev.map(item => item.id === camera.id ? camera : item) : [...prev, camera]);
+      }
+      setDiscoverMessage(data.alreadyConnected ? `Noeud ${node.name} deja connecte.` : `Noeud ${node.name} connecte.`);
+      fetchCameraNodes(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
       setDiscoverMessage(message);
@@ -455,7 +511,7 @@ export default function CameraFeed() {
 
   async function addDiscoveredDevice(device: DiscoveredCamera) {
     try {
-      const res  = await fetch(`${API}/api/cameras`, {
+      const res  = await fetch(apiUrl('/api/cameras'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -480,7 +536,7 @@ export default function CameraFeed() {
 
   async function deleteCamera(id: number) {
     if (!confirm('Supprimer cette caméra ?')) return;
-    await fetch(`${API}/api/cameras/${id}`, { method: 'DELETE' });
+    await fetch(apiUrl(`/api/cameras/${id}`), { method: 'DELETE' });
     setCameras(prev => prev.filter(c => c.id !== id));
     if (focused === id) setFocused(null);
   }
@@ -490,7 +546,7 @@ export default function CameraFeed() {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const res = await fetch(`${API}/api/cameras/${id}/history`);
+      const res = await fetch(apiUrl(`/api/cameras/${id}/history`));
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Impossible de charger l’historique');
@@ -505,23 +561,50 @@ export default function CameraFeed() {
     }
   }
 
+  async function loadMotionHistory(deviceId: string, title: string) {
+    setMotionHistoryDeviceId(deviceId);
+    setMotionHistoryTitle(title);
+    setMotionHistoryLoading(true);
+    setMotionHistoryError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(deviceId)}/motion-history`));
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Impossible de charger l’historique mouvement');
+      }
+      const data = await res.json();
+      setMotionHistoryRecords(Array.isArray(data) ? data : []);
+    } catch (err: unknown) {
+      setMotionHistoryRecords([]);
+      setMotionHistoryError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setMotionHistoryLoading(false);
+    }
+  }
+
   function closeHistory() {
     setHistoryCameraId(null);
     setHistoryRecords([]);
     setHistoryError(null);
   }
 
+  function closeMotionHistory() {
+    setMotionHistoryDeviceId(null);
+    setMotionHistoryTitle('');
+    setMotionHistoryRecords([]);
+    setMotionHistoryError(null);
+  }
+
   const onlineCount = cameras.filter(c => c.status === 'running').length;
   const recCount    = cameras.filter(c => c.recording).length;
   const focusedCam  = cameras.find(c => c.id === focused);
   const canAddManually = Boolean(newName.trim() && newRtsp.trim());
-  const canAddTapo = Boolean(tapoHost.trim() && tapoUsername.trim() && tapoPassword.trim());
 
   function toggleAddPanel() {
     setShowAdd((current) => {
       const next = !current;
       if (next) {
-        setAddMode('tapo');
+        setAddMode('node');
       } else {
         setDiscoverMessage(null);
       }
@@ -560,15 +643,15 @@ export default function CameraFeed() {
           <div className="cam-add-topbar">
             <div>
               <h3 className="cam-add-title">Ajouter une caméra</h3>
-              <p className="cam-add-subtitle">Tapo C220, ESP32-CAM ou flux manuel.</p>
+              <p className="cam-add-subtitle">Noeud Raspberry Pi, ESP32-CAM ou flux manuel.</p>
             </div>
             <div className="cam-add-mode-switch">
               <button
                 type="button"
-                className={`cam-add-mode-btn ${addMode === 'tapo' ? 'cam-add-mode-btn--active' : ''}`}
-                onClick={() => setAddMode('tapo')}
+                className={`cam-add-mode-btn ${addMode === 'node' ? 'cam-add-mode-btn--active' : ''}`}
+                onClick={() => setAddMode('node')}
               >
-                Tapo C220
+                Noeud Pi
               </button>
               <button
                 type="button"
@@ -587,46 +670,64 @@ export default function CameraFeed() {
             </div>
           </div>
 
-          {addMode === 'tapo' && (
-            <section className="cam-manual-panel">
-              <div>
-                <h3 className="cam-discovery-title">Ajouter une Tapo C220</h3>
-                <p className="cam-discovery-subtitle">Le serveur construit l’URL RTSP Tapo automatiquement.</p>
+          {addMode === 'node' && (
+            <section className="cam-discovery-panel">
+              <div className="cam-discovery-header">
+                <div>
+                  <h3 className="cam-discovery-title">Noeuds Raspberry Pi detectes</h3>
+                  <p className="cam-discovery-subtitle">Mouvement actif pendant {nodeMotionWindowSeconds} secondes apres la derniere detection.</p>
+                </div>
+                <button
+                  type="button"
+                  className="sensor-link-btn"
+                  onClick={() => fetchCameraNodes()}
+                  disabled={cameraNodesLoading}
+                >
+                  {cameraNodesLoading ? 'Actualisation...' : 'Actualiser'}
+                </button>
               </div>
-              <div className="sensor-note">
-                <p>Dans l’app Tapo: active RTSP/ONVIF puis cree un compte camera dedie. Utilise ensuite l’IP locale de la camera ici.</p>
-              </div>
-              <input className="sensor-input" placeholder="Nom de la caméra (optionnel, défaut: Tapo C220)"
-                value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
-              <input className="sensor-input" placeholder="Adresse IP locale de la caméra (ex: 192.168.0.58)"
-                value={tapoHost} onChange={e => setTapoHost(e.target.value)} />
-              <input className="sensor-input" placeholder="Identifiant du compte caméra Tapo"
-                value={tapoUsername} onChange={e => setTapoUsername(e.target.value)} />
-              <input className="sensor-input" placeholder="Mot de passe du compte caméra Tapo"
-                type="password"
-                value={tapoPassword} onChange={e => setTapoPassword(e.target.value)} />
-              <select
-                className="sensor-input"
-                aria-label="Qualite du flux Tapo"
-                value={tapoStream}
-                onChange={e => setTapoStream(e.target.value === 'sub' ? 'sub' : 'main')}
-              >
-                <option value="main">Flux principal (stream1)</option>
-                <option value="sub">Flux secondaire (stream2)</option>
-              </select>
-              <input className="sensor-input" placeholder="Emplacement (optionnel)"
-                value={newLoc} onChange={e => setNewLoc(e.target.value)} />
               {discoverMessage && (
                 <div className="sensor-note">
                   <p>{discoverMessage}</p>
                 </div>
               )}
-              <div className="cam-add-actions">
-                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('manual')}>
-                  Saisir une URL manuellement
-                </button>
-                <button className="sensor-confirm-btn" onClick={addTapoCamera} disabled={!canAddTapo}>Ajouter la Tapo</button>
-              </div>
+              {cameraNodesLoading && <p>Chargement des noeuds camera…</p>}
+              {cameraNodesError && <p className="cam-discovery-error">{cameraNodesError}</p>}
+              {!cameraNodesLoading && !cameraNodesError && cameraNodes.length === 0 && (
+                <p className="cam-discovery-empty">Aucun noeud detecte. Lance le script d’annonce sur le Raspberry Pi.</p>
+              )}
+              {cameraNodes.length > 0 && (
+                <ul className="cam-discovery-list">
+                  {cameraNodes.map(node => (
+                    <li key={node.device_id} className="cam-discovery-item">
+                      <div className="cam-discovery-item-head">
+                        <strong>{node.name}</strong>
+                        <span className={`cam-discovery-source cam-discovery-source--${node.source}`}>{node.model || node.source}</span>
+                      </div>
+                      <div className="cam-discovery-meta">{node.host}{node.location ? ` · ${node.location}` : ''}</div>
+                      <div className="cam-discovery-meta">Vu le {new Date(node.last_seen_at).toLocaleString('fr-FR')}</div>
+                      <div className="cam-inline-actions">
+                        <StatusBadge status={node.connected ? 'running' : 'stopped'} />
+                        <MotionBadge active={node.motionActive} />
+                        <button
+                          type="button"
+                          className="sensor-link-btn"
+                          onClick={() => loadMotionHistory(node.device_id, node.name)}
+                        >
+                          Historique mouvement
+                        </button>
+                        <button
+                          type="button"
+                          className="sensor-confirm-btn"
+                          onClick={() => connectCameraNode(node)}
+                        >
+                          {node.connected ? 'Reconnecter vue' : 'Connecter'}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
 
@@ -707,8 +808,8 @@ export default function CameraFeed() {
                 </div>
               )}
               <div className="cam-add-actions">
-                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('tapo')}>
-                  Retour a Tapo C220
+                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('node')}>
+                  Retour aux noeuds Pi
                 </button>
                 <button className="sensor-confirm-btn" onClick={addCamera} disabled={!canAddManually}>Ajouter</button>
               </div>
@@ -730,6 +831,12 @@ export default function CameraFeed() {
               </div>
               <div className="cam-card-actions cam-card-actions--wide-gap">
                 <StatusBadge status={focusedCam.status} />
+                <MotionBadge active={focusedCam.motionActive} />
+                {focusedCam.nodeDeviceId && (
+                  <button className="sensor-link-btn" onClick={() => loadMotionHistory(focusedCam.nodeDeviceId!, focusedCam.name)}>
+                    Mouvements
+                  </button>
+                )}
                 <button className="cam-card-history" onClick={() => loadCameraHistory(focusedCam.id)}>📁 Historique</button>
                 <button className="cam-card-delete" onClick={() => deleteCamera(focusedCam.id)}>✕</button>
               </div>
@@ -762,6 +869,7 @@ export default function CameraFeed() {
                 </div>
                 <div className="cam-card-actions">
                   <StatusBadge status={cam.status} />
+                  <MotionBadge active={cam.motionActive} />
                   <button className="cam-card-history"
                     onClick={e => { e.stopPropagation(); loadCameraHistory(cam.id); }}>
                     📁
@@ -805,13 +913,48 @@ export default function CameraFeed() {
                       </div>
                     </div>
                     <a
-                      href={`${API}${entry.url}`}
+                      href={apiUrl(entry.url)}
                       target="_blank"
                       rel="noreferrer"
                       className="cam-history-link"
                     >
                       Ouvrir
                     </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {motionHistoryDeviceId !== null && (
+        <div className="cam-history-overlay" onClick={closeMotionHistory}>
+          <div className="cam-history-panel" onClick={e => e.stopPropagation()}>
+            <div className="cam-history-header">
+              <div>
+                <strong>Historique mouvement {motionHistoryTitle}</strong>
+                <div className="cam-history-meta">
+                  {motionHistoryRecords.length} evenement{motionHistoryRecords.length > 1 ? 's' : ''}
+                </div>
+              </div>
+              <button className="cam-card-delete" onClick={closeMotionHistory}>✕</button>
+            </div>
+            {motionHistoryLoading && <p>Chargement de l’historique mouvement…</p>}
+            {motionHistoryError && <p className="cam-history-error">{motionHistoryError}</p>}
+            {!motionHistoryLoading && !motionHistoryError && motionHistoryRecords.length === 0 && (
+              <p>Aucun mouvement enregistre pour ce noeud.</p>
+            )}
+            {!motionHistoryLoading && motionHistoryRecords.length > 0 && (
+              <div className="cam-history-list">
+                {motionHistoryRecords.map(entry => (
+                  <div key={entry.id} className="cam-history-row">
+                    <div>
+                      <strong>{entry.motion ? 'Mouvement detecte' : 'Etat inactif'}</strong>
+                      <div className="cam-history-meta">
+                        {new Date(entry.detected_at).toLocaleString('fr-FR')}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

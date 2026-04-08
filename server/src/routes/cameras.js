@@ -9,11 +9,11 @@ import {
   RECORDINGS_DIR,
 } from '../camera/manager.js';
 import { discoverMdnsEsp32Cameras } from '../camera/mdns.js';
-import { normalizeTapoCameraInput } from '../camera/tapo.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
 const ENABLE_SCAN_FALLBACK = process.env.CAMERA_DISCOVERY_ENABLE_SCAN_FALLBACK !== 'false';
+const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
 
 function normalizeDiscoveryPayload(body = {}) {
   const host = String(body.host || body.ip || '').trim();
@@ -62,34 +62,32 @@ function maskStreamUrl(streamUrl) {
   }
 }
 
-function serializeCamera(camera) {
+function isMotionActive(lastMotionAt) {
+  if (!lastMotionAt) return false;
+  const timestamp = new Date(lastMotionAt).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return Date.now() - timestamp <= MOTION_ACTIVE_WINDOW_SECONDS * 1000;
+}
+
+function serializeCamera(camera, node = null) {
   return {
     ...camera,
     rtsp_url: maskStreamUrl(camera.rtsp_url),
+    motionActive: node ? isMotionActive(node.last_motion_at) : false,
+    lastMotionAt: node?.last_motion_at || null,
+    nodeDeviceId: node?.device_id || null,
     ...getState(camera.id),
   };
 }
 
+async function getCameraNodesByHost() {
+  const { rows } = await pool.query('SELECT device_id, host, last_motion_at FROM camera_nodes');
+  return new Map(rows.map(row => [row.host, row]));
+}
+
 function normalizeCreateCameraPayload(body = {}) {
-  const provider = String(body.provider || body.camera_type || body.brand || '').trim().toLowerCase();
   const name = String(body.name || '').trim();
   const location = String(body.location || '').trim();
-  const looksLikeTapo = provider === 'tapo'
-    || Boolean(body.tapoHost || body.tapoUsername || body.tapoPassword || body.tapoStream);
-
-  if (looksLikeTapo) {
-    const tapo = normalizeTapoCameraInput(body);
-    if (!tapo.ok) return tapo;
-
-    return {
-      ok: true,
-      name: name || tapo.model,
-      rtspUrl: tapo.rtspUrl,
-      location: location || tapo.host,
-      discoverySource: 'manual-tapo',
-    };
-  }
-
   const rtspUrl = String(body.rtsp_url || body.streamUrl || '').trim();
   if (!name || !rtspUrl) {
     return { ok: false, error: 'Nom et URL RTSP requis' };
@@ -165,8 +163,14 @@ async function deleteExpiredDiscoveries() {
 // GET /api/cameras — liste + état live
 router.get('/', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM cameras ORDER BY id');
-    const result   = rows.map(cam => serializeCamera(cam));
+    const [camerasResult, nodeMap] = await Promise.all([
+      pool.query('SELECT * FROM cameras ORDER BY id'),
+      getCameraNodesByHost().catch(() => new Map()),
+    ]);
+    const result = camerasResult.rows.map(cam => {
+      const host = getHostFromStreamUrl(cam.rtsp_url);
+      return serializeCamera(cam, nodeMap.get(host));
+    });
     res.json(result);
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -199,7 +203,8 @@ router.post('/', async (req, res) => {
         source: discoverySource,
       }).catch(err => console.error('[CAM DISCOVERY UPSERT]', err));
     }
-    res.status(201).json(serializeCamera(camera));
+    const nodeMap = await getCameraNodesByHost().catch(() => new Map());
+    res.status(201).json(serializeCamera(camera, nodeMap.get(host)));
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
   }

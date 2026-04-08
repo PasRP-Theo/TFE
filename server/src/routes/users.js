@@ -1,11 +1,24 @@
 import { Router } from 'express';
 import bcrypt      from 'bcryptjs';
 import { pool }    from '../db/index.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+async function getAdminCount(client = pool) {
+  const { rows } = await client.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
+  return rows[0]?.count ?? 0;
+}
+
+async function getAppSettings(client = pool) {
+  const { rows } = await client.query(
+    'SELECT bootstrap_admin_user_id, default_admin_active FROM app_settings WHERE id = 1'
+  );
+  return rows[0] || { bootstrap_admin_user_id: null, default_admin_active: false };
+}
+
 // GET /api/users
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id, email, role, created_at FROM users ORDER BY created_at'
@@ -17,12 +30,14 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/users — creation depuis le panel admin
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { email, password, role = 'user' } = req.body;
   if (!email || !password)
     return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
   if (password.length < 6)
     return res.status(400).json({ error: 'Mot de passe trop court (6 caracteres min)' });
+  if (!['user', 'admin'].includes(role))
+    return res.status(400).json({ error: 'Role invalide' });
   try {
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
@@ -36,27 +51,110 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH /api/users/:id — modifier le role
-router.patch('/:id', async (req, res) => {
-  const { role } = req.body;
-  if (!['user', 'admin'].includes(role))
+// PATCH /api/users/:id — modifier identifiant / mot de passe / role
+router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Identifiant invalide' });
+
+  const nextEmail = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : undefined;
+  const nextPassword = typeof req.body.password === 'string' ? req.body.password : undefined;
+  const nextRole = typeof req.body.role === 'string' ? req.body.role : undefined;
+
+  if (nextRole !== undefined && !['user', 'admin'].includes(nextRole))
     return res.status(400).json({ error: 'Role invalide' });
+  if (nextEmail !== undefined && !nextEmail)
+    return res.status(400).json({ error: 'Identifiant requis' });
+  if (nextPassword !== undefined && nextPassword.length > 0 && nextPassword.length < 6)
+    return res.status(400).json({ error: 'Mot de passe trop court (6 caracteres min)' });
+
   try {
-    const { rows } = await pool.query(
-      'UPDATE users SET role=$1 WHERE id=$2 RETURNING id, email, role, created_at',
-      [role, req.params.id]
+    const currentResult = await pool.query(
+      'SELECT id, email, role FROM users WHERE id = $1',
+      [userId]
     );
+    const currentUser = currentResult.rows[0];
+    if (!currentUser) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+    if (currentUser.role === 'admin' && nextRole === 'user') {
+      const adminCount = await getAdminCount();
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Impossible de retirer le dernier administrateur' });
+      }
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (nextEmail !== undefined && nextEmail !== currentUser.email) {
+      values.push(nextEmail);
+      updates.push(`email = $${values.length}`);
+    }
+
+    if (nextRole !== undefined && nextRole !== currentUser.role) {
+      values.push(nextRole);
+      updates.push(`role = $${values.length}`);
+    }
+
+    if (nextPassword !== undefined && nextPassword.length > 0) {
+      const hash = await bcrypt.hash(nextPassword, 12);
+      values.push(hash);
+      updates.push(`password = $${values.length}`);
+    }
+
+    if (updates.length === 0) {
+      const { rows } = await pool.query(
+        'SELECT id, email, role, created_at FROM users WHERE id = $1',
+        [userId]
+      );
+      return res.json(rows[0]);
+    }
+
+    values.push(userId);
+    const { rows } = await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING id, email, role, created_at`,
+      values
+    );
+
+    const settings = await getAppSettings();
+    const editedBootstrapAdmin = settings.bootstrap_admin_user_id === userId
+      && settings.default_admin_active
+      && ((nextEmail !== undefined && nextEmail !== 'root') || (nextPassword !== undefined && nextPassword.length > 0));
+
+    if (editedBootstrapAdmin) {
+      await pool.query(
+        `UPDATE app_settings
+         SET default_admin_active = false,
+             updated_at = NOW()
+         WHERE id = 1`
+      );
+    }
+
     if (!rows[0]) return res.status(404).json({ error: 'Utilisateur introuvable' });
     res.json(rows[0]);
-  } catch {
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Identifiant deja utilise' });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
 // DELETE /api/users/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Identifiant invalide' });
+
+    const currentResult = await pool.query('SELECT id, role FROM users WHERE id = $1', [userId]);
+    const currentUser = currentResult.rows[0];
+    if (!currentUser) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+    if (currentUser.role === 'admin') {
+      const adminCount = await getAdminCount();
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Impossible de supprimer le dernier administrateur' });
+      }
+    }
+
+    const { rowCount } = await pool.query('DELETE FROM users WHERE id=$1', [userId]);
     if (!rowCount) return res.status(404).json({ error: 'Utilisateur introuvable' });
     res.json({ message: 'Supprime' });
   } catch {

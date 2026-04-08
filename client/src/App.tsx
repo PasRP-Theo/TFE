@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { AppConfigProvider, useAppConfig } from './hooks/useAppConfig';
+import { AppearanceProvider, useAppearance } from './hooks/useAppearance';
 import LoginPage   from './components/LoginPage';
 // import SensorList  from './components/SensorList';
 import CameraFeed  from './components/CameraFeed';
@@ -34,16 +36,13 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function AppShell() {
   const { user, logout, loading } = useAuth();
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const { config } = useAppConfig();
+  const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isSecureInstallContext, setIsSecureInstallContext] = useState(true);
   const [installHint, setInstallHint] = useState('');
   const location = useLocation();
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
-  }, [theme]);
 
   useEffect(() => {
     type LegacyMediaQueryList = MediaQueryList & {
@@ -145,7 +144,7 @@ function AppShell() {
               wrapperClassName="login-logo-mark"
               imageClassName="login-logo-icon"
               fallbackClassName="login-logo-fallback"
-              fallbackText="A"
+              fallbackText={config.appName.charAt(0) || 'A'}
             />
             <span className="login-logo-text">Chargement...</span>
           </div>
@@ -176,10 +175,10 @@ function AppShell() {
               wrapperClassName="app-logo-mark"
               imageClassName="app-logo-icon"
               fallbackClassName="app-logo-fallback"
-              fallbackText="A"
+              fallbackText={config.appName.charAt(0) || 'A'}
             />
-            <span className="app-logo-text">AUBEPINES</span>
-            <span className="app-logo-version">v2.4.1</span>
+            <span className="app-logo-text">{config.appName}</span>
+            <span className="app-logo-version">{config.systemVersion}</span>
           </div>
 
           <nav className="app-nav" aria-label="Navigation principale">
@@ -219,9 +218,9 @@ function AppShell() {
           </div>
 
           <button className="app-theme-btn"
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            title={theme === 'dark' ? 'Passer en clair' : 'Passer en sombre'}>
-            {theme === 'dark' ? '☀️' : '🌙'}
+            onClick={toggleTheme}
+            title={settings.theme === 'dark' ? 'Passer en clair' : 'Passer en sombre'}>
+            {settings.theme === 'dark' ? '☀️' : '🌙'}
           </button>
 
           <button className="app-logout-btn" onClick={logout} title="Se déconnecter">⏻</button>
@@ -255,8 +254,12 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppShell />
-    </AuthProvider>
+    <AppConfigProvider>
+      <AuthProvider>
+        <AppearanceProvider>
+          <AppShell />
+        </AppearanceProvider>
+      </AuthProvider>
+    </AppConfigProvider>
   );
 }

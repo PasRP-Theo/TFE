@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useAppConfig } from '../hooks/useAppConfig';
 import BrandLogo from './BrandLogo.tsx';
 
 export default function LoginPage() {
   const { login }  = useAuth();
+  const { config } = useAppConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
@@ -50,7 +52,7 @@ export default function LoginPage() {
       <div className="lp-corner lp-corner--br" />
 
       <div className="lp-sysinfo">
-        <div>SYS // SURVEILLANCE-OS v2.4.1</div>
+        <div>SYS // {config.appName.toUpperCase()} {config.systemVersion}</div>
         <div>NODE // CENTRAL-UNIT-01</div>
         <div>NET  // 192.168.1.1 — SECURED</div>
       </div>
@@ -77,12 +79,18 @@ export default function LoginPage() {
               wrapperClassName="lp-logo-mark"
               imageClassName="lp-logo-icon"
               fallbackClassName="lp-logo-fallback"
-              fallbackText="A"
+              fallbackText={config.appName.charAt(0) || 'A'}
             />
-            <div className="lp-logo-text">SURVEILLANCE</div>
+            <div className="lp-logo-text">{config.appName}</div>
           </div>
-          <div className="lp-subtitle">ACCÈS SÉCURISÉ AU SYSTÈME</div>
+          <div className="lp-subtitle">{config.appSubtitle.toUpperCase()}</div>
           <div className="lp-sep" />
+
+          {config.defaultAdminActive && (
+            <div className="lp-error lp-error--info">
+              <span>ℹ</span><span>Première connexion : {config.defaultAdminUsername} / root. Change ce compte immédiatement après connexion.</span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit}>
             <div className="lp-field">
@@ -131,7 +139,7 @@ export default function LoginPage() {
         </div>
 
         <div className="lp-card-footer">
-          <div className="lp-footer-text">SYSTÈME DE SURVEILLANCE · v2.4.1</div>
+          <div className="lp-footer-text">{config.appSubtitle.toUpperCase()} · {config.systemVersion}</div>
           <div className="lp-footer-status">
             <div className="lp-footer-dot" />
             CONNEXION SÉCURISÉE

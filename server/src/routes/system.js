@@ -1,5 +1,9 @@
 import { Router } from 'express';
 import si from 'systeminformation';
+import bcrypt from 'bcryptjs';
+import { pool } from '../db/index.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { stopAllCameras } from '../camera/manager.js';
 
 const router = Router();
 
@@ -87,6 +91,66 @@ router.get('/info', async (req, res) => {
   } catch (err) {
     console.error('[SYSTEM INFO]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la récupération des infos système' });
+  }
+});
+
+router.post('/reset', requireAuth, requireAdmin, async (_req, res) => {
+  const client = await pool.connect();
+
+  try {
+    stopAllCameras();
+
+    await client.query('BEGIN');
+
+    await client.query('TRUNCATE TABLE camera_node_motion_events RESTART IDENTITY');
+    await client.query('TRUNCATE TABLE camera_nodes RESTART IDENTITY');
+    await client.query('TRUNCATE TABLE camera_discoveries RESTART IDENTITY');
+    await client.query('TRUNCATE TABLE cameras RESTART IDENTITY');
+    await client.query('TRUNCATE TABLE users RESTART IDENTITY');
+
+    const rootHash = await bcrypt.hash('root', 12);
+    const insertedAdmin = await client.query(
+      `INSERT INTO users (email, password, role)
+       VALUES ($1, $2, 'admin')
+       RETURNING id, email, role, created_at`,
+      ['root', rootHash]
+    );
+
+    await client.query(
+      `UPDATE app_settings
+       SET app_name = 'AUBEPINES',
+           app_subtitle = 'Système de surveillance',
+           system_version = 'v2.4.1',
+           bootstrap_admin_user_id = $1,
+           default_admin_active = true,
+           updated_at = NOW()
+       WHERE id = 1`,
+      [insertedAdmin.rows[0].id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      message: 'Réinitialisation effectuée',
+      scope: {
+        users: 'reset',
+        appConfig: 'reset',
+        cameras: 'reset',
+        cameraDiscoveries: 'reset',
+        cameraNodes: 'reset',
+        recordings: 'unchanged',
+      },
+      bootstrapAdmin: {
+        username: 'root',
+        password: 'root',
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[SYSTEM RESET]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la réinitialisation' });
+  } finally {
+    client.release();
   }
 });
 

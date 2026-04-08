@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../config/auth.js';
 
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -6,7 +7,7 @@ export function requireAuth(req, res, next) {
   // 1. Essai JWT
   if (header?.startsWith('Bearer ')) {
     try {
-      req.user = jwt.verify(header.slice(7), process.env.JWT_SECRET);
+      req.user = jwt.verify(header.slice(7), JWT_SECRET);
       return next();
     } catch { /* invalide, on essaie la session */ }
   }

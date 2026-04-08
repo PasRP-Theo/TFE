@@ -12,7 +12,10 @@ import groceryRoutes         from "./src/routes/grocery.js";
 import userRoutes            from "./src/routes/users.js";
 import systemRoutes          from "./src/routes/system.js";
 import cameraRoutes          from "./src/routes/cameras.js";
+import cameraNodeRoutes      from "./src/routes/cameraNodes.js";
+import appConfigRoutes       from "./src/routes/appConfig.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings } from "./src/camera/manager.js";
+import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -41,16 +44,34 @@ const apiLimiter = rateLimit({
 });
 app.use("/api/", apiLimiter);
 
+function getRequestUser(req) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(header.slice(7), JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
 // ── Auth ───────────────────────────────────────────────────
 app.post("/auth/register", async (req, res) => {
   const { email, password, role = "user" } = req.body;
   if (!email || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
   if (password.length < 6) return res.status(400).json({ error: "Mot de passe trop court (6 caracteres min)" });
   try {
+    const existingUserResult = await pool.query('SELECT COUNT(*)::int AS count FROM users');
+    const hasUsers = (existingUserResult.rows[0]?.count ?? 0) > 0;
+    const requestUser = getRequestUser(req);
+
+    if (hasUsers && requestUser?.role !== 'admin') {
+      return res.status(403).json({ error: 'Acces reserve aux administrateurs' });
+    }
+
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
       "INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING id, email, role",
-      [email.toLowerCase().trim(), hash, role]
+      [email.toLowerCase().trim(), hash, hasUsers ? role : 'admin']
     );
     res.status(201).json({ message: "Utilisateur cree", user: rows[0] });
   } catch (err) {
@@ -70,8 +91,8 @@ app.post("/auth/login", loginLimiter, async (req, res) => {
     if (!valid) return res.status(401).json({ error: "Identifiant ou mot de passe incorrect" });
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || "changeme_in_production",
-      { expiresIn: "1h" }
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
     );
     res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
   } catch (err) { console.error(err); res.status(500).json({ error: "Erreur serveur" }); }
@@ -81,7 +102,7 @@ app.get("/auth/me", async (req, res) => {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "Non authentifie" });
   try {
-    const decoded = jwt.verify(header.slice(7), process.env.JWT_SECRET || "changeme_in_production");
+    const decoded = jwt.verify(header.slice(7), JWT_SECRET);
     const { rows } = await pool.query("SELECT id, email, role FROM users WHERE id = $1", [decoded.id]);
     if (!rows[0]) return res.status(404).json({ error: "Introuvable" });
     res.json({ user: rows[0] });
@@ -100,7 +121,9 @@ app.use('/recordings', express.static(recordingsDir));
 app.use("/api/grocery", groceryRoutes);
 app.use("/api/users",   userRoutes);
 app.use("/api/system",  systemRoutes);
+app.use("/api/camera-nodes", cameraNodeRoutes);
 app.use("/api/cameras", cameraRoutes);
+app.use("/api/app-config", appConfigRoutes);
 
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 

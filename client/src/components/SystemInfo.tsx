@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useAppConfig } from "../hooks/useAppConfig";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const POLL_INTERVAL = 5000;
 
 export default function SystemInfo() {
+  const { config } = useAppConfig();
   const [data, setData] = useState<SystemInfoData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -375,7 +377,7 @@ export default function SystemInfo() {
         </Card>
       </div>
 
-      <div className="sysinfo-footer">AUBEPINES — via Node.js systeminformation</div>
+      <div className="sysinfo-footer">{config.appName} — via Node.js systeminformation</div>
     </div>
   );
 }
