@@ -30,6 +30,22 @@ export async function initDB() {
         app_name                VARCHAR(120) NOT NULL DEFAULT 'AUBEPINES',
         app_subtitle            VARCHAR(180) NOT NULL DEFAULT 'Système de surveillance',
         system_version          VARCHAR(40)  NOT NULL DEFAULT 'v2.4.1',
+        login_message           VARCHAR(240) NOT NULL DEFAULT 'Connexion sécurisée au système',
+        interface_language      VARCHAR(10)  NOT NULL DEFAULT 'fr-FR',
+        time_format             VARCHAR(8)   NOT NULL DEFAULT '24h',
+        show_system_version     BOOLEAN      NOT NULL DEFAULT true,
+        ui_density              VARCHAR(16)  NOT NULL DEFAULT 'standard',
+        camera_card_size        VARCHAR(16)  NOT NULL DEFAULT 'standard',
+        show_status_panel       BOOLEAN      NOT NULL DEFAULT true,
+        camera_autostart_enabled BOOLEAN     NOT NULL DEFAULT true,
+        camera_refresh_seconds  INTEGER      NOT NULL DEFAULT 3,
+        show_offline_cameras    BOOLEAN      NOT NULL DEFAULT true,
+        default_camera_add_mode VARCHAR(16)  NOT NULL DEFAULT 'node',
+        camera_discovery_interval_seconds INTEGER NOT NULL DEFAULT 5,
+        alerts_realtime_enabled BOOLEAN      NOT NULL DEFAULT true,
+        alerts_daily_summary_enabled BOOLEAN NOT NULL DEFAULT false,
+        alerts_sound_enabled    BOOLEAN      NOT NULL DEFAULT true,
+        alerts_disconnect_enabled BOOLEAN    NOT NULL DEFAULT true,
         bootstrap_admin_user_id INTEGER,
         default_admin_active    BOOLEAN      NOT NULL DEFAULT false,
         updated_at              TIMESTAMP    NOT NULL DEFAULT NOW()
@@ -128,6 +144,25 @@ export async function initDB() {
 
       CREATE INDEX IF NOT EXISTS idx_camera_node_motion_events_device_time
         ON camera_node_motion_events(device_id, detected_at DESC);
+    `);
+
+    await client.query(`
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS login_message VARCHAR(240) NOT NULL DEFAULT 'Connexion sécurisée au système';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS interface_language VARCHAR(10) NOT NULL DEFAULT 'fr-FR';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS time_format VARCHAR(8) NOT NULL DEFAULT '24h';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS show_system_version BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS ui_density VARCHAR(16) NOT NULL DEFAULT 'standard';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_card_size VARCHAR(16) NOT NULL DEFAULT 'standard';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS show_status_panel BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_autostart_enabled BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_refresh_seconds INTEGER NOT NULL DEFAULT 3;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS show_offline_cameras BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_camera_add_mode VARCHAR(16) NOT NULL DEFAULT 'node';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_discovery_interval_seconds INTEGER NOT NULL DEFAULT 5;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_realtime_enabled BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_daily_summary_enabled BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_sound_enabled BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_disconnect_enabled BOOLEAN NOT NULL DEFAULT true;
     `);
 
     await client.query(

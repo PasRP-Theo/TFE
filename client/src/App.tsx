@@ -161,13 +161,13 @@ function AppShell() {
     // Vue capteurs désactivée à la demande.
     // { to: '/',         label: 'Capteurs',   show: true    },
     { to: '/videos',   label: 'Caméras',    shortLabel: 'Caméras',  icon: '◉', show: true    },
-    { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: isAdmin },
+    { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: true },
     //{ to: '/courses',  label: 'Courses',    show: true    },
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
   return (
-    <div className={`app ${isInstalledMode ? 'app--installed' : ''}`}>
+    <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
       <header className="app-header">
         <div className="app-header-inner">
           <div className="app-logo">
@@ -178,7 +178,7 @@ function AppShell() {
               fallbackText={config.appName.charAt(0) || 'A'}
             />
             <span className="app-logo-text">{config.appName}</span>
-            <span className="app-logo-version">{config.systemVersion}</span>
+            {config.showSystemVersion && <span className="app-logo-version">{config.systemVersion}</span>}
           </div>
 
           <nav className="app-nav" aria-label="Navigation principale">
@@ -192,23 +192,25 @@ function AppShell() {
             ))}
           </nav>
 
-          <div className="app-status-group">
-            <div className="app-status">
-              <span className="app-status-dot" />
-              EN LIGNE · LOCAL
-            </div>
-            {!isInstalledMode && installPromptEvent && (
-              <button className="app-install-btn" onClick={handleInstallClick} type="button">
-                Installer
-              </button>
-            )}
-            {isInstalledMode && (
-              <div className="app-installed-badge">
-                <span className="app-installed-badge-dot" />
-                MODE APP
+          {config.showStatusPanel && (
+            <div className="app-status-group">
+              <div className="app-status">
+                <span className="app-status-dot" />
+                EN LIGNE · LOCAL
               </div>
-            )}
-          </div>
+              {!isInstalledMode && installPromptEvent && (
+                <button className="app-install-btn" onClick={handleInstallClick} type="button">
+                  Installer
+                </button>
+              )}
+              {isInstalledMode && (
+                <div className="app-installed-badge">
+                  <span className="app-installed-badge-dot" />
+                  MODE APP
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="app-user">
             <span className="app-user-email">{user.email}</span>
@@ -238,9 +240,7 @@ function AppShell() {
           <Route path="/"        element={<Navigate to="/videos" replace />} />
           <Route path="/videos"  element={<CameraFeed />} />
           {/* <Route path="/courses" element={<GroceryList />} />*/}
-          <Route path="/system"  element={
-            <AdminRoute><SystemInfo /></AdminRoute>
-          } />
+          <Route path="/system"  element={<SystemInfo />} />
           <Route path="/settings" element={
             <AdminRoute><Settings /></AdminRoute>
           } />

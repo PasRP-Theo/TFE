@@ -5,11 +5,21 @@ import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from "../lib/api";
 
 function SettingToggle({ label, description, defaultChecked = false }: {
-  label: string; description?: string; defaultChecked?: boolean;
+  label: string; description?: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void;
 }) {
-  const [checked, setChecked] = useState(defaultChecked);
+  const [internalChecked, setInternalChecked] = useState(defaultChecked);
+  const checked = typeof arguments[0].checked === 'boolean' ? arguments[0].checked : internalChecked;
+
+  function handleToggle() {
+    const nextValue = !checked;
+    if (typeof arguments[0].checked !== 'boolean') {
+      setInternalChecked(nextValue);
+    }
+    arguments[0].onChange?.(nextValue);
+  }
+
   return (
-    <button type="button" className={`settings-row ${checked ? 'settings-row--active' : ''}`} onClick={() => setChecked(v => !v)}>
+    <button type="button" className={`settings-row ${checked ? 'settings-row--active' : ''}`} onClick={handleToggle}>
       <div className="settings-row-text">
         <span className="settings-row-label">{label}</span>
         {description && <span className="settings-row-desc">{description}</span>}
@@ -25,32 +35,114 @@ function TabSettings() {
   const { settings, updateSettings, resetSettings } = useAppearance();
   const { token, logout } = useAuth();
   const { config, updateConfig } = useAppConfig();
-  const [appName, setAppName] = useState(config.appName);
-  const [appSubtitle, setAppSubtitle] = useState(config.appSubtitle);
-  const [brandingError, setBrandingError] = useState('');
-  const [brandingSuccess, setBrandingSuccess] = useState('');
-  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [draftConfig, setDraftConfig] = useState(config);
+  const [applicationError, setApplicationError] = useState('');
+  const [applicationSuccess, setApplicationSuccess] = useState('');
+  const [applicationSaving, setApplicationSaving] = useState(false);
+  const [displayError, setDisplayError] = useState('');
+  const [displaySuccess, setDisplaySuccess] = useState('');
+  const [displaySaving, setDisplaySaving] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraSuccess, setCameraSuccess] = useState('');
+  const [cameraSaving, setCameraSaving] = useState(false);
+  const [alertsError, setAlertsError] = useState('');
+  const [alertsSuccess, setAlertsSuccess] = useState('');
+  const [alertsSaving, setAlertsSaving] = useState(false);
   const [resetError, setResetError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
-    setAppName(config.appName);
-    setAppSubtitle(config.appSubtitle);
-  }, [config.appName, config.appSubtitle]);
+    setDraftConfig(config);
+  }, [config]);
 
-  async function saveBranding() {
+  function updateDraft(patch: Partial<typeof draftConfig>) {
+    setDraftConfig((current) => ({ ...current, ...patch }));
+  }
+
+  async function saveApplicationSettings() {
     if (!token) return;
-    setBrandingError('');
-    setBrandingSuccess('');
-    setBrandingSaving(true);
+    setApplicationError('');
+    setApplicationSuccess('');
+    setApplicationSaving(true);
     try {
-      await updateConfig(token, { appName, appSubtitle });
-      setBrandingSuccess('Titre mis à jour.');
+      const nextConfig = await updateConfig(token, {
+        appName: draftConfig.appName,
+        appSubtitle: draftConfig.appSubtitle,
+        loginMessage: draftConfig.loginMessage,
+        interfaceLanguage: draftConfig.interfaceLanguage,
+        timeFormat: draftConfig.timeFormat,
+        showSystemVersion: draftConfig.showSystemVersion,
+      });
+      setDraftConfig(nextConfig);
+      setApplicationSuccess('Paramètres de l’application enregistrés.');
     } catch (err: unknown) {
-      setBrandingError(err instanceof Error ? err.message : 'Erreur serveur');
+      setApplicationError(err instanceof Error ? err.message : 'Erreur serveur');
     } finally {
-      setBrandingSaving(false);
+      setApplicationSaving(false);
+    }
+  }
+
+  async function saveDisplaySettings() {
+    if (!token) return;
+    setDisplayError('');
+    setDisplaySuccess('');
+    setDisplaySaving(true);
+    try {
+      const nextConfig = await updateConfig(token, {
+        uiDensity: draftConfig.uiDensity,
+        cameraCardSize: draftConfig.cameraCardSize,
+        showStatusPanel: draftConfig.showStatusPanel,
+      });
+      setDraftConfig(nextConfig);
+      setDisplaySuccess('Réglages d’affichage enregistrés.');
+    } catch (err: unknown) {
+      setDisplayError(err instanceof Error ? err.message : 'Erreur serveur');
+    } finally {
+      setDisplaySaving(false);
+    }
+  }
+
+  async function saveCameraSettings() {
+    if (!token) return;
+    setCameraError('');
+    setCameraSuccess('');
+    setCameraSaving(true);
+    try {
+      const nextConfig = await updateConfig(token, {
+        cameraAutostartEnabled: draftConfig.cameraAutostartEnabled,
+        cameraRefreshSeconds: draftConfig.cameraRefreshSeconds,
+        showOfflineCameras: draftConfig.showOfflineCameras,
+        defaultCameraAddMode: draftConfig.defaultCameraAddMode,
+        cameraDiscoveryIntervalSeconds: draftConfig.cameraDiscoveryIntervalSeconds,
+      });
+      setDraftConfig(nextConfig);
+      setCameraSuccess('Réglages caméras enregistrés.');
+    } catch (err: unknown) {
+      setCameraError(err instanceof Error ? err.message : 'Erreur serveur');
+    } finally {
+      setCameraSaving(false);
+    }
+  }
+
+  async function saveAlertsSettings() {
+    if (!token) return;
+    setAlertsError('');
+    setAlertsSuccess('');
+    setAlertsSaving(true);
+    try {
+      const nextConfig = await updateConfig(token, {
+        alertsRealtimeEnabled: draftConfig.alertsRealtimeEnabled,
+        alertsDailySummaryEnabled: draftConfig.alertsDailySummaryEnabled,
+        alertsSoundEnabled: draftConfig.alertsSoundEnabled,
+        alertsDisconnectEnabled: draftConfig.alertsDisconnectEnabled,
+      });
+      setDraftConfig(nextConfig);
+      setAlertsSuccess('Préférences d’alerte enregistrées.');
+    } catch (err: unknown) {
+      setAlertsError(err instanceof Error ? err.message : 'Erreur serveur');
+    } finally {
+      setAlertsSaving(false);
     }
   }
 
@@ -81,16 +173,50 @@ function TabSettings() {
   return (
     <div>
       <div className="settings-section">
-        <div className="settings-section-label">IDENTITÉ DE L’APPLICATION</div>
-        <div className="sensor-add-form settings-add-form">
-          <input className="sensor-input" type="text" placeholder="Titre principal" value={appName} onChange={event => setAppName(event.target.value)} />
-          <input className="sensor-input" type="text" placeholder="Sous-titre" value={appSubtitle} onChange={event => setAppSubtitle(event.target.value)} />
-          <button className="sensor-confirm-btn" onClick={saveBranding} disabled={brandingSaving || !appName.trim() || !appSubtitle.trim()}>
-            {brandingSaving ? 'Enregistrement...' : 'Enregistrer le titre'}
+        <div className="settings-section-label settings-section-label--row">
+          <span>APPLICATION</span>
+          <button className="sensor-confirm-btn" onClick={saveApplicationSettings} disabled={applicationSaving || !draftConfig.appName.trim() || !draftConfig.appSubtitle.trim() || !draftConfig.loginMessage.trim()}>
+            {applicationSaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
-        {brandingError && <div className="settings-msg settings-msg--error">⚠ {brandingError}</div>}
-        {brandingSuccess && <div className="settings-msg settings-msg--success">✓ {brandingSuccess}</div>}
+        <div className="settings-config-grid">
+          <label className="settings-field">
+            <span className="settings-field-label">Titre principal</span>
+            <input className="sensor-input" type="text" value={draftConfig.appName} onChange={event => updateDraft({ appName: event.target.value })} />
+          </label>
+          <label className="settings-field">
+            <span className="settings-field-label">Sous-titre</span>
+            <input className="sensor-input" type="text" value={draftConfig.appSubtitle} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
+          </label>
+          <label className="settings-field settings-field--wide">
+            <span className="settings-field-label">Message d’accueil login</span>
+            <input className="sensor-input" type="text" value={draftConfig.loginMessage} onChange={event => updateDraft({ loginMessage: event.target.value })} />
+          </label>
+          <label className="settings-field">
+            <span className="settings-field-label">Langue</span>
+            <select className="sensor-input sensor-select" value={draftConfig.interfaceLanguage} onChange={event => updateDraft({ interfaceLanguage: event.target.value as typeof draftConfig.interfaceLanguage })}>
+              <option value="fr-FR">Français</option>
+              <option value="en-GB">English</option>
+            </select>
+          </label>
+          <label className="settings-field">
+            <span className="settings-field-label">Format horaire</span>
+            <select className="sensor-input sensor-select" value={draftConfig.timeFormat} onChange={event => updateDraft({ timeFormat: event.target.value as typeof draftConfig.timeFormat })}>
+              <option value="24h">24 heures</option>
+              <option value="12h">12 heures</option>
+            </select>
+          </label>
+        </div>
+        <div className="settings-toggle-list">
+          <SettingToggle
+            label="Afficher la version système"
+            description="Affiche le numéro de version dans l’en-tête et sur l’écran de connexion."
+            checked={draftConfig.showSystemVersion}
+            onChange={(checked) => updateDraft({ showSystemVersion: checked })}
+          />
+        </div>
+        {applicationError && <div className="settings-msg settings-msg--error">⚠ {applicationError}</div>}
+        {applicationSuccess && <div className="settings-msg settings-msg--success">✓ {applicationSuccess}</div>}
       </div>
 
       <div className="settings-section">
@@ -177,16 +303,126 @@ function TabSettings() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label">NOTIFICATIONS</div>
-        <SettingToggle label="Alertes en temps réel" description="Notifications push lors d'un événement critique" defaultChecked />
-        <SettingToggle label="Rapport journalier" description="Résumé envoyé chaque matin à 08h00" />
-        <SettingToggle label="Alertes sonores" description="Signal audio lors d'une alerte capteur" defaultChecked />
+        <div className="settings-section-label settings-section-label--row">
+          <span>AFFICHAGE</span>
+          <button className="sensor-confirm-btn" onClick={saveDisplaySettings} disabled={displaySaving}>
+            {displaySaving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+        <div className="settings-config-grid">
+          <label className="settings-field">
+            <span className="settings-field-label">Densité d’interface</span>
+            <select className="sensor-input sensor-select" value={draftConfig.uiDensity} onChange={event => updateDraft({ uiDensity: event.target.value as typeof draftConfig.uiDensity })}>
+              <option value="compact">Compacte</option>
+              <option value="standard">Standard</option>
+              <option value="touch">Tactile</option>
+            </select>
+          </label>
+          <label className="settings-field">
+            <span className="settings-field-label">Taille des cartes caméra</span>
+            <select className="sensor-input sensor-select" value={draftConfig.cameraCardSize} onChange={event => updateDraft({ cameraCardSize: event.target.value as typeof draftConfig.cameraCardSize })}>
+              <option value="compact">Compacte</option>
+              <option value="standard">Standard</option>
+              <option value="large">Grande</option>
+            </select>
+          </label>
+        </div>
+        <div className="settings-toggle-list">
+          <SettingToggle
+            label="Afficher le panneau de statut"
+            description="Affiche les indicateurs EN LIGNE / MODE APP dans l’en-tête."
+            checked={draftConfig.showStatusPanel}
+            onChange={(checked) => updateDraft({ showStatusPanel: checked })}
+          />
+        </div>
+        {displayError && <div className="settings-msg settings-msg--error">⚠ {displayError}</div>}
+        {displaySuccess && <div className="settings-msg settings-msg--success">✓ {displaySuccess}</div>}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label settings-section-label--row">
+          <span>CAMÉRAS</span>
+          <button className="sensor-confirm-btn" onClick={saveCameraSettings} disabled={cameraSaving}>
+            {cameraSaving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+        <div className="settings-config-grid">
+          <label className="settings-field">
+            <span className="settings-field-label">Rafraîchissement de la grille</span>
+            <input className="sensor-input" type="number" min="2" max="15" value={draftConfig.cameraRefreshSeconds} onChange={event => updateDraft({ cameraRefreshSeconds: Number(event.target.value) || 2 })} />
+            <span className="settings-field-hint">Secondes entre deux synchronisations de la liste des caméras.</span>
+          </label>
+          <label className="settings-field">
+            <span className="settings-field-label">Intervalle découverte nœuds / ESP32</span>
+            <input className="sensor-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
+            <span className="settings-field-hint">Secondes entre deux rafraîchissements dans le panneau d’ajout caméra.</span>
+          </label>
+          <label className="settings-field">
+            <span className="settings-field-label">Mode d’ajout par défaut</span>
+            <select className="sensor-input sensor-select" value={draftConfig.defaultCameraAddMode} onChange={event => updateDraft({ defaultCameraAddMode: event.target.value as typeof draftConfig.defaultCameraAddMode })}>
+              <option value="node">Nœud Pi</option>
+              <option value="discover">ESP32-CAM</option>
+              <option value="manual">Manuel</option>
+            </select>
+          </label>
+        </div>
+        <div className="settings-toggle-list">
+          <SettingToggle
+            label="Démarrer automatiquement les caméras au lancement du serveur"
+            description="Si désactivé, les flux actifs restent enregistrés mais ne sont pas relancés automatiquement au boot."
+            checked={draftConfig.cameraAutostartEnabled}
+            onChange={(checked) => updateDraft({ cameraAutostartEnabled: checked })}
+          />
+          <SettingToggle
+            label="Afficher les caméras hors ligne"
+            description="Conserve les flux stoppés ou en reconnexion dans la grille principale."
+            checked={draftConfig.showOfflineCameras}
+            onChange={(checked) => updateDraft({ showOfflineCameras: checked })}
+          />
+        </div>
+        {cameraError && <div className="settings-msg settings-msg--error">⚠ {cameraError}</div>}
+        {cameraSuccess && <div className="settings-msg settings-msg--success">✓ {cameraSuccess}</div>}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label settings-section-label--row">
+          <span>ALERTES</span>
+          <button className="sensor-confirm-btn" onClick={saveAlertsSettings} disabled={alertsSaving}>
+            {alertsSaving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+        <div className="settings-toggle-list">
+          <SettingToggle
+            label="Alertes en temps réel"
+            description="Active la remontée immédiate des événements critiques dans l’interface."
+            checked={draftConfig.alertsRealtimeEnabled}
+            onChange={(checked) => updateDraft({ alertsRealtimeEnabled: checked })}
+          />
+          <SettingToggle
+            label="Rapport journalier"
+            description="Prépare un résumé quotidien des événements et détections."
+            checked={draftConfig.alertsDailySummaryEnabled}
+            onChange={(checked) => updateDraft({ alertsDailySummaryEnabled: checked })}
+          />
+          <SettingToggle
+            label="Alertes sonores"
+            description="Autorise le déclenchement sonore local quand une alerte critique est remontée."
+            checked={draftConfig.alertsSoundEnabled}
+            onChange={(checked) => updateDraft({ alertsSoundEnabled: checked })}
+          />
+          <SettingToggle
+            label="Alerter si une caméra se déconnecte"
+            description="Marque les coupures caméra comme alertes prioritaires."
+            checked={draftConfig.alertsDisconnectEnabled}
+            onChange={(checked) => updateDraft({ alertsDisconnectEnabled: checked })}
+          />
+        </div>
+        {alertsError && <div className="settings-msg settings-msg--error">⚠ {alertsError}</div>}
+        {alertsSuccess && <div className="settings-msg settings-msg--success">✓ {alertsSuccess}</div>}
       </div>
 
       <div className="settings-section">
         <div className="settings-section-label">SYSTÈME</div>
-        <SettingToggle label="Enregistrement automatique" description="Sauvegarde du flux caméra en continu" />
-        <SettingToggle label="Mode nuit" description="Ajustement automatique de la luminosité" defaultChecked />
         <div className="settings-danger-zone">
           <div className="settings-danger-zone-copy">
             <div className="settings-danger-zone-title">RÉINITIALISATION COMPLÈTE</div>

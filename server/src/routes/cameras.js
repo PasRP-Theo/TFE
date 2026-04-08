@@ -7,6 +7,9 @@ import {
   stopCamera,  getState,    getAllStates,
   detectCameraStreamUrl, scanLocalNetworkForCameraStreams,
   RECORDINGS_DIR,
+  deleteRecording,
+  deleteAllRecordings,
+  getRecordingsRetentionDays,
 } from '../camera/manager.js';
 import { discoverMdnsEsp32Cameras } from '../camera/mdns.js';
 
@@ -367,7 +370,9 @@ router.get('/:id/state', (req, res) => {
 router.get('/:id/history', async (req, res) => {
   const cameraId = String(req.params.id);
   const camDir = path.join(RECORDINGS_DIR, cameraId);
-  if (!existsSync(camDir)) return res.json([]);
+  if (!existsSync(camDir)) {
+    return res.json({ recordings: [], retentionDays: getRecordingsRetentionDays() });
+  }
 
   try {
     const files = await fs.readdir(camDir);
@@ -384,10 +389,34 @@ router.get('/:id/history', async (req, res) => {
       });
     }
     recordings.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    res.json(recordings);
+    res.json({ recordings, retentionDays: getRecordingsRetentionDays() });
   } catch (err) {
     console.error('[CAM HISTORY]', err);
     res.status(500).json({ error: 'Impossible de lire l’historique' });
+  }
+});
+
+router.delete('/:id/history', async (req, res) => {
+  try {
+    const result = await deleteAllRecordings(req.params.id);
+    res.json({ message: 'Historique supprimé', deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error('[CAM HISTORY DELETE ALL]', err);
+    res.status(500).json({ error: 'Impossible de supprimer l’historique' });
+  }
+});
+
+router.delete('/:id/history/:filename', async (req, res) => {
+  try {
+    const result = await deleteRecording(req.params.id, req.params.filename);
+    if (!result.deleted) {
+      const status = result.reason === 'not-found' ? 404 : 400;
+      return res.status(status).json({ error: 'Enregistrement introuvable ou nom invalide' });
+    }
+    res.json({ message: 'Enregistrement supprimé', filename: result.filename });
+  } catch (err) {
+    console.error('[CAM HISTORY DELETE]', err);
+    res.status(500).json({ error: 'Impossible de supprimer l’enregistrement' });
   }
 });
 

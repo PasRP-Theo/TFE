@@ -264,6 +264,15 @@ function ensureDir(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
+function getCameraRecordingDir(cameraId) {
+  return path.join(RECORDINGS_DIR, String(cameraId));
+}
+
+export function getRecordingsRetentionDays() {
+  const days = Number(process.env.RECORDINGS_RETENTION_DAYS || 30);
+  return Number.isFinite(days) && days > 0 ? days : 30;
+}
+
 function broadcast(cameraId) {
   cameraEvents.emit('state', { cameraId, ...getState(cameraId) });
 }
@@ -566,4 +575,46 @@ export function stopAllCameras() {
     console.log(`[CAM ${id}] Arrêtée (shutdown)`);
   });
   states.clear();
+}
+
+export async function deleteRecording(cameraId, filename) {
+  const safeName = path.basename(String(filename || '')).trim();
+  if (!safeName || safeName !== String(filename || '').trim()) {
+    return { deleted: false, reason: 'invalid-filename' };
+  }
+
+  const camDir = getCameraRecordingDir(cameraId);
+  const filePath = path.join(camDir, safeName);
+
+  if (!existsSync(filePath)) {
+    return { deleted: false, reason: 'not-found' };
+  }
+
+  await unlink(filePath);
+
+  const remaining = existsSync(camDir) ? await readdir(camDir) : [];
+  if (remaining.length === 0) {
+    await rm(camDir, { recursive: true, force: true });
+  }
+
+  return { deleted: true, filename: safeName };
+}
+
+export async function deleteAllRecordings(cameraId) {
+  const camDir = getCameraRecordingDir(cameraId);
+  if (!existsSync(camDir)) {
+    return { deletedCount: 0 };
+  }
+
+  const files = await readdir(camDir, { withFileTypes: true });
+  let deletedCount = 0;
+
+  for (const file of files) {
+    if (!file.isFile()) continue;
+    await unlink(path.join(camDir, file.name));
+    deletedCount += 1;
+  }
+
+  await rm(camDir, { recursive: true, force: true });
+  return { deletedCount };
 }

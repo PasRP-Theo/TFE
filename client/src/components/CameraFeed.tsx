@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { apiUrl } from "../lib/api";
+import { useAppConfig } from "../hooks/useAppConfig";
 
 type HlsConstructor = typeof import("hls.js").default;
 
@@ -24,6 +25,11 @@ interface RecordingEntry {
   url:       string;
   createdAt: string;
   size:      number;
+}
+
+interface HistoryResponse {
+  recordings: RecordingEntry[];
+  retentionDays?: number;
 }
 
 interface DiscoveredCamera {
@@ -65,6 +71,48 @@ interface MotionEventEntry {
 }
 
 type AddMode = 'node' | 'discover' | 'manual';
+type HistorySort = 'recent' | 'oldest' | 'largest';
+
+function formatStorageSize(sizeInBytes: number) {
+  if (sizeInBytes < 1024) return `${sizeInBytes} o`;
+  if (sizeInBytes < 1024 * 1024) return `${Math.round(sizeInBytes / 1024)} Ko`;
+  if (sizeInBytes < 1024 * 1024 * 1024) return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} Mo`;
+  return `${(sizeInBytes / (1024 * 1024 * 1024)).toFixed(2)} Go`;
+}
+
+function formatHistoryDate(value: string) {
+  return new Date(value).toLocaleString('fr-FR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function getHistoryGroupLabel(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const sameDay = (left: Date, right: Date) => (
+    left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate()
+  );
+
+  if (sameDay(date, today)) return 'Aujourd’hui';
+  if (sameDay(date, yesterday)) return 'Hier';
+
+  return date.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
 
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
@@ -335,6 +383,7 @@ function CameraControls({ cam, onAction }: {
 
 // ── Composant principal ────────────────────────────────────
 export default function CameraFeed() {
+  const { config } = useAppConfig();
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [focused, setFocused] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -358,6 +407,14 @@ export default function CameraFeed() {
   const [historyRecords, setHistoryRecords] = useState<RecordingEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyRetentionDays, setHistoryRetentionDays] = useState(30);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historySort, setHistorySort] = useState<HistorySort>('recent');
+  const [historyDeleteError, setHistoryDeleteError] = useState<string | null>(null);
+  const [historyDeleteLoading, setHistoryDeleteLoading] = useState(false);
+  const [cameraDeleteTarget, setCameraDeleteTarget] = useState<Camera | null>(null);
+  const [recordDeleteTarget, setRecordDeleteTarget] = useState<RecordingEntry | null>(null);
+  const [purgeHistoryConfirm, setPurgeHistoryConfirm] = useState(false);
   const [motionHistoryDeviceId, setMotionHistoryDeviceId] = useState<string | null>(null);
   const [motionHistoryTitle, setMotionHistoryTitle] = useState('');
   const [motionHistoryRecords, setMotionHistoryRecords] = useState<MotionEventEntry[]>([]);
@@ -407,7 +464,7 @@ export default function CameraFeed() {
     if (!showAdd) return;
 
     let stopped = false;
-    setAddMode('node');
+    setAddMode(config.defaultCameraAddMode);
 
     fetchDiscoveries();
     fetchCameraNodes();
@@ -416,13 +473,13 @@ export default function CameraFeed() {
         fetchDiscoveries(true);
         fetchCameraNodes(true);
       }
-    }, 5000);
+    }, config.cameraDiscoveryIntervalSeconds * 1000);
 
     return () => {
       stopped = true;
       clearInterval(interval);
     };
-  }, [showAdd]);
+  }, [showAdd, config.defaultCameraAddMode, config.cameraDiscoveryIntervalSeconds]);
 
   async function fetchCameras() {
     try {
@@ -435,9 +492,9 @@ export default function CameraFeed() {
 
   useEffect(() => {
     fetchCameras();
-    const t = setInterval(fetchCameras, 3000);
+    const t = setInterval(fetchCameras, config.cameraRefreshSeconds * 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [config.cameraRefreshSeconds]);
 
   async function handleAction(id: number, action: "start" | "pause" | "resume" | "stop") {
     try {
@@ -534,30 +591,79 @@ export default function CameraFeed() {
     }
   }
 
-  async function deleteCamera(id: number) {
-    if (!confirm('Supprimer cette caméra ?')) return;
-    await fetch(apiUrl(`/api/cameras/${id}`), { method: 'DELETE' });
-    setCameras(prev => prev.filter(c => c.id !== id));
-    if (focused === id) setFocused(null);
+  async function confirmDeleteCamera() {
+    if (!cameraDeleteTarget) return;
+    await fetch(apiUrl(`/api/cameras/${cameraDeleteTarget.id}`), { method: 'DELETE' });
+    setCameras(prev => prev.filter(c => c.id !== cameraDeleteTarget.id));
+    if (focused === cameraDeleteTarget.id) setFocused(null);
+    if (historyCameraId === cameraDeleteTarget.id) closeHistory();
+    setCameraDeleteTarget(null);
   }
 
   async function loadCameraHistory(id: number) {
     setHistoryCameraId(id);
     setHistoryLoading(true);
     setHistoryError(null);
+    setHistoryDeleteError(null);
+    setHistorySearch('');
+    setHistorySort('recent');
     try {
       const res = await fetch(apiUrl(`/api/cameras/${id}/history`));
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Impossible de charger l’historique');
       }
-      const data = await res.json();
-      setHistoryRecords(Array.isArray(data) ? data : []);
+      const data = await res.json() as HistoryResponse | RecordingEntry[];
+      if (Array.isArray(data)) {
+        setHistoryRecords(data);
+        setHistoryRetentionDays(30);
+      } else {
+        setHistoryRecords(Array.isArray(data.recordings) ? data.recordings : []);
+        setHistoryRetentionDays(typeof data.retentionDays === 'number' ? data.retentionDays : 30);
+      }
     } catch (err: unknown) {
       setHistoryRecords([]);
       setHistoryError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setHistoryLoading(false);
+    }
+  }
+
+  async function confirmDeleteRecording() {
+    if (historyCameraId === null || !recordDeleteTarget) return;
+    setHistoryDeleteLoading(true);
+    setHistoryDeleteError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/cameras/${historyCameraId}/history/${encodeURIComponent(recordDeleteTarget.filename)}`), {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Impossible de supprimer l’enregistrement');
+      setHistoryRecords(prev => prev.filter(entry => entry.filename !== recordDeleteTarget.filename));
+      setRecordDeleteTarget(null);
+    } catch (err: unknown) {
+      setHistoryDeleteError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setHistoryDeleteLoading(false);
+    }
+  }
+
+  async function confirmDeleteAllHistory() {
+    if (historyCameraId === null) return;
+    setHistoryDeleteLoading(true);
+    setHistoryDeleteError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/cameras/${historyCameraId}/history`), {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Impossible de supprimer tous les enregistrements');
+      setHistoryRecords([]);
+      setPurgeHistoryConfirm(false);
+    } catch (err: unknown) {
+      setHistoryDeleteError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setHistoryDeleteLoading(false);
     }
   }
 
@@ -586,6 +692,9 @@ export default function CameraFeed() {
     setHistoryCameraId(null);
     setHistoryRecords([]);
     setHistoryError(null);
+    setHistoryDeleteError(null);
+    setRecordDeleteTarget(null);
+    setPurgeHistoryConfirm(false);
   }
 
   function closeMotionHistory() {
@@ -604,13 +713,38 @@ export default function CameraFeed() {
     setShowAdd((current) => {
       const next = !current;
       if (next) {
-        setAddMode('node');
+        setAddMode(config.defaultCameraAddMode);
       } else {
         setDiscoverMessage(null);
       }
       return next;
     });
   }
+
+  const visibleCameras = config.showOfflineCameras
+    ? cameras
+    : cameras.filter((camera) => camera.status !== 'stopped' && camera.status !== 'reconnecting');
+  const historySearchValue = historySearch.trim().toLowerCase();
+  const filteredHistoryRecords = historyRecords.filter((entry) => {
+    if (!historySearchValue) return true;
+    const haystack = `${entry.filename} ${formatHistoryDate(entry.createdAt)}`.toLowerCase();
+    return haystack.includes(historySearchValue);
+  });
+  const sortedHistoryRecords = [...filteredHistoryRecords].sort((left, right) => {
+    if (historySort === 'oldest') return left.createdAt.localeCompare(right.createdAt);
+    if (historySort === 'largest') return right.size - left.size || right.createdAt.localeCompare(left.createdAt);
+    return right.createdAt.localeCompare(left.createdAt);
+  });
+  const groupedHistoryRecords = sortedHistoryRecords.reduce<Array<{ label: string; items: RecordingEntry[] }>>((groups, entry) => {
+    const label = getHistoryGroupLabel(entry.createdAt);
+    const current = groups[groups.length - 1];
+    if (current && current.label === label) {
+      current.items.push(entry);
+      return groups;
+    }
+    groups.push({ label, items: [entry] });
+    return groups;
+  }, []);
 
   return (
     <div className="cam-page">
@@ -620,7 +754,7 @@ export default function CameraFeed() {
         <div className="cam-header-left">
           <span className="cam-header-title">CAMÉRAS</span>
           <div className="cam-header-meta">
-            <span className="cam-header-stat">EN LIGNE <span>{onlineCount}/{cameras.length}</span></span>
+            <span className="cam-header-stat">EN LIGNE <span>{onlineCount}/{visibleCameras.length}</span></span>
             <span className="cam-header-stat rec">REC <span>{recCount}</span></span>
           </div>
         </div>
@@ -639,39 +773,45 @@ export default function CameraFeed() {
 
       {/* Formulaire ajout */}
       {showAdd && (
-        <div className="cam-add-form">
-          <div className="cam-add-topbar">
-            <div>
-              <h3 className="cam-add-title">Ajouter une caméra</h3>
-              <p className="cam-add-subtitle">Noeud Raspberry Pi, ESP32-CAM ou flux manuel.</p>
+        <div className="cam-add-overlay" onClick={() => { setShowAdd(false); setDiscoverMessage(null); }}>
+          <div className="cam-add-form" onClick={(event) => event.stopPropagation()}>
+            <div className="cam-add-topbar">
+              <div>
+                <h3 className="cam-add-title">Ajouter une caméra</h3>
+                <p className="cam-add-subtitle">Noeud Raspberry Pi, ESP32-CAM ou flux manuel.</p>
+              </div>
+              <div className="cam-add-topbar-actions">
+                <div className="cam-add-mode-switch">
+                  <button
+                    type="button"
+                    className={`cam-add-mode-btn ${addMode === 'node' ? 'cam-add-mode-btn--active' : ''}`}
+                    onClick={() => setAddMode('node')}
+                  >
+                    Noeud Pi
+                  </button>
+                  <button
+                    type="button"
+                    className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
+                    onClick={() => setAddMode('discover')}
+                  >
+                    ESP32-CAM
+                  </button>
+                  <button
+                    type="button"
+                    className={`cam-add-mode-btn ${addMode === 'manual' ? 'cam-add-mode-btn--active' : ''}`}
+                    onClick={() => setAddMode('manual')}
+                  >
+                    Manuel
+                  </button>
+                </div>
+                <button type="button" className="cam-add-close-btn" onClick={() => { setShowAdd(false); setDiscoverMessage(null); }}>
+                  Fermer
+                </button>
+              </div>
             </div>
-            <div className="cam-add-mode-switch">
-              <button
-                type="button"
-                className={`cam-add-mode-btn ${addMode === 'node' ? 'cam-add-mode-btn--active' : ''}`}
-                onClick={() => setAddMode('node')}
-              >
-                Noeud Pi
-              </button>
-              <button
-                type="button"
-                className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
-                onClick={() => setAddMode('discover')}
-              >
-                ESP32-CAM
-              </button>
-              <button
-                type="button"
-                className={`cam-add-mode-btn ${addMode === 'manual' ? 'cam-add-mode-btn--active' : ''}`}
-                onClick={() => setAddMode('manual')}
-              >
-                Manuel
-              </button>
-            </div>
-          </div>
 
-          {addMode === 'node' && (
-            <section className="cam-discovery-panel">
+            {addMode === 'node' && (
+              <section className="cam-discovery-panel">
               <div className="cam-discovery-header">
                 <div>
                   <h3 className="cam-discovery-title">Noeuds Raspberry Pi detectes</h3>
@@ -728,11 +868,11 @@ export default function CameraFeed() {
                   ))}
                 </ul>
               )}
-            </section>
-          )}
+              </section>
+            )}
 
-          {addMode === 'discover' && (
-            <section className="cam-discovery-panel">
+            {addMode === 'discover' && (
+              <section className="cam-discovery-panel">
               <div className="cam-discovery-header">
                 <div>
                   <h3 className="cam-discovery-title">ESP32 vues récemment</h3>
@@ -787,11 +927,11 @@ export default function CameraFeed() {
                   ))}
                 </ul>
               )}
-            </section>
-          )}
+              </section>
+            )}
 
-          {addMode === 'manual' && (
-            <section className="cam-manual-panel">
+            {addMode === 'manual' && (
+              <section className="cam-manual-panel">
               <div>
                 <h3 className="cam-discovery-title">Ajout manuel</h3>
                 <p className="cam-discovery-subtitle">Saisissez un flux RTSP ou HTTP valide.</p>
@@ -813,15 +953,16 @@ export default function CameraFeed() {
                 </button>
                 <button className="sensor-confirm-btn" onClick={addCamera} disabled={!canAddManually}>Ajouter</button>
               </div>
-            </section>
-          )}
+              </section>
+            )}
+          </div>
         </div>
       )}
 
       {/* Vue focus */}
       {focusedCam ? (
         <div className="cam-focus-wrapper" onClick={() => setFocused(null)}>
-          <div className={`cam-card ${focusedCam.recording ? 'cam-card--rec' : ''}`}
+          <div className={`cam-card cam-card--focus-mode ${focusedCam.recording ? 'cam-card--rec' : ''}`}
             onClick={e => e.stopPropagation()}>
             <div className="cam-card-header">
               <div className="cam-card-title">
@@ -838,25 +979,27 @@ export default function CameraFeed() {
                   </button>
                 )}
                 <button className="cam-card-history" onClick={() => loadCameraHistory(focusedCam.id)}>📁 Historique</button>
-                <button className="cam-card-delete" onClick={() => deleteCamera(focusedCam.id)}>✕</button>
+                <button className="cam-card-delete" onClick={() => setCameraDeleteTarget(focusedCam)}>✕</button>
               </div>
             </div>
-            <CameraScreen cam={focusedCam} time={time} />
+            <div className="cam-screen-shell cam-screen-shell--focus-mode">
+              <CameraScreen cam={focusedCam} time={time} />
+            </div>
             <CameraControls cam={focusedCam} onAction={handleAction} />
           </div>
-          <div className="cam-focus-hint">
-            ← Clic en dehors pour revenir à la grille
-          </div>
+          <button type="button" className="cam-focus-exit-btn" onClick={(event) => { event.stopPropagation(); setFocused(null); }}>
+            Retour à la grille
+          </button>
         </div>
       ) : (
-        <div className="cam-grid">
+        <div className={`cam-grid cam-grid--${config.cameraCardSize}`}>
           {loading && <div className="cam-empty">Chargement des caméras…</div>}
-          {!loading && cameras.length === 0 && (
+          {!loading && visibleCameras.length === 0 && (
             <div className="cam-empty">
               Aucune caméra configurée — cliquez "+ Ajouter" pour commencer.
             </div>
           )}
-          {cameras.map(cam => (
+          {visibleCameras.map(cam => (
             <div
               key={cam.id}
               className={`cam-card ${cam.recording ? 'cam-card--rec' : ''} ${focused === cam.id ? 'cam-card--focused' : ''}`}
@@ -875,7 +1018,7 @@ export default function CameraFeed() {
                     📁
                   </button>
                   <button className="cam-card-delete"
-                    onClick={e => { e.stopPropagation(); deleteCamera(cam.id); }}>✕</button>
+                    onClick={e => { e.stopPropagation(); setCameraDeleteTarget(cam); }}>✕</button>
                 </div>
               </div>
               <CameraScreen cam={cam} time={time} />
@@ -889,38 +1032,125 @@ export default function CameraFeed() {
         <div className="cam-history-overlay" onClick={closeHistory}>
           <div className="cam-history-panel" onClick={e => e.stopPropagation()}>
             <div className="cam-history-header">
-              <div>
-                <strong>Historique caméra {historyCameraId}</strong>
+              <div className="cam-history-header-main">
+                <span className="cam-history-kicker">GESTIONNAIRE D'ENREGISTREMENTS</span>
+                <strong>Caméra {historyCameraId}</strong>
                 <div className="cam-history-meta">
                   {historyRecords.length} enregistrement{historyRecords.length > 1 ? 's' : ''}
                 </div>
               </div>
               <button className="cam-card-delete" onClick={closeHistory}>✕</button>
             </div>
-            {historyLoading && <p>Chargement de l’historique…</p>}
-            {historyError && <p className="cam-history-error">{historyError}</p>}
+            <div className="cam-history-toolbar">
+              <div className="cam-history-toolbar-main">
+                <input
+                  className="cam-history-search"
+                  type="search"
+                  aria-label="Rechercher dans les enregistrements"
+                  placeholder="Rechercher un rendu..."
+                  value={historySearch}
+                  onChange={(event) => setHistorySearch(event.target.value)}
+                />
+                <div className="cam-history-sort" aria-label="Trier les enregistrements" role="group">
+                  <button
+                    type="button"
+                    className={`cam-history-sort-btn ${historySort === 'recent' ? 'cam-history-sort-btn--active' : ''}`}
+                    onClick={() => setHistorySort('recent')}
+                  >
+                    Plus récents
+                  </button>
+                  <button
+                    type="button"
+                    className={`cam-history-sort-btn ${historySort === 'oldest' ? 'cam-history-sort-btn--active' : ''}`}
+                    onClick={() => setHistorySort('oldest')}
+                  >
+                    Plus anciens
+                  </button>
+                  <button
+                    type="button"
+                    className={`cam-history-sort-btn ${historySort === 'largest' ? 'cam-history-sort-btn--active' : ''}`}
+                    onClick={() => setHistorySort('largest')}
+                  >
+                    Plus lourds
+                  </button>
+                </div>
+              </div>
+              <div className="cam-history-toolbar-side">
+                <span className="cam-history-retention">Suppression auto après {historyRetentionDays} jours</span>
+                <button
+                  type="button"
+                  className="sensor-delete-btn sensor-delete-btn--danger"
+                  onClick={() => {
+                    setHistoryDeleteError(null);
+                    setPurgeHistoryConfirm(true);
+                  }}
+                  disabled={historyRecords.length === 0 || historyDeleteLoading}
+                >
+                  Tout supprimer
+                </button>
+              </div>
+            </div>
+            {historyLoading && <div className="cam-history-empty-state">Chargement de l’historique…</div>}
+            {historyError && <div className="cam-history-error">{historyError}</div>}
+            {historyDeleteError && <div className="cam-history-error">{historyDeleteError}</div>}
             {!historyLoading && !historyError && historyRecords.length === 0 && (
-              <p>Aucun enregistrement disponible pour cette caméra.</p>
+              <div className="cam-history-empty-state">Aucun enregistrement disponible pour cette caméra.</div>
             )}
-            {!historyLoading && historyRecords.length > 0 && (
+            {!historyLoading && !historyError && historyRecords.length > 0 && groupedHistoryRecords.length === 0 && (
+              <div className="cam-history-empty-state">Aucun résultat pour cette recherche.</div>
+            )}
+            {!historyLoading && groupedHistoryRecords.length > 0 && (
               <div className="cam-history-list">
-                {historyRecords.map(entry => (
-                  <div key={entry.filename} className="cam-history-row">
-                    <div>
-                      <strong>{entry.filename}</strong>
-                      <div className="cam-history-meta">
-                        {new Date(entry.createdAt).toLocaleString('fr-FR')} · {Math.round(entry.size / 1024)} KB
+                {groupedHistoryRecords.map(group => (
+                  <section key={group.label} className="cam-history-group">
+                    <div className="cam-history-group-title">{group.label}</div>
+                    {group.items.map(entry => (
+                      <div key={entry.filename} className="cam-history-row">
+                        <div className="cam-history-row-main">
+                          <div className="cam-history-row-icon">REC</div>
+                          <div className="cam-history-row-copy">
+                            <strong>{entry.filename}</strong>
+                            <div className="cam-history-meta">
+                              {formatHistoryDate(entry.createdAt)}
+                            </div>
+                            <div className="cam-history-tags">
+                              <span className="cam-history-tag">{formatStorageSize(entry.size)}</span>
+                              <span className="cam-history-tag">HLS export</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="cam-history-tags">
+                          <div className="cam-history-actions">
+                            <a
+                              href={apiUrl(entry.url)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="cam-history-link"
+                            >
+                              Ouvrir
+                            </a>
+                            <a
+                              href={apiUrl(entry.url)}
+                              download
+                              className="cam-history-link cam-history-link--secondary"
+                            >
+                              Télécharger
+                            </a>
+                            <button
+                              type="button"
+                              className="cam-history-link cam-history-link--danger"
+                              onClick={() => {
+                                setHistoryDeleteError(null);
+                                setRecordDeleteTarget(entry);
+                              }}
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <a
-                      href={apiUrl(entry.url)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="cam-history-link"
-                    >
-                      Ouvrir
-                    </a>
-                  </div>
+                    ))}
+                  </section>
                 ))}
               </div>
             )}
@@ -932,33 +1162,97 @@ export default function CameraFeed() {
         <div className="cam-history-overlay" onClick={closeMotionHistory}>
           <div className="cam-history-panel" onClick={e => e.stopPropagation()}>
             <div className="cam-history-header">
-              <div>
-                <strong>Historique mouvement {motionHistoryTitle}</strong>
+              <div className="cam-history-header-main">
+                <span className="cam-history-kicker">JOURNAL DE MOUVEMENT</span>
+                <strong>{motionHistoryTitle}</strong>
                 <div className="cam-history-meta">
                   {motionHistoryRecords.length} evenement{motionHistoryRecords.length > 1 ? 's' : ''}
                 </div>
               </div>
               <button className="cam-card-delete" onClick={closeMotionHistory}>✕</button>
             </div>
-            {motionHistoryLoading && <p>Chargement de l’historique mouvement…</p>}
-            {motionHistoryError && <p className="cam-history-error">{motionHistoryError}</p>}
+            {motionHistoryLoading && <div className="cam-history-empty-state">Chargement de l’historique mouvement…</div>}
+            {motionHistoryError && <div className="cam-history-error">{motionHistoryError}</div>}
             {!motionHistoryLoading && !motionHistoryError && motionHistoryRecords.length === 0 && (
-              <p>Aucun mouvement enregistre pour ce noeud.</p>
+              <div className="cam-history-empty-state">Aucun mouvement enregistré pour ce nœud.</div>
             )}
             {!motionHistoryLoading && motionHistoryRecords.length > 0 && (
               <div className="cam-history-list">
                 {motionHistoryRecords.map(entry => (
                   <div key={entry.id} className="cam-history-row">
-                    <div>
-                      <strong>{entry.motion ? 'Mouvement detecte' : 'Etat inactif'}</strong>
-                      <div className="cam-history-meta">
-                        {new Date(entry.detected_at).toLocaleString('fr-FR')}
+                    <div className="cam-history-row-main">
+                      <div className={`cam-history-row-icon ${entry.motion ? '' : 'cam-history-row-icon--muted'}`}>{entry.motion ? 'ON' : 'OFF'}</div>
+                      <div className="cam-history-row-copy">
+                        <strong>{entry.motion ? 'Mouvement détecté' : 'État inactif'}</strong>
+                        <div className="cam-history-meta">
+                          {formatHistoryDate(entry.detected_at)}
+                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {cameraDeleteTarget && (
+        <div className="settings-modal-overlay" onClick={() => setCameraDeleteTarget(null)}>
+          <div className="settings-modal-card settings-modal-card--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER LA CAMÉRA</div>
+            <div className="settings-modal-warning settings-modal-warning--danger">
+              La caméra {cameraDeleteTarget.name} sera retirée de la grille et son flux sera arrêté.
+            </div>
+            <div className="settings-modal-warning">
+              Les enregistrements déjà présents restent disponibles tant qu’ils ne sont pas supprimés ou purgés automatiquement après {historyRetentionDays} jours.
+            </div>
+            <div className="settings-modal-actions">
+              <button className="sensor-link-btn" onClick={() => setCameraDeleteTarget(null)}>Annuler</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteCamera}>Confirmer la suppression</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recordDeleteTarget && (
+        <div className="settings-modal-overlay" onClick={() => !historyDeleteLoading && setRecordDeleteTarget(null)}>
+          <div className="settings-modal-card settings-modal-card--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER L’ENREGISTREMENT</div>
+            <div className="settings-modal-warning settings-modal-warning--danger">
+              {recordDeleteTarget.filename} sera définitivement supprimé.
+            </div>
+            <div className="settings-modal-warning">
+              Cette action retire uniquement ce rendu. La purge automatique reste fixée à {historyRetentionDays} jours.
+            </div>
+            {historyDeleteError && <div className="settings-msg settings-msg--error">⚠ {historyDeleteError}</div>}
+            <div className="settings-modal-actions">
+              <button className="sensor-link-btn" onClick={() => setRecordDeleteTarget(null)} disabled={historyDeleteLoading}>Annuler</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteRecording} disabled={historyDeleteLoading}>
+                {historyDeleteLoading ? 'Suppression...' : 'Supprimer ce rendu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {purgeHistoryConfirm && (
+        <div className="settings-modal-overlay" onClick={() => !historyDeleteLoading && setPurgeHistoryConfirm(false)}>
+          <div className="settings-modal-card settings-modal-card--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER TOUT L’HISTORIQUE</div>
+            <div className="settings-modal-warning settings-modal-warning--danger">
+              Tous les rendus de cette caméra seront supprimés définitivement.
+            </div>
+            <div className="settings-modal-warning">
+              Cette purge manuelle s’ajoute au nettoyage automatique quotidien des fichiers de plus de {historyRetentionDays} jours.
+            </div>
+            {historyDeleteError && <div className="settings-msg settings-msg--error">⚠ {historyDeleteError}</div>}
+            <div className="settings-modal-actions">
+              <button className="sensor-link-btn" onClick={() => setPurgeHistoryConfirm(false)} disabled={historyDeleteLoading}>Annuler</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteAllHistory} disabled={historyDeleteLoading}>
+                {historyDeleteLoading ? 'Suppression...' : 'Tout supprimer'}
+              </button>
+            </div>
           </div>
         </div>
       )}

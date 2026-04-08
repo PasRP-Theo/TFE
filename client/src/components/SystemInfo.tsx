@@ -377,7 +377,7 @@ export default function SystemInfo() {
         </Card>
       </div>
 
-      <div className="sysinfo-footer">{config.appName} — via Node.js systeminformation</div>
+      <div className="sysinfo-footer">{config.appName}{config.showSystemVersion ? ` · ${config.systemVersion}` : ''} — via Node.js systeminformation</div>
     </div>
   );
 }

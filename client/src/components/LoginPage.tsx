@@ -25,6 +25,9 @@ export default function LoginPage() {
     return () => clearInterval(t);
   }, [loading]);
 
+  const locale = config.interfaceLanguage;
+  const use12HourClock = config.timeFormat === '12h';
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -38,8 +41,8 @@ export default function LoginPage() {
     }
   }
 
-  const timeStr = time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dateStr = time.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: use12HourClock });
+  const dateStr = time.toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
     <div className="lp-root">
@@ -52,7 +55,7 @@ export default function LoginPage() {
       <div className="lp-corner lp-corner--br" />
 
       <div className="lp-sysinfo">
-        <div>SYS // {config.appName.toUpperCase()} {config.systemVersion}</div>
+        <div>SYS // {config.appName.toUpperCase()}{config.showSystemVersion ? ` ${config.systemVersion}` : ''}</div>
         <div>NODE // CENTRAL-UNIT-01</div>
         <div>NET  // 192.168.1.1 — SECURED</div>
       </div>
@@ -84,6 +87,7 @@ export default function LoginPage() {
             <div className="lp-logo-text">{config.appName}</div>
           </div>
           <div className="lp-subtitle">{config.appSubtitle.toUpperCase()}</div>
+          <div className="lp-login-message">{config.loginMessage}</div>
           <div className="lp-sep" />
 
           {config.defaultAdminActive && (
@@ -139,7 +143,7 @@ export default function LoginPage() {
         </div>
 
         <div className="lp-card-footer">
-          <div className="lp-footer-text">{config.appSubtitle.toUpperCase()} · {config.systemVersion}</div>
+          <div className="lp-footer-text">{config.appSubtitle.toUpperCase()}{config.showSystemVersion ? ` · ${config.systemVersion}` : ''}</div>
           <div className="lp-footer-status">
             <div className="lp-footer-dot" />
             CONNEXION SÉCURISÉE

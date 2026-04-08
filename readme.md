@@ -12,6 +12,7 @@ Objectif du projet:
 - `client/`: frontend React + Vite
 - `server/`: backend Node.js + fichiers statiques servis en production
 - `.github/workflows/deploy.yml`: pipeline de déploiement automatique sur le host Ubuntu
+- `README-user-stories.md`: backlog fonctionnel et user stories du projet
 
 ## Développement local
 
