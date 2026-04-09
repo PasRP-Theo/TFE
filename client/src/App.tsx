@@ -174,15 +174,15 @@ function AppShell() {
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
       <header className="app-header">
         <div className="app-header-inner">
-          <div className="app-logo">
+          <div className="app-logo" style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <BrandLogo
               wrapperClassName="app-logo-mark"
               imageClassName="app-logo-icon"
               fallbackClassName="app-logo-fallback"
               fallbackText={config.appName.charAt(0) || 'A'}
             />
-            <span className="app-logo-text">{config.appName}</span>
-            {config.showSystemVersion && <span className="app-logo-version">{config.systemVersion}</span>}
+            <span className="app-logo-text" style={{ display: 'inline-block' }}>{config.appName}</span>
+            {config.showSystemVersion && <span className="app-logo-version" style={{ display: 'inline-block' }}>{config.systemVersion}</span>}
           </div>
 
           <nav className="app-nav" aria-label="Navigation principale">
