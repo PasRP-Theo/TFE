@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiUrl, readJsonResponse } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
 
 interface AlertEntry {
   id: number;
@@ -64,6 +69,94 @@ function getHourBarLevel(events: number, maxEvents: number) {
   return Math.min(10, Math.max(1, Math.round((events / maxEvents) * 10)));
 }
 
+function AlertsFilterDropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: FilterOption[];
+  onChange: (nextValue: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const selectedOption = options.find((option) => option.value === value) || options[0];
+
+  return (
+    <div className={`alerts-dropdown ${open ? 'alerts-dropdown--open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        className="alerts-select alerts-dropdown-trigger"
+        aria-haspopup="listbox"
+        aria-label={label}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selectedOption?.label || label}</span>
+        <span className="alerts-dropdown-chevron" aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div className="alerts-dropdown-menu" role="listbox" aria-label={label}>
+          {options.map((option) => (
+            <button
+              key={option.value || '__all'}
+              type="button"
+              role="option"
+              className={`alerts-dropdown-option ${option.value === value ? 'alerts-dropdown-option--active' : ''}`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const LEVEL_OPTIONS: FilterOption[] = [
+  { value: '', label: 'Tous niveaux' },
+  { value: 'info', label: 'Info' },
+  { value: 'warning', label: 'Avertissement' },
+  { value: 'critical', label: 'Critique' },
+];
+
+const STATUS_OPTIONS: FilterOption[] = [
+  { value: '', label: 'Tous statuts' },
+  { value: 'new', label: 'Nouvelles' },
+  { value: 'viewed', label: 'Vues' },
+  { value: 'acknowledged', label: 'Confirmees' },
+];
+
 export default function AlertsPage() {
   const { token } = useAuth();
   const [alerts, setAlerts] = useState<AlertEntry[]>([]);
@@ -76,7 +169,7 @@ export default function AlertsPage() {
   const [level, setLevel] = useState('');
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
-  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
 
   const authHeaders = useMemo(() => token ? { Authorization: `Bearer ${token}` } : undefined, [token]);
 
@@ -135,7 +228,7 @@ export default function AlertsPage() {
 
   async function acknowledgeAlert(id: number) {
     if (!authHeaders) return;
-    setActionLoadingId(id);
+    setActionLoadingKey(`ack-${id}`);
     try {
       const response = await fetch(apiUrl(`/api/alerts/${id}/ack`), {
         method: 'PATCH',
@@ -148,7 +241,46 @@ export default function AlertsPage() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
-      setActionLoadingId(null);
+      setActionLoadingKey(null);
+    }
+  }
+
+  async function deleteAlert(id: number) {
+    if (!authHeaders) return;
+    setActionLoadingKey(`delete-${id}`);
+    try {
+      const response = await fetch(apiUrl(`/api/alerts/${id}`), {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      let deleteError = 'Impossible de supprimer l’alerte';
+
+      if (contentType.includes('application/json')) {
+        const data = await readJsonResponse<{ error?: string; deleted?: boolean }>(response);
+        if (!response.ok) throw new Error(data.error || deleteError);
+      } else if (!response.ok) {
+        if (response.status === 404) {
+          deleteError = 'Suppression indisponible: la route DELETE des alertes n’est pas active sur le serveur. Redémarre le backend.';
+        }
+        throw new Error(deleteError);
+      }
+
+      const nextCount = Math.max(total - 1, 0);
+      const nextPage = nextCount > 0 ? Math.min(page, Math.max(Math.ceil(nextCount / PAGE_SIZE), 1)) : 1;
+
+      setAlerts((current) => current.filter((entry) => entry.id !== id));
+      setTotal(nextCount);
+      setPage(nextPage);
+      await Promise.all([fetchSummary(), fetchAnalytics()]);
+      if (nextPage === page) {
+        await fetchAlerts();
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setActionLoadingKey(null);
     }
   }
 
@@ -263,18 +395,24 @@ export default function AlertsPage() {
                 }
               }}
             />
-            <select className="alerts-select" aria-label="Filtrer par niveau" title="Filtrer par niveau" value={level} onChange={(event) => { setPage(1); setLevel(event.target.value); }}>
-              <option value="">Tous niveaux</option>
-              <option value="info">Info</option>
-              <option value="warning">Avertissement</option>
-              <option value="critical">Critique</option>
-            </select>
-            <select className="alerts-select" aria-label="Filtrer par statut" title="Filtrer par statut" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value); }}>
-              <option value="">Tous statuts</option>
-              <option value="new">Nouvelles</option>
-              <option value="viewed">Vues</option>
-              <option value="acknowledged">Confirmees</option>
-            </select>
+            <AlertsFilterDropdown
+              label="Filtrer par niveau"
+              value={level}
+              options={LEVEL_OPTIONS}
+              onChange={(nextValue) => {
+                setPage(1);
+                setLevel(nextValue);
+              }}
+            />
+            <AlertsFilterDropdown
+              label="Filtrer par statut"
+              value={status}
+              options={STATUS_OPTIONS}
+              onChange={(nextValue) => {
+                setPage(1);
+                setStatus(nextValue);
+              }}
+            />
             <button type="button" className="sensor-link-btn" onClick={() => { setPage(1); void fetchAlerts().catch(() => {}); }}>Filtrer</button>
           </div>
         </div>
@@ -311,11 +449,20 @@ export default function AlertsPage() {
                       type="button"
                       className="sensor-confirm-btn"
                       onClick={() => acknowledgeAlert(entry.id)}
-                      disabled={actionLoadingId === entry.id}
+                      disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
                     >
-                      {actionLoadingId === entry.id ? 'Confirmation...' : 'Confirmer'}
+                      {actionLoadingKey === `ack-${entry.id}` ? 'Confirmation...' : 'Confirmer'}
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="sensor-delete-btn"
+                    onClick={() => deleteAlert(entry.id)}
+                    disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
+                    title="Supprimer l’alerte"
+                  >
+                    {actionLoadingKey === `delete-${entry.id}` ? 'Suppression...' : 'Supprimer'}
+                  </button>
                 </div>
               </article>
             ))}

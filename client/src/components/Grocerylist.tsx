@@ -228,7 +228,7 @@ export default function GroceryList() {
             onKeyDown={e => e.key === "Enter" && addItem()}
             autoFocus
           />
-          <select className="sensor-input sensor-select" value={newCat} onChange={e => setNewCat(e.target.value)}>
+          <select className="sensor-input sensor-select" value={newCat} onChange={e => setNewCat(e.target.value)} aria-label="Catégorie">
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
           <div className="grocery-qty-row">
@@ -236,7 +236,7 @@ export default function GroceryList() {
             <span className="grocery-qty-val">{newQty}</span>
             <button className="grocery-qty-btn" onClick={() => setNewQty(q => q+1)}>+</button>
             <select className="sensor-input sensor-select grocery-unit-select"
-              value={newUnit} onChange={e => setNewUnit(e.target.value)}>
+              value={newUnit} onChange={e => setNewUnit(e.target.value)} aria-label="Unité">
               {UNITS.map(u => <option key={u}>{u}</option>)}
             </select>
           </div>

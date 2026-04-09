@@ -234,4 +234,19 @@ router.patch('/:id/view', requireAuth, async (req, res) => {
   }
 });
 
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM alerts WHERE id = $1', [req.params.id]);
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Alerte introuvable' });
+    }
+
+    res.json({ deleted: true, id: Number(req.params.id) });
+  } catch (err) {
+    console.error('[ALERT DELETE]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la suppression de l’alerte' });
+  }
+});
+
 export default router;
