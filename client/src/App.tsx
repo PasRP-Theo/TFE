@@ -174,15 +174,15 @@ function AppShell() {
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
       <header className="app-header">
         <div className="app-header-inner">
-          <div className="app-logo" style={{ display: 'flex', alignItems: 'baseline', gap: '4px', minWidth: 0 }}>
+          <div className="app-logo" style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
             <BrandLogo
               wrapperClassName="app-logo-mark"
               imageClassName="app-logo-icon"
               fallbackClassName="app-logo-fallback"
               fallbackText={config.appName.charAt(0) || 'A'}
             />
-            <span className="app-logo-text" style={{ display: 'inline-block', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{config.appName}</span>
-            {config.showSystemVersion && <span className="app-logo-version" style={{ display: 'inline-block', fontSize: '0.65rem', whiteSpace: 'nowrap' }}>{config.systemVersion}</span>}
+            <span className="app-logo-text" style={{ display: 'inline-block', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{config.appName}</span>
+            {config.showSystemVersion && <span className="app-logo-version" style={{ display: 'inline-block', fontSize: '0.6rem', whiteSpace: 'nowrap' }}>{config.systemVersion}</span>}
           </div>
 
           <nav className="app-nav" aria-label="Navigation principale">
