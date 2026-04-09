@@ -201,7 +201,7 @@ function AppShell() {
             <div className="app-status-group">
               <div className="app-status">
                 <span className="app-status-dot" />
-                EN LIGNE · LOCALll
+                EN LIGNE · LOCAL
               </div>
               {!isInstalledMode && installPromptEvent && (
                 <button className="app-install-btn" onClick={handleInstallClick} type="button">
