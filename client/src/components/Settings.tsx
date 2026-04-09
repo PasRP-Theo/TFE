@@ -1,8 +1,80 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks/useAppearance";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from "../lib/api";
+
+function SettingsDropdown({
+  value,
+  options,
+  onChange,
+  ariaLabel
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (nextValue: string) => void;
+  ariaLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const selectedOption = options.find((option) => option.value === value) || options[0];
+
+  return (
+    <div className={`alerts-dropdown ${open ? 'alerts-dropdown--open' : ''}`} ref={rootRef} style={{ width: '100%' }}>
+      <button
+        type="button"
+        className="alerts-select alerts-dropdown-trigger"
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        onClick={() => setOpen((current) => !current)}
+        style={{ width: '100%' }}
+      >
+        <span>{selectedOption?.label || ariaLabel}</span>
+        <span className="alerts-dropdown-chevron" aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div className="alerts-dropdown-menu" role="listbox" aria-label={ariaLabel}>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              className={`alerts-dropdown-option ${option.value === value ? 'alerts-dropdown-option--active' : ''}`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SettingToggle({ label, description, defaultChecked = false }: {
   label: string; description?: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void;
@@ -192,20 +264,30 @@ function TabSettings() {
             <span className="settings-field-label">Message d’accueil login</span>
             <input className="sensor-input" type="text" value={draftConfig.loginMessage} onChange={event => updateDraft({ loginMessage: event.target.value })} />
           </label>
-          <label className="settings-field">
+          <div className="settings-field">
             <span className="settings-field-label">Langue</span>
-            <select className="sensor-input sensor-select" value={draftConfig.interfaceLanguage} onChange={event => updateDraft({ interfaceLanguage: event.target.value as typeof draftConfig.interfaceLanguage })}>
-              <option value="fr-FR">Français</option>
-              <option value="en-GB">English</option>
-            </select>
-          </label>
-          <label className="settings-field">
+            <SettingsDropdown
+              value={draftConfig.interfaceLanguage}
+              options={[
+                { value: 'fr-FR', label: 'Français' },
+                { value: 'en-GB', label: 'English' }
+              ]}
+              onChange={val => updateDraft({ interfaceLanguage: val as typeof draftConfig.interfaceLanguage })}
+              ariaLabel="Langue"
+            />
+          </div>
+          <div className="settings-field">
             <span className="settings-field-label">Format horaire</span>
-            <select className="sensor-input sensor-select" value={draftConfig.timeFormat} onChange={event => updateDraft({ timeFormat: event.target.value as typeof draftConfig.timeFormat })}>
-              <option value="24h">24 heures</option>
-              <option value="12h">12 heures</option>
-            </select>
-          </label>
+            <SettingsDropdown
+              value={draftConfig.timeFormat}
+              options={[
+                { value: '24h', label: '24 heures' },
+                { value: '12h', label: '12 heures' }
+              ]}
+              onChange={val => updateDraft({ timeFormat: val as typeof draftConfig.timeFormat })}
+              ariaLabel="Format horaire"
+            />
+          </div>
         </div>
         <div className="settings-toggle-list">
           <SettingToggle
@@ -310,22 +392,32 @@ function TabSettings() {
           </button>
         </div>
         <div className="settings-config-grid">
-          <label className="settings-field">
+          <div className="settings-field">
             <span className="settings-field-label">Densité d’interface</span>
-            <select className="sensor-input sensor-select" value={draftConfig.uiDensity} onChange={event => updateDraft({ uiDensity: event.target.value as typeof draftConfig.uiDensity })}>
-              <option value="compact">Compacte</option>
-              <option value="standard">Standard</option>
-              <option value="touch">Tactile</option>
-            </select>
-          </label>
-          <label className="settings-field">
+            <SettingsDropdown
+              value={draftConfig.uiDensity}
+              options={[
+                { value: 'compact', label: 'Compacte' },
+                { value: 'standard', label: 'Standard' },
+                { value: 'touch', label: 'Tactile' }
+              ]}
+              onChange={val => updateDraft({ uiDensity: val as typeof draftConfig.uiDensity })}
+              ariaLabel="Densité d’interface"
+            />
+          </div>
+          <div className="settings-field">
             <span className="settings-field-label">Taille des cartes caméra</span>
-            <select className="sensor-input sensor-select" value={draftConfig.cameraCardSize} onChange={event => updateDraft({ cameraCardSize: event.target.value as typeof draftConfig.cameraCardSize })}>
-              <option value="compact">Compacte</option>
-              <option value="standard">Standard</option>
-              <option value="large">Grande</option>
-            </select>
-          </label>
+            <SettingsDropdown
+              value={draftConfig.cameraCardSize}
+              options={[
+                { value: 'compact', label: 'Compacte' },
+                { value: 'standard', label: 'Standard' },
+                { value: 'large', label: 'Grande' }
+              ]}
+              onChange={val => updateDraft({ cameraCardSize: val as typeof draftConfig.cameraCardSize })}
+              ariaLabel="Taille des cartes caméra"
+            />
+          </div>
         </div>
         <div className="settings-toggle-list">
           <SettingToggle
@@ -357,14 +449,19 @@ function TabSettings() {
             <input className="sensor-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
             <span className="settings-field-hint">Secondes entre deux rafraîchissements dans le panneau d’ajout caméra.</span>
           </label>
-          <label className="settings-field">
+          <div className="settings-field">
             <span className="settings-field-label">Mode d’ajout par défaut</span>
-            <select className="sensor-input sensor-select" value={draftConfig.defaultCameraAddMode} onChange={event => updateDraft({ defaultCameraAddMode: event.target.value as typeof draftConfig.defaultCameraAddMode })}>
-              <option value="node">Nœud Pi</option>
-              <option value="discover">ESP32-CAM</option>
-              <option value="manual">Manuel</option>
-            </select>
-          </label>
+            <SettingsDropdown
+              value={draftConfig.defaultCameraAddMode}
+              options={[
+                { value: 'node', label: 'Nœud Pi' },
+                { value: 'discover', label: 'ESP32-CAM' },
+                { value: 'manual', label: 'Manuel' }
+              ]}
+              onChange={val => updateDraft({ defaultCameraAddMode: val as typeof draftConfig.defaultCameraAddMode })}
+              ariaLabel="Mode d’ajout par défaut"
+            />
+          </div>
         </div>
         <div className="settings-toggle-list">
           <SettingToggle
@@ -604,10 +701,17 @@ function TabUsers() {
           <div className="sensor-add-form settings-add-form">
             <input className="sensor-input" type="email" placeholder="Email" value={newEmail} onChange={event => setNewEmail(event.target.value)} autoFocus />
             <input className="sensor-input" type="text" placeholder="Mot de passe" value={newPass} onChange={event => setNewPass(event.target.value)} />
-            <select className="sensor-input sensor-select" aria-label="Role du nouvel utilisateur" value={newRole} onChange={event => setNewRole(event.target.value)}>
-              <option value="user">Utilisateur</option>
-              <option value="admin">Administrateur</option>
-            </select>
+            <div style={{ flex: 1 }}>
+              <SettingsDropdown
+                value={newRole}
+                options={[
+                  { value: 'user', label: 'Utilisateur' },
+                  { value: 'admin', label: 'Administrateur' }
+                ]}
+                onChange={setNewRole}
+                ariaLabel="Rôle du nouvel utilisateur"
+              />
+            </div>
             <button className="sensor-confirm-btn" onClick={createUser}>Créer</button>
           </div>
         )}
