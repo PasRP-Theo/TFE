@@ -2,7 +2,6 @@ const configuredBaseUrl = String(import.meta.env.VITE_API_URL || '').trim();
 const configuredApiPort = String(import.meta.env.VITE_API_PORT || '4000').trim();
 
 function getDefaultApiBaseUrl() {
-  if (configuredBaseUrl) return configuredBaseUrl.replace(/\/$/, '');
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return `http://${window.location.hostname}:${configuredApiPort}`;
   }
