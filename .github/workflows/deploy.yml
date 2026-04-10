@@ -1,4 +1,4 @@
-name: Deploy AUBEPINES
+name: Deploy SENTYS
 
 on:
   push:
