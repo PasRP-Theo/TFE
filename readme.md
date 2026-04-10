@@ -1,8 +1,25 @@
 # SENTYS Surveillance
 
-Application de surveillance avec frontend Vite/React et backend Node.js.
+SENTYS est un système complet de vidéosurveillance et de monitoring domotique/IoT auto-hébergé. 
+Conçu pour être déployé sur une unité centrale (comme un Raspberry Pi ou un mini-PC sous Ubuntu), il centralise la gestion de caméras et de capteurs via une interface web moderne, sécurisée et réactive.
 
-Objectif du projet:
+## Fonctionnalités principales
+
+- **Vidéosurveillance centralisée** : Affichage des flux vidéo (RTSP/HTTP) en temps réel via HLS, gestion des enregistrements et historique avec lecteur intégré.
+- **Découverte automatique (Plug & Play)** : Détection automatique des nœuds caméras autonomes (Raspberry Pi) et des modules ESP32-CAM sur le réseau local via mDNS ou scan réseau.
+- **Monitoring IoT & Capteurs** : Suivi en direct de divers capteurs (Température, Humidité, Mouvement, Fumée, CO2) et système d'alertes en temps réel.
+- **Tableau de bord Système** : Surveillance des performances de la machine hôte (CPU, RAM, Disques, Réseau, Batterie).
+- **Administration & Sécurité** : Gestion multi-utilisateurs avec rôles (Admin/User), personnalisation avancée de l'interface (thème, densité), et accès protégé.
+
+## Architecture technique
+
+- **Frontend** : React, Vite, TypeScript, HLS.js (pour la lecture vidéo).
+- **Backend** : Node.js, Express, FFmpeg (pour le traitement vidéo), Base de données SQL.
+
+---
+
+## Workflow de développement et déploiement
+
 - développer sur le PC pro
 - pousser sur GitHub
 - déclencher automatiquement un redéploiement sur le PC host Ubuntu via GitHub Actions self-hosted runner
