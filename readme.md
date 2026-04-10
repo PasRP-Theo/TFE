@@ -138,3 +138,6 @@ Pour déployer automatiquement:
 3. s'assurer que PM2 lance l'app `aubepines`
 4. pousser sur `main`
 5. vérifier `/home/theo/TFE/.deploy-commit`
+
+## Tests
+Ce projet inclut des tests unitaires automatisés via GitHub Actions.
