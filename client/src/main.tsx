@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App.tsx'
 
-const DEV_SW_CLEANUP_FLAG = 'aubepines:dev-sw-cleanup'
+const DEV_SW_CLEANUP_FLAG = 'sentys:dev-sw-cleanup'
 
 async function prepareRuntime() {
     if (import.meta.env.DEV && 'serviceWorker' in navigator) {

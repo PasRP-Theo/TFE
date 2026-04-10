@@ -18,7 +18,7 @@ interface AppearanceContextType {
   toggleTheme: () => void;
 }
 
-export const APPEARANCE_STORAGE_KEY = 'aubepines:appearance';
+export const APPEARANCE_STORAGE_KEY = 'sentys:appearance';
 
 export const APPEARANCE_DEFAULTS: AppearanceSettings = {
   theme: 'dark',

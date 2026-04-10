@@ -34,7 +34,7 @@ interface AppConfigContextType {
 }
 
 const DEFAULT_CONFIG: AppConfig = {
-  appName: 'AUBEPINES',
+  appName: 'SENTYS',
   appSubtitle: 'Système de surveillance',
   systemVersion: 'v2.4.1',
   loginMessage: 'Connexion sécurisée au système',

@@ -1,4 +1,4 @@
-# AUBEPINES Surveillance
+# SENTYS Surveillance
 
 Application de surveillance avec frontend Vite/React et backend Node.js.
 
@@ -55,7 +55,7 @@ git log -1 --oneline
 
 ```bash
 pm2 list
-pm2 describe aubepines
+pm2 describe sentys
 ```
 
 ### Vérifier ce que l'application sert réellement

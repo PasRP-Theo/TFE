@@ -1,6 +1,6 @@
-# AUBEPINES - User Stories et Taches a Realiser
+# SENTYS - User Stories et Taches a Realiser
 
-Ce document regroupe les user stories restantes du projet AUBEPINES sous un format Markdown exploitable dans le depot.
+Ce document regroupe les user stories restantes du projet SENTYS sous un format Markdown exploitable dans le depot.
 
 Chaque story suit le format standard :
 
@@ -21,7 +21,7 @@ Les stories sont organisees par epic et priorisees selon leur importance pour le
 | ID | User story | Criteres d'acceptation | Prio | Etat |
 | --- | --- | --- | --- | --- |
 | US-01 | En tant que systeme, je veux basculer en mode autonome (SD) quand le WiFi disparait, afin de ne jamais perdre d'enregistrement. | Bascule en moins de 5 s ; ecriture SD immediate ; log `MODE_AUTONOME` sur port serie ; tentative de reconnexion toutes les 30 min. | P1 | A faire |
-| US-02 | En tant que systeme, je veux creer un hotspot WiFi (mode AP) si aucun reseau n'est disponible, afin de rester accessible localement. | AP `AUBEPINES_CAMx` visible ; page HTML `/status` accessible sur `192.168.4.1`. | P1 | A faire |
+| US-02 | En tant que systeme, je veux creer un hotspot WiFi (mode AP) si aucun reseau n'est disponible, afin de rester accessible localement. | AP `SENTYS_CAMx` visible ; page HTML `/status` accessible sur `192.168.4.1`. | P1 | A faire |
 | US-03 | En tant que systeme, je veux entrer en deep sleep 60 s apres le dernier mouvement detecte, afin de maximiser l'autonomie batterie. | Deep sleep apres 60 s sans PIR ; consommation inferieure a `0,02 mA` en veille ; reveil PIR en moins de 2 s. | P1 | A faire |
 | US-05 | En tant que systeme, je veux synchroniser les fichiers SD vers le serveur des que le WiFi est retabli. | Detection auto de reconnexion ; upload multipart `POST /upload` ; fichiers marques comme synchronises apres succes. | P1 | A faire |
 | US-07 | En tant que systeme, je veux envoyer une alerte batterie au serveur quand le niveau descend sous 15 %. | `POST /alert` envoye sous 15 % ; pas de repetition tant que le niveau ne remonte pas au-dessus de 20 %. | P2 | A faire |
