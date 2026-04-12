@@ -11,8 +11,8 @@ export default defineConfig({
       includeAssets: ['pwa-icon.svg', 'pwa-maskable.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
         id: '/',
-        name: 'Aubepines Surveillance',
-        short_name: 'Aubepines',
+        name: 'Sentys Surveillance',
+        short_name: 'Sentys',
         description: 'Surveillance locale de la maison avec cameras et supervision systeme.',
         theme_color: '#08111d',
         background_color: '#08111d',
