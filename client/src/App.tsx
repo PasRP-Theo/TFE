@@ -11,11 +11,17 @@ import SystemInfo  from './components/SystemInfo';
 import AlertsPage  from './components/AlertsPage';
 import BrandLogo from './components/BrandLogo.tsx';
 import { apiUrl, readJsonResponse } from './lib/api';
+import { registerSW } from 'virtual:pwa-register';
 import './App.css';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
+// ── Enregistrement de la PWA (Service Worker) ──────────────
+if (typeof window !== 'undefined') {
+  registerSW({ immediate: true });
 }
 
 // ── Route protégée par rôle ────────────────────────────────
