@@ -172,6 +172,10 @@ export default function SystemInfo() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [pulse, setPulse] = useState(false);
+  const [surveillanceActive, setSurveillanceActive] = useState(true);
+  const [showPinPad, setShowPinPad] = useState(false);
+  const [enteredPin, setEnteredPin] = useState("");
+  const [pinError, setPinError] = useState("");
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -200,6 +204,35 @@ export default function SystemInfo() {
     const interval = setInterval(fetchInfo, POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [fetchInfo]);
+
+  const handleArmClick = () => {
+    const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
+    if (savedPin) {
+      setShowPinPad(true);
+      setEnteredPin("");
+      setPinError("");
+    } else {
+      setSurveillanceActive(!surveillanceActive);
+    }
+  };
+
+  const handlePinPress = (digit: string) => {
+    if (enteredPin.length >= 4) return;
+    const nextPin = enteredPin + digit;
+    setEnteredPin(nextPin);
+    setPinError("");
+
+    if (nextPin.length === 4) {
+      const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
+      if (nextPin === savedPin) {
+        setSurveillanceActive(!surveillanceActive);
+        setShowPinPad(false);
+      } else {
+        setPinError("CODE INCORRECT");
+        setTimeout(() => setEnteredPin(""), 500);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -258,6 +291,21 @@ export default function SystemInfo() {
       </div>
 
       <div className="sysinfo-grid">
+        <Card title="Mode Surveillance" icon="🛡️" accent={surveillanceActive ? "#22c55e" : "#ef4444"}>
+          <div style={{ textAlign: 'center', padding: '15px 0' }}>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: surveillanceActive ? '#22c55e' : '#ef4444', marginBottom: '20px' }}>
+              {surveillanceActive ? 'ARMÉ (ACTIF)' : 'DÉSARMÉ (INACTIF)'}
+            </div>
+            <button 
+              className={surveillanceActive ? "sensor-delete-btn sensor-delete-btn--danger sensor-delete-btn--xl" : "sensor-confirm-btn sensor-confirm-btn--xl"} 
+              style={{ width: '100%', padding: '15px', fontSize: '16px', fontWeight: 'bold' }}
+              onClick={handleArmClick}
+            >
+              {surveillanceActive ? "DÉSACTIVER LES ALARMES" : "ARMER LE SYSTÈME"}
+            </button>
+          </div>
+        </Card>
+
         <Card title="Processeur" icon="⚙️" accent="#60a5fa">
           <InfoRow label="Modèle" value={`${cpu.manufacturer} ${cpu.model}`} />
           <InfoRow label="Cœurs" value={`${cpu.physicalCores} physiques / ${cpu.cores} logiques`} />
@@ -378,6 +426,24 @@ export default function SystemInfo() {
       </div>
 
       <div className="sysinfo-footer">{config.appName}{config.showSystemVersion ? ` · ${config.systemVersion}` : ''} — via Node.js systeminformation</div>
+
+      {showPinPad && (
+        <div className="settings-modal-overlay" onClick={() => setShowPinPad(false)} style={{ zIndex: 9999 }}>
+          <div className="settings-modal-card" onClick={e => e.stopPropagation()} style={{ textAlign: 'center', width: '320px' }}>
+            <h3 style={{ marginTop: 0, color: '#6cc7ff', letterSpacing: '2px' }}>AUTORISATION REQUISE</h3>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', margin: '20px 0' }}>
+              {[0, 1, 2, 3].map(i => <div key={i} style={{ width: '16px', height: '16px', borderRadius: '50%', background: enteredPin.length > i ? '#6cc7ff' : 'transparent', border: '2px solid #6cc7ff', transition: 'all 0.2s' }} />)}
+            </div>
+            {pinError && <div style={{ color: '#ef4444', marginBottom: '15px', fontSize: '12px', fontWeight: 'bold' }}>{pinError}</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => <button key={num} onClick={() => handlePinPress(num.toString())} style={{ background: 'rgba(108, 199, 255, 0.1)', border: '1px solid rgba(108, 199, 255, 0.3)', color: '#fff', fontSize: '20px', padding: '15px 0', borderRadius: '6px', cursor: 'pointer' }}>{num}</button>)}
+              <button onClick={() => { setEnteredPin(""); setPinError(""); }} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '18px', borderRadius: '6px', cursor: 'pointer' }}>C</button>
+              <button onClick={() => handlePinPress('0')} style={{ background: 'rgba(108, 199, 255, 0.1)', border: '1px solid rgba(108, 199, 255, 0.3)', color: '#fff', fontSize: '20px', padding: '15px 0', borderRadius: '6px', cursor: 'pointer' }}>0</button>
+              <button onClick={() => setEnteredPin(p => p.slice(0, -1))} style={{ background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#f59e0b', fontSize: '18px', borderRadius: '6px', cursor: 'pointer' }}>⌫</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

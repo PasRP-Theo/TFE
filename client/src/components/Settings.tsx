@@ -123,6 +123,7 @@ function TabSettings() {
   const [resetError, setResetError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [kioskPin, setKioskPin] = useState(() => window.localStorage.getItem('sentys:kiosk_pin') || '');
 
   useEffect(() => {
     setDraftConfig(config);
@@ -239,6 +240,16 @@ function TabSettings() {
     } catch (err: unknown) {
       setResetError(err instanceof Error ? err.message : 'Erreur de réinitialisation');
       setResetLoading(false);
+    }
+  }
+
+  function saveKioskPin() {
+    if (kioskPin.trim()) {
+      window.localStorage.setItem('sentys:kiosk_pin', kioskPin.trim());
+      alert("Code PIN enregistré. Il protègera l'écran et les actions sensibles sur cet appareil.");
+    } else {
+      window.localStorage.removeItem('sentys:kiosk_pin');
+      alert("Code PIN désactivé.");
     }
   }
 
@@ -516,6 +527,32 @@ function TabSettings() {
         </div>
         {alertsError && <div className="settings-msg settings-msg--error">⚠ {alertsError}</div>}
         {alertsSuccess && <div className="settings-msg settings-msg--success">✓ {alertsSuccess}</div>}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label settings-section-label--row">
+          <span>SÉCURITÉ LOCALE & KIOSK</span>
+          <button className="sensor-confirm-btn" onClick={saveKioskPin}>Enregistrer le PIN</button>
+        </div>
+        <div className="settings-config-grid">
+          <label className="settings-field">
+            <span className="settings-field-label">Code PIN (4 chiffres)</span>
+            <input className="sensor-input" type="password" maxLength={4} placeholder="Laisser vide pour désactiver" value={kioskPin} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} />
+            <span className="settings-field-hint">Ce code protègera l'armement du système et le déverrouillage de l'écran.</span>
+          </label>
+        </div>
+        <div className="settings-toggle-list">
+          <SettingToggle
+            label="Activer le Mode Kiosk sur cet appareil"
+            description="Masque l'onglet Paramètres et verrouille automatiquement l'écran après 5 minutes d'inactivité."
+            checked={window.localStorage.getItem('sentys:kiosk_mode') === 'true'}
+            onChange={(checked) => {
+              if (checked) window.localStorage.setItem('sentys:kiosk_mode', 'true');
+              else window.localStorage.removeItem('sentys:kiosk_mode');
+              window.location.reload();
+            }}
+          />
+        </div>
       </div>
 
       <div className="settings-section">
