@@ -73,7 +73,7 @@ function AppShell() {
 
     const handleBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as BeforeInstallPromptEvent;
-      promptEvent.preventDefault();
+      // On laisse le navigateur libre d'afficher son pop-up natif automatique
       setInstallPromptEvent(promptEvent);
     };
 
