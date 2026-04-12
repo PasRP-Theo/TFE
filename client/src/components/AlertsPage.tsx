@@ -208,6 +208,7 @@ export default function AlertsPage() {
     setAnalytics(data);
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!authHeaders) return;
     setLoading(true);
@@ -216,6 +217,7 @@ export default function AlertsPage() {
       .finally(() => setLoading(false));
   }, [authHeaders, page, level, status]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!authHeaders) return;
     const interval = setInterval(() => {

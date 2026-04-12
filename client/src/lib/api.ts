@@ -1,4 +1,4 @@
-const configuredBaseUrl = String(import.meta.env.VITE_API_URL || '').trim();
+export const configuredBaseUrl = String(import.meta.env.VITE_API_URL || '').trim();
 const configuredApiPort = String(import.meta.env.VITE_API_PORT || '4000').trim();
 
 function getDefaultApiBaseUrl() {

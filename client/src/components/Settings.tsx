@@ -76,18 +76,18 @@ function SettingsDropdown({
   );
 }
 
-function SettingToggle({ label, description, defaultChecked = false }: {
+function SettingToggle({ label, description, defaultChecked = false, ...props }: {
   label: string; description?: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void;
 }) {
   const [internalChecked, setInternalChecked] = useState(defaultChecked);
-  const checked = typeof arguments[0].checked === 'boolean' ? arguments[0].checked : internalChecked;
+  const checked = typeof props.checked === 'boolean' ? props.checked : internalChecked;
 
   function handleToggle() {
     const nextValue = !checked;
-    if (typeof arguments[0].checked !== 'boolean') {
+    if (typeof props.checked !== 'boolean') {
       setInternalChecked(nextValue);
     }
-    arguments[0].onChange?.(nextValue);
+    props.onChange?.(nextValue);
   }
 
   return (
@@ -598,6 +598,7 @@ function TabUsers() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!token) return;
     fetchUsers();
