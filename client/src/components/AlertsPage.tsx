@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiUrl, readJsonResponse } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
@@ -171,9 +171,12 @@ export default function AlertsPage() {
   const [search, setSearch] = useState('');
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
 
+  const searchRef = useRef(search);
+  searchRef.current = search;
+
   const authHeaders = useMemo(() => token ? { Authorization: `Bearer ${token}` } : undefined, [token]);
 
-  async function fetchAlerts() {
+  const fetchAlerts = useCallback(async () => {
     if (!authHeaders) return;
     const params = new URLSearchParams({
       page: String(page),
@@ -181,7 +184,7 @@ export default function AlertsPage() {
     });
     if (level) params.set('level', level);
     if (status) params.set('status', status);
-    if (search.trim()) params.set('search', search.trim());
+    if (searchRef.current.trim()) params.set('search', searchRef.current.trim());
 
     const response = await fetch(apiUrl(`/api/alerts?${params.toString()}`), {
       headers: authHeaders,
@@ -190,34 +193,32 @@ export default function AlertsPage() {
     if (!response.ok) throw new Error(data.error || 'Impossible de charger les alertes');
     setAlerts(Array.isArray(data.alerts) ? data.alerts : []);
     setTotal(data.total || 0);
-  }
+  }, [authHeaders, page, level, status]);
 
-  async function fetchSummary() {
+  const fetchSummary = useCallback(async () => {
     if (!authHeaders) return;
     const response = await fetch(apiUrl('/api/alerts/summary'), { headers: authHeaders });
     const data = await readJsonResponse<AlertSummary & { error?: string }>(response);
     if (!response.ok) throw new Error(data.error || 'Impossible de charger le resume des alertes');
     setSummary(data);
-  }
+  }, [authHeaders]);
 
-  async function fetchAnalytics() {
+  const fetchAnalytics = useCallback(async () => {
     if (!authHeaders) return;
     const response = await fetch(apiUrl('/api/alerts/analytics'), { headers: authHeaders });
     const data = await readJsonResponse<AnalyticsResponse & { error?: string }>(response);
     if (!response.ok) throw new Error(data.error || 'Impossible de charger les statistiques');
     setAnalytics(data);
-  }
+  }, [authHeaders]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!authHeaders) return;
     setLoading(true);
     Promise.all([fetchAlerts(), fetchSummary(), fetchAnalytics()])
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Erreur inconnue'))
       .finally(() => setLoading(false));
-  }, [authHeaders, page, level, status]);
+  }, [authHeaders, fetchAlerts, fetchSummary, fetchAnalytics]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!authHeaders) return;
     const interval = setInterval(() => {
@@ -226,7 +227,7 @@ export default function AlertsPage() {
       fetchAlerts().catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
-  }, [authHeaders, page, level, status, search]);
+  }, [authHeaders, fetchAlerts, fetchSummary, fetchAnalytics]);
 
   async function acknowledgeAlert(id: number) {
     if (!authHeaders) return;

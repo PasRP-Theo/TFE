@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks/useAppearance";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -620,9 +620,9 @@ function TabUsers() {
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const authHeaders = useMemo(() => token ? { Authorization: `Bearer ${token}` } : undefined, [token]);
 
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch(apiUrl('/api/users'), { headers: authHeaders });
       const data = await readJsonResponse<Array<User> & { error?: string }>(res);
@@ -633,13 +633,12 @@ function TabUsers() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [authHeaders]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!token) return;
     fetchUsers();
-  }, [token]);
+  }, [token, fetchUsers]);
 
   async function createUser() {
     setError("");

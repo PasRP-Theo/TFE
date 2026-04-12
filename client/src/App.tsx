@@ -208,7 +208,7 @@ function AppShell() {
   if (!user) return <LoginPage />;
 
   if (isKioskMode && isLocked) {
-    const isLockedOut = lockoutUntil !== null && Date.now() < lockoutUntil;
+    const isLockedOut = lockoutUntil !== null;
 
     const handlePinPress = (digit: string) => {
       if (isLockedOut || enteredPin.length >= 4) return;
@@ -227,7 +227,7 @@ function AppShell() {
           const newAttempts = attempts + 1;
           setAttempts(newAttempts);
           if (newAttempts >= 3) {
-            setLockoutUntil(Date.now() + 60000);
+            setLockoutUntil(new Date().getTime() + 60000);
             setLockError("SYSTÈME BLOQUÉ (1 MIN)");
           } else {
             setLockError(`CODE INCORRECT (${3 - newAttempts} ESSAIS)`);
