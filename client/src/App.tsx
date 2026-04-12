@@ -10,8 +10,14 @@ import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
 import AlertsPage  from './components/AlertsPage';
 import BrandLogo from './components/BrandLogo.tsx';
+import { registerSW } from 'virtual:pwa-register';
 import { apiUrl, readJsonResponse } from './lib/api';
 import './App.css';
+
+// ── Enregistrement de la PWA (Service Worker) ──────────────
+if (typeof window !== 'undefined') {
+  registerSW({ immediate: true });
+}
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
