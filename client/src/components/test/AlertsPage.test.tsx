@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import AlertsPage from '../AlertsPage';
 
-vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: 'fake-token' })
-}));
+vi.mock('../../hooks/useAuth', () => {
+  const mockAuth = { token: 'fake-token' };
+  return {
+    useAuth: () => mockAuth
+  };
+});
 
 describe('AlertsPage Component', () => {
   beforeEach(() => {

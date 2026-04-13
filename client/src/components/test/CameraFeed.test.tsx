@@ -2,17 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import CameraFeed from '../CameraFeed';
 
-vi.mock('../../hooks/useAppConfig', () => ({
-  useAppConfig: () => ({
-    config: {
-      cameraRefreshSeconds: 10,
-      showOfflineCameras: true,
-      cameraCardSize: 'standard',
-      defaultCameraAddMode: 'node',
-      cameraDiscoveryIntervalSeconds: 10
-    }
-  })
-}));
+vi.mock('../../hooks/useAppConfig', () => {
+  const mockConfig = {
+    cameraRefreshSeconds: 10,
+    showOfflineCameras: true,
+    cameraCardSize: 'standard',
+    defaultCameraAddMode: 'node',
+    cameraDiscoveryIntervalSeconds: 10
+  };
+  return {
+    useAppConfig: () => ({
+      config: mockConfig
+    })
+  };
+});
 
 describe('CameraFeed Component', () => {
   beforeEach(() => {

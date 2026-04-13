@@ -3,15 +3,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import SystemInfo from '../SystemInfo';
 
 // On simule (mock) le hook useAppConfig car le composant en dépend
-vi.mock('../../hooks/useAppConfig', () => ({
-  useAppConfig: () => ({
-    config: {
-      appName: 'SENTYS',
-      showSystemVersion: true,
-      systemVersion: 'v2.4.1'
-    }
-  })
-}));
+vi.mock('../../hooks/useAppConfig', () => {
+  const mockConfig = {
+    appName: 'SENTYS',
+    showSystemVersion: true,
+    systemVersion: 'v2.4.1'
+  };
+  return {
+    useAppConfig: () => ({
+      config: mockConfig
+    })
+  };
+});
 
 describe('SystemInfo Component', () => {
   beforeEach(() => {

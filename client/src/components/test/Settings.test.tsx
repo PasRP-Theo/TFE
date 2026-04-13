@@ -4,37 +4,46 @@ import Settings from '../Settings';
 import { useAppConfig } from '../../hooks/useAppConfig';
 
 // Simulation des dépendances complexes
-vi.mock('../../hooks/useAppConfig', () => ({
-  useAppConfig: () => ({
-    config: {
-      appName: 'SENTYS',
-      appSubtitle: 'Dashboard',
-      loginMessage: 'Welcome',
-      systemVersion: 'v1.0',
-    },
-    updateConfig: vi.fn(),
-  })
-}));
+vi.mock('../../hooks/useAppConfig', () => {
+  const mockConfig = {
+    appName: 'SENTYS',
+    appSubtitle: 'Dashboard',
+    loginMessage: 'Welcome',
+    systemVersion: 'v1.0',
+  };
+  return {
+    useAppConfig: () => ({
+      config: mockConfig,
+      updateConfig: vi.fn(),
+    })
+  };
+});
 
-vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({
-    token: 'fake-token',
-    user: { id: 1, email: 'admin@test.com', role: 'admin' },
-    logout: vi.fn(),
-  })
-}));
+vi.mock('../../hooks/useAuth', () => {
+  const mockUser = { id: 1, email: 'admin@test.com', role: 'admin' };
+  return {
+    useAuth: () => ({
+      token: 'fake-token',
+      user: mockUser,
+      logout: vi.fn(),
+    })
+  };
+});
 
-vi.mock('../../hooks/useAppearance', () => ({
-  useAppearance: () => ({
-    settings: { theme: 'dark', accent: 'blue', fontScale: 1, touchTarget: 44 },
-    updateSettings: vi.fn(),
-    resetSettings: vi.fn(),
-  }),
-  APPEARANCE_ACCENTS: [
-    { id: 'blue', label: 'Bleu', description: 'Défaut' }
-  ],
-  APPEARANCE_DEFAULTS: { theme: 'dark', fontScale: 1, touchTarget: 44 }
-}));
+vi.mock('../../hooks/useAppearance', () => {
+  const mockSettings = { theme: 'dark', accent: 'blue', fontScale: 1, touchTarget: 44 };
+  return {
+    useAppearance: () => ({
+      settings: mockSettings,
+      updateSettings: vi.fn(),
+      resetSettings: vi.fn(),
+    }),
+    APPEARANCE_ACCENTS: [
+      { id: 'blue', label: 'Bleu', description: 'Défaut' }
+    ],
+    APPEARANCE_DEFAULTS: { theme: 'dark', fontScale: 1, touchTarget: 44 }
+  };
+});
 
 describe('Settings Component', () => {
   it('affiche l\'onglet Général par défaut au montage', () => {

@@ -12,19 +12,22 @@ vi.mock('../../hooks/useAuth', () => ({
   })
 }));
 
-vi.mock('../../hooks/useAppConfig', () => ({
-  useAppConfig: () => ({
-    config: {
-      appName: 'SENTYS_TEST',
-      appSubtitle: 'Module de test',
-      loginMessage: 'Message sécurisé',
-      showSystemVersion: true,
-      systemVersion: 'v9.9.9',
-      interfaceLanguage: 'fr-FR',
-      timeFormat: '24h',
-    }
-  })
-}));
+vi.mock('../../hooks/useAppConfig', () => {
+  const mockConfig = {
+    appName: 'SENTYS_TEST',
+    appSubtitle: 'Module de test',
+    loginMessage: 'Message sécurisé',
+    showSystemVersion: true,
+    systemVersion: 'v9.9.9',
+    interfaceLanguage: 'fr-FR',
+    timeFormat: '24h',
+  };
+  return {
+    useAppConfig: () => ({
+      config: mockConfig
+    })
+  };
+});
 
 describe('LoginPage Component', () => {
   it('affiche correctement le formulaire de connexion et les variables de config', () => {
