@@ -38,5 +38,9 @@ describe('SystemInfo Component', () => {
     await waitFor(() => {
       expect(screen.queryByText(/Récupération des infos système/i)).toBeNull();
     });
+
+    // Vérifier que les données mockées sont bien affichées
+    expect(screen.getByText(/Intel Core i7/i)).toBeDefined();
+    expect(screen.getByText(/16.0 Go/i)).toBeDefined();
   });
 });
