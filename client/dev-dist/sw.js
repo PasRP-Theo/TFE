@@ -67,10 +67,13 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-1ca034b5'], (function (workbox) { 'use strict';
+define(['./workbox-7a5e81cd'], (function (workbox) { 'use strict';
 
-  self.skipWaiting();
-  workbox.clientsClaim();
+  self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+      self.skipWaiting();
+    }
+  });
 
   /**
    * The precacheAndRoute() method efficiently caches and responds to
@@ -78,41 +81,12 @@ define(['./workbox-1ca034b5'], (function (workbox) { 'use strict';
    * See https://goo.gl/S9QRab
    */
   workbox.precacheAndRoute([{
-    "url": "/index.html",
-    "revision": "0.ar9fa3pqpk"
+    "url": "index.html",
+    "revision": "0.6h1r3peqscc"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
-    allowlist: [/^\/$/],
-    denylist: [/^\/api\//, /^\/auth\//]
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
+    allowlist: [/^\/$/]
   }));
-  workbox.registerRoute(({
-    url,
-    sameOrigin
-  }) => sameOrigin && (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")), new workbox.NetworkOnly(), 'GET');
-  workbox.registerRoute(({
-    request,
-    sameOrigin
-  }) => sameOrigin && request.destination === "document", new workbox.NetworkFirst({
-    "cacheName": "pages",
-    plugins: []
-  }), 'GET');
-  workbox.registerRoute(({
-    request,
-    sameOrigin
-  }) => sameOrigin && ["style", "script", "worker"].includes(request.destination), new workbox.StaleWhileRevalidate({
-    "cacheName": "assets",
-    plugins: []
-  }), 'GET');
-  workbox.registerRoute(({
-    request,
-    sameOrigin
-  }) => sameOrigin && request.destination === "image", new workbox.CacheFirst({
-    "cacheName": "images",
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 40,
-      maxAgeSeconds: 2592000
-    })]
-  }), 'GET');
 
 }));
