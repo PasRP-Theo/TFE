@@ -19,7 +19,12 @@ describe('SystemInfo Component', () => {
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({
-          cpu: {}, ram: {}, disks: [], network: [], os: {}, battery: {}
+          cpu: { manufacturer: 'Intel', model: 'Core i7', physicalCores: 4, cores: 8, speedGHz: 2.8, usagePercent: 15, temperature: 45 },
+          ram: { totalGB: 16, usedGB: 8, freeGB: 8, usagePercent: 50 },
+          disks: [],
+          network: [],
+          os: { distro: 'Ubuntu', release: '22.04', arch: 'x64', hostname: 'sentys-node', platform: 'linux', uptime: 3600 },
+          battery: { hasBattery: false }
         })
       })
     ) as unknown as typeof fetch;
