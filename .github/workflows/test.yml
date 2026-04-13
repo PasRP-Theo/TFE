@@ -37,9 +37,9 @@ jobs:
         run: npm run lint --if-present
 
       - name: Run unit tests
-        run: npm run test --if-present -- --pool=forks --logHeapUsage
+        run: npm run test --if-present -- --pool=forks --file-parallelism=false --logHeapUsage
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          NODE_OPTIONS: "--max-old-space-size=6144"
 
   test-server:
     name: Test Server (Backend)
@@ -68,6 +68,6 @@ jobs:
         run: npm run lint --if-present
 
       - name: Run unit tests
-        run: npm run test --if-present -- --pool=forks --logHeapUsage
+        run: npm run test --if-present -- --pool=forks --file-parallelism=false --logHeapUsage
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          NODE_OPTIONS: "--max-old-space-size=6144"
