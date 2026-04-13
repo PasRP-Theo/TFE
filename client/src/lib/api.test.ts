@@ -24,7 +24,7 @@ describe('API Utilities', () => {
         status: 502,
         headers: { get: (key: string) => key.toLowerCase() === 'content-type' ? 'text/plain' : null },
         text: () => Promise.resolve('Bad Gateway')
-      } as any as Response;
+      } as unknown as Response;
 
       await expect(readJsonResponse(fakeResponse)).rejects.toThrow(/Réponse API invalide/);
     });

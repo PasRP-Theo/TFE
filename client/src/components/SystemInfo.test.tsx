@@ -22,7 +22,7 @@ describe('SystemInfo Component', () => {
           cpu: {}, ram: {}, disks: [], network: [], os: {}, battery: {}
         })
       })
-    ) as any;
+    ) as unknown as typeof fetch;
   });
 
   it('affiche l\'état de chargement au montage initial', () => {
