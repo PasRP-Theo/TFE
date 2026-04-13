@@ -37,7 +37,7 @@ jobs:
         run: npm run lint --if-present
 
       - name: Run unit tests
-        run: npm run test --if-present -- --setupFiles ./vitest.setup.ts
+        run: npm run test --if-present
 
   test-server:
     name: Test Server (Backend)
