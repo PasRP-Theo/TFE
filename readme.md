@@ -1,5 +1,7 @@
 # SENTYS Surveillance
 
+![Tests](https://github.com/PasRP-Theo/TFE/actions/workflows/test.yml/badge.svg)
+
 SENTYS est un système complet de vidéosurveillance et de monitoring domotique/IoT auto-hébergé. 
 Conçu pour être déployé sur une unité centrale (comme un Raspberry Pi ou un mini-PC sous Ubuntu), il centralise la gestion de caméras et de capteurs via une interface web moderne, sécurisée et réactive.
 
