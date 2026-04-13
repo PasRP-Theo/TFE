@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import SystemInfo from '../SystemInfo';
 
 // On simule (mock) le hook useAppConfig car le composant en dépend
@@ -25,8 +25,13 @@ describe('SystemInfo Component', () => {
     ) as unknown as typeof fetch;
   });
 
-  it('affiche l\'état de chargement au montage initial', () => {
+  it('affiche l\'état de chargement au montage initial', async () => {
     render(<SystemInfo />);
     expect(screen.getByText(/Récupération des infos système/i)).toBeDefined();
+
+    // Attendre que la requête API se termine pour éviter l'avertissement "act(...)"
+    await waitFor(() => {
+      expect(screen.queryByText(/Récupération des infos système/i)).toBeNull();
+    });
   });
 });
