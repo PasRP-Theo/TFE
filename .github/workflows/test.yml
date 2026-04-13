@@ -40,8 +40,6 @@ jobs:
         run: npm run test --if-present
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
 
   test-server:
     name: Test Server (Backend)
