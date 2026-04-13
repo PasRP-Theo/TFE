@@ -29,7 +29,11 @@ vi.mock('../../hooks/useAppearance', () => ({
     settings: { theme: 'dark', accent: 'blue', fontScale: 1, touchTarget: 44 },
     updateSettings: vi.fn(),
     resetSettings: vi.fn(),
-  })
+  }),
+  APPEARANCE_ACCENTS: [
+    { id: 'blue', label: 'Bleu', description: 'Défaut' }
+  ],
+  APPEARANCE_DEFAULTS: { theme: 'dark', fontScale: 1, touchTarget: 44 }
 }));
 
 describe('Settings Component', () => {

@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LoginPage from '../LoginPage';
-import { useAuth } from '../../hooks/useAuth';
+
+const mockLogin = vi.fn();
 
 // Simulation des hooks
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => ({
-    login: vi.fn(),
+    login: mockLogin,
     loading: false,
   })
 }));
@@ -48,9 +49,8 @@ describe('LoginPage Component', () => {
     fireEvent.change(passAttr, { target: { value: 'password123' } });
     fireEvent.click(submitBtn);
 
-    const { login } = useAuth();
     await waitFor(() => {
-      expect(login).toHaveBeenCalledWith('testuser', 'password123');
+      expect(mockLogin).toHaveBeenCalledWith('testuser', 'password123');
     });
   });
 });

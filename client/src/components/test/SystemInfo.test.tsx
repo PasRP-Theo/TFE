@@ -41,6 +41,6 @@ describe('SystemInfo Component', () => {
 
     // Vérifier que les données mockées sont bien affichées
     expect(screen.getByText(/Intel Core i7/i)).toBeDefined();
-    expect(screen.getByText(/16.0 Go/i)).toBeDefined();
+    expect(screen.getAllByText(/16.0 Go/i).length).toBeGreaterThan(0);
   });
 });
