@@ -13,7 +13,7 @@ describe('AlertsPage Component', () => {
   beforeEach(() => {
     global.fetch = vi.fn((url: string) => {
       const defaultHeaders = { get: (key: string) => key.toLowerCase() === 'content-type' ? 'application/json' : null };
-      const createResponse = (bodyObj: any) => ({
+      const createResponse = (bodyObj: unknown) => ({
         ok: true,
         headers: defaultHeaders,
         json: () => Promise.resolve(bodyObj),
