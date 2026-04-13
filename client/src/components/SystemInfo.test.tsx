@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import SystemInfo from './SystemInfo';
 
@@ -14,6 +14,17 @@ vi.mock('../hooks/useAppConfig', () => ({
 }));
 
 describe('SystemInfo Component', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          cpu: {}, ram: {}, disks: [], network: [], os: {}, battery: {}
+        })
+      })
+    ) as any;
+  });
+
   it('affiche l\'état de chargement au montage initial', () => {
     render(<SystemInfo />);
     expect(screen.getByText(/Récupération des infos système/i)).toBeDefined();

@@ -19,10 +19,13 @@ describe('API Utilities', () => {
 
   describe('readJsonResponse()', () => {
     it('devrait rejeter la promesse si le content-type n\'est pas JSON', async () => {
-      const fakeResponse = new Response('Bad Gateway', {
+      // Faux objet (duck-typing) pour éviter les ReferenceError dans JSDOM
+      const fakeResponse = {
         status: 502,
-        headers: new Headers({ 'content-type': 'text/plain' }),
-      });
+        headers: { get: (key: string) => key.toLowerCase() === 'content-type' ? 'text/plain' : null },
+        text: () => Promise.resolve('Bad Gateway')
+      } as any as Response;
+
       await expect(readJsonResponse(fakeResponse)).rejects.toThrow(/Réponse API invalide/);
     });
   });
