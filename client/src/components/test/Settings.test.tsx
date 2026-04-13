@@ -1,20 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Settings from '../Settings';
-import { useAppConfig } from '../../hooks/useAppConfig';
+
+const mockConfig = {
+  appName: 'SENTYS',
+  appSubtitle: 'Dashboard',
+  loginMessage: 'Welcome',
+  systemVersion: 'v1.0',
+};
+const mockUpdateConfig = vi.fn().mockResolvedValue(mockConfig);
 
 // Simulation des dépendances complexes
 vi.mock('../../hooks/useAppConfig', () => {
-  const mockConfig = {
-    appName: 'SENTYS',
-    appSubtitle: 'Dashboard',
-    loginMessage: 'Welcome',
-    systemVersion: 'v1.0',
-  };
   return {
     useAppConfig: () => ({
       config: mockConfig,
-      updateConfig: vi.fn(),
+      updateConfig: mockUpdateConfig,
     })
   };
 });
@@ -65,9 +66,8 @@ describe('Settings Component', () => {
     const saveBtns = screen.getAllByText('Enregistrer');
     fireEvent.click(saveBtns[0]); // Premier bouton "Enregistrer" (Section Application)
     
-    const { updateConfig } = useAppConfig();
     await waitFor(() => {
-      expect(updateConfig).toHaveBeenCalled();
+      expect(mockUpdateConfig).toHaveBeenCalled();
     });
   });
 });
