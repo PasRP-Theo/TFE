@@ -586,7 +586,7 @@ function TabSettings() {
             <div className="settings-modal-actions">
               <button className="sensor-link-btn" onClick={() => setShowResetConfirm(false)} disabled={resetLoading}>Annuler</button>
               <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={resetSystem} disabled={resetLoading}>
-                {resetLoading ? 'Réinitialisation...' : 'Confirmer la réinitialisation'}
+                {resetLoading ? 'Réinitialisation...' : 'Réinitialiser'}
               </button>
             </div>
           </div>
@@ -827,7 +827,7 @@ function TabUsers() {
             {deleteError && <div className="settings-modal-inline-error">⚠ {deleteError}</div>}
             <div className="settings-modal-actions">
               <button className="sensor-link-btn" onClick={() => { setDeleteUserTarget(null); setDeleteError(''); }}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={() => deleteUser(deleteUserTarget.id)}>Supprimer l'utilisateur</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={() => deleteUser(deleteUserTarget.id)}>Supprimer</button>
             </div>
           </div>
         </div>

@@ -234,6 +234,16 @@ router.patch('/:id/view', requireAuth, async (req, res) => {
   }
 });
 
+router.delete('/all', requireAuth, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM alerts');
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('[ALERT DELETE ALL]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la suppression de toutes les alertes' });
+  }
+});
+
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { rowCount } = await pool.query('DELETE FROM alerts WHERE id = $1', [req.params.id]);

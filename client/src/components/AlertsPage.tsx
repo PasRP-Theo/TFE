@@ -170,6 +170,8 @@ export default function AlertsPage() {
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [alertDeleteTarget, setAlertDeleteTarget] = useState<AlertEntry | null>(null);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -280,8 +282,39 @@ export default function AlertsPage() {
       if (nextPage === page) {
         await fetchAlerts();
       }
+      setAlertDeleteTarget(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setActionLoadingKey(null);
+    }
+  }
+
+  // Suppression de toutes les alertes
+  async function deleteAllAlerts() {
+    if (!authHeaders) return;
+    setActionLoadingKey('delete-all');
+    try {
+      const response = await fetch(apiUrl('/api/alerts/all'), {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      let deleteError = 'Impossible de supprimer toutes les alertes';
+      if (contentType.includes('application/json')) {
+        const data = await readJsonResponse<{ error?: string; deleted?: boolean }>(response);
+        if (!response.ok) throw new Error(data.error || deleteError);
+      } else if (!response.ok) {
+        throw new Error(deleteError);
+      }
+      setAlerts([]);
+      setTotal(0);
+      setPage(1);
+      setShowDeleteAllConfirm(false);
+      await Promise.all([fetchSummary(), fetchAnalytics()]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setShowDeleteAllConfirm(false);
     } finally {
       setActionLoadingKey(null);
     }
@@ -384,7 +417,7 @@ export default function AlertsPage() {
       <div className="alerts-panel">
         <div className="alerts-panel-head">
           <div className="alerts-panel-title">Journal des alertes</div>
-          <div className="alerts-filters">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               className="alerts-search"
               type="search"
@@ -417,6 +450,16 @@ export default function AlertsPage() {
               }}
             />
             <button type="button" className="sensor-link-btn" onClick={() => { setPage(1); void fetchAlerts().catch(() => {}); }}>Filtrer</button>
+            <button
+              type="button"
+              className="sensor-delete-btn sensor-delete-btn--danger"
+              style={{ minWidth: 0, padding: '6px 12px', fontSize: 13 }}
+              onClick={() => setShowDeleteAllConfirm(true)}
+              disabled={loading || alerts.length === 0}
+              title="Supprimer toutes les alertes"
+            >
+              Supprimer tout
+            </button>
           </div>
         </div>
 
@@ -460,7 +503,7 @@ export default function AlertsPage() {
                   <button
                     type="button"
                     className="sensor-delete-btn"
-                    onClick={() => deleteAlert(entry.id)}
+                    onClick={() => setAlertDeleteTarget(entry)}
                     disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
                     title="Supprimer l’alerte"
                   >
@@ -478,6 +521,40 @@ export default function AlertsPage() {
           <button type="button" className="sensor-link-btn" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(current + 1, totalPages))}>Suivant</button>
         </div>
       </div>
+
+      {showDeleteAllConfirm && (
+        <div className="settings-modal-overlay" onClick={() => !actionLoadingKey && setShowDeleteAllConfirm(false)}>
+          <div className="settings-modal-card settings-modal-card--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER TOUTES LES ALERTES</div>
+            <div className="settings-modal-warning settings-modal-warning--danger">
+              Voulez-vous vraiment vider tout le journal des alertes ? Cette action est irréversible.
+            </div>
+            <div className="settings-modal-actions">
+              <button className="sensor-link-btn" onClick={() => setShowDeleteAllConfirm(false)} disabled={actionLoadingKey === 'delete-all'}>Annuler</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={deleteAllAlerts} disabled={actionLoadingKey === 'delete-all'}>
+                {actionLoadingKey === 'delete-all' ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {alertDeleteTarget && (
+        <div className="settings-modal-overlay" onClick={() => !actionLoadingKey && setAlertDeleteTarget(null)}>
+          <div className="settings-modal-card settings-modal-card--danger" onClick={(event) => event.stopPropagation()}>
+            <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER L'ALERTE</div>
+            <div className="settings-modal-warning settings-modal-warning--danger">
+              Voulez-vous vraiment supprimer l'alerte "{alertDeleteTarget.title}" ? Cette action est irréversible.
+            </div>
+            <div className="settings-modal-actions">
+              <button className="sensor-link-btn" onClick={() => setAlertDeleteTarget(null)} disabled={actionLoadingKey === `delete-${alertDeleteTarget.id}`}>Annuler</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={() => deleteAlert(alertDeleteTarget.id)} disabled={actionLoadingKey === `delete-${alertDeleteTarget.id}`}>
+                {actionLoadingKey === `delete-${alertDeleteTarget.id}` ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

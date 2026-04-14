@@ -1209,7 +1209,7 @@ export default function CameraFeed() {
             </div>
             <div className="settings-modal-actions">
               <button className="sensor-link-btn" onClick={() => setCameraDeleteTarget(null)}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteCamera}>Confirmer la suppression</button>
+              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteCamera}>Supprimer</button>
             </div>
           </div>
         </div>
