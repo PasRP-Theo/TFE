@@ -300,7 +300,7 @@ export default function AlertsPage() {
         headers: authHeaders,
       });
       const contentType = (response.headers.get('content-type') || '').toLowerCase();
-      let deleteError = 'Impossible de supprimer toutes les alertes';
+      const deleteError = 'Impossible de supprimer toutes les alertes';
       if (contentType.includes('application/json')) {
         const data = await readJsonResponse<{ error?: string; deleted?: boolean }>(response);
         if (!response.ok) throw new Error(data.error || deleteError);
