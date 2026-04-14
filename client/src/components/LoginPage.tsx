@@ -110,6 +110,7 @@ export default function LoginPage() {
                   required
                   autoFocus
                   autoComplete="username"
+                  inputMode="text"
                 />
               </div>
             </div>
@@ -126,6 +127,7 @@ export default function LoginPage() {
                   placeholder="••••••••••••"
                   required
                   autoComplete="current-password"
+                  inputMode="text"
                 />
               </div>
             </div>
