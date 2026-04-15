@@ -12,6 +12,7 @@ Conçu pour être déployé sur une unité centrale (comme un Raspberry Pi ou un
 - **Monitoring IoT & Capteurs** : Suivi en direct de divers capteurs (Température, Humidité, Mouvement, Fumée, CO2) et système d'alertes en temps réel.
 - **Tableau de bord Système** : Surveillance des performances de la machine hôte (CPU, RAM, Disques, Réseau, Batterie).
 - **Administration & Sécurité** : Gestion multi-utilisateurs avec rôles (Admin/User), personnalisation avancée de l'interface (thème, densité), et accès protégé.
+- **Code couleur simple** : Indicateur d’état visuel sur l'interface de contrôle (Vert : OK, Orange : Connexion instable, Rouge : Alerte/Panne) pour un diagnostic instantané.
 
 ## Architecture technique
 

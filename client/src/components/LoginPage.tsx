@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false);
   const [dots,     setDots]     = useState('');
   const [time,     setTime]     = useState(new Date());
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -24,6 +25,20 @@ export default function LoginPage() {
     const t = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 400);
     return () => clearInterval(t);
   }, [loading]);
+
+  useEffect(() => {
+    const isLocalPanel = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.localStorage.getItem('sentys:kiosk_mode') === 'true';
+    
+    if (isLocalPanel && !autoLoginAttempted) {
+      setAutoLoginAttempted(true);
+      setLoading(true);
+      login('admin', 'admin123').catch(() => {
+        console.warn("Auto-login Kiosk échoué.");
+        setError("Auto-login échoué (mot de passe admin123 invalide ?).");
+        setLoading(false);
+      });
+    }
+  }, [autoLoginAttempted, login]);
 
   const locale = config.interfaceLanguage;
   const use12HourClock = config.timeFormat === '12h';

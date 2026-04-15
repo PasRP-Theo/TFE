@@ -110,9 +110,9 @@ router.post('/reset', requireAuth, requireAdmin, async (_req, res) => {
 
     const rootHash = await bcrypt.hash('root', 12);
     const insertedAdmin = await client.query(
-      `INSERT INTO users (email, password, role)
+      `INSERT INTO users (username, password, role)
        VALUES ($1, $2, 'admin')
-       RETURNING id, email, role, created_at`,
+       RETURNING id, username, role, created_at`,
       ['root', rootHash]
     );
 

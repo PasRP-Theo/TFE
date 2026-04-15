@@ -420,6 +420,7 @@ export default function CameraFeed() {
   const [motionHistoryRecords, setMotionHistoryRecords] = useState<MotionEventEntry[]>([]);
   const [motionHistoryLoading, setMotionHistoryLoading] = useState(false);
   const [motionHistoryError, setMotionHistoryError] = useState<string | null>(null);
+  const [sysInfo, setSysInfo] = useState<{ hasBattery: boolean; isCharging: boolean; percent?: number } | null>(null);
 
   async function fetchDiscoveries(silent = false) {
     if (!silent) setDiscoveriesLoading(true);
@@ -495,6 +496,28 @@ export default function CameraFeed() {
     const t = setInterval(fetchCameras, config.cameraRefreshSeconds * 1000);
     return () => clearInterval(t);
   }, [config.cameraRefreshSeconds]);
+
+  useEffect(() => {
+    let stopped = false;
+    async function fetchSysInfo() {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(apiUrl('/api/system/info'), {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!stopped) {
+          setSysInfo({ hasBattery: data.battery.hasBattery, isCharging: data.battery.isCharging, percent: data.battery.percent });
+        }
+      } catch {
+        // ignore
+      }
+    }
+    fetchSysInfo();
+    const t = setInterval(fetchSysInfo, 5000);
+    return () => { stopped = true; clearInterval(t); };
+  }, []);
 
   async function handleAction(id: number, action: "start" | "pause" | "resume" | "stop") {
     try {
@@ -747,7 +770,7 @@ export default function CameraFeed() {
   }, []);
 
   return (
-    <div className="cam-page">
+    <div className="cam-page" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
 
       {/* Header */}
       <div className="cam-header">
@@ -992,7 +1015,7 @@ export default function CameraFeed() {
           </button>
         </div>
       ) : (
-        <div className={`cam-grid cam-grid--${config.cameraCardSize}`}>
+        <div className={`cam-grid cam-grid--${config.cameraCardSize}`} style={{ paddingBottom: '80px' }}>
           {loading && <div className="cam-empty">Chargement des caméras…</div>}
           {!loading && visibleCameras.length === 0 && (
             <div className="cam-empty">
@@ -1027,6 +1050,36 @@ export default function CameraFeed() {
           ))}
         </div>
       )}
+
+      {/* Barre de diagnostic LED (Dynamique & Fixe) */}
+      {(() => {
+        const hasOffline = cameras.some(c => c.status === 'stopped');
+        const hasInstable = !navigator.onLine || cameras.some(c => c.status === 'reconnecting' || c.status === 'paused');
+        const ledColor = hasOffline ? 'var(--accent-red)' : hasInstable ? 'var(--accent-amber)' : '#22c55e';
+        const ledStatus = hasOffline ? 'ROUGE : PANNE' : hasInstable ? 'ORANGE : INSTABLE' : 'VERT : OK';
+        const ledDesc = hasOffline ? 'Une ou plusieurs caméras sont injoignables.' : hasInstable ? 'Réseau instable ou reconnexion en cours.' : 'Toutes les caméras fonctionnent normalement.';
+        
+        return (
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: 'var(--bg-surface)', borderTop: '1px solid var(--border)', padding: '14px 20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '14px', color: 'var(--text-secondary)', boxShadow: '0 -4px 20px rgba(0,0,0,0.3)' }}>
+            <span style={{ color: 'var(--text-muted)' }}><strong>DIAGNOSTIC CAMÉRAS :</strong></span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: ledColor }}>
+              <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: ledColor, boxShadow: `0 0 10px ${ledColor}` }} /> 
+              {ledStatus}
+            </span>
+            <span>— {ledDesc}</span>
+
+            {sysInfo && (
+              <>
+                <span style={{ color: 'var(--border)', margin: '0 4px' }}>|</span>
+                <span style={{ color: 'var(--text-muted)' }}><strong>SERVEUR :</strong></span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: (!sysInfo.hasBattery || sysInfo.isCharging) ? 'inherit' : 'var(--accent-amber)' }}>
+                  {(!sysInfo.hasBattery || sysInfo.isCharging) ? '⚡ SUR SECTEUR' : `🔋 SUR BATTERIE ${sysInfo.percent != null ? `(${sysInfo.percent.toFixed(0)}%)` : ''}`}
+                </span>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {historyCameraId !== null && (
         <div className="cam-history-overlay" onClick={closeHistory}>

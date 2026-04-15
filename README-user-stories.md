@@ -78,6 +78,7 @@ Les stories sont organisees par epic et priorisees selon leur importance pour le
 | US-21 | En tant que client, je veux activer ou desactiver le mode surveillance en un clic. | Bouton toggle ON/OFF ; confirmation visuelle ; etat synchronise avec le serveur. | P1 | A faire |
 | US-22 | En tant que client, je veux voir les alertes critiques en temps reel avec bouton de confirmation. | Badge de comptage ; code couleur critique/warning/info ; mise a jour WebSocket. | P1 | A faire |
 | US-23 | En tant que client, je veux voir l'etat general du systeme sur le boitier. | Barres CPU/RAM/disque ; uptime formate ; toggles par module. | P2 | Partiel conceptuel |
+| US-24 | En tant que client, je veux un diagnostic visuel instantané sur l'écran de contrôle sans avoir à lire de logs. | Code couleur simple : Indicateur visuel intégré au site (Vert : OK, Orange : Connexion instable, Rouge : Alerte/Panne). | P1 | Terminé |
 
 ### Notes d'adaptation
 

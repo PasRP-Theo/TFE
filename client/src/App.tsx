@@ -50,6 +50,7 @@ function AdminRoute({
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [batteryInfo, setBatteryInfo] = useState<{ charging: boolean, level: number } | null>(null);
   const location = useLocation();
 
   useEffect(() => {
@@ -112,6 +113,34 @@ function AdminRoute({
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    let navBattery: any;
+    const updateBattery = () => {
+      if (navBattery) {
+        setBatteryInfo({
+          charging: navBattery.charging,
+          level: Math.round(navBattery.level * 100)
+        });
+      }
+    };
+
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((b: any) => {
+        navBattery = b;
+        updateBattery();
+        b.addEventListener('chargingchange', updateBattery);
+        b.addEventListener('levelchange', updateBattery);
+      }).catch(() => {});
+    }
+
+    return () => {
+      if (navBattery) {
+        navBattery.removeEventListener('chargingchange', updateBattery);
+        navBattery.removeEventListener('levelchange', updateBattery);
+      }
     };
   }, []);
 
@@ -266,6 +295,18 @@ function AdminRoute({
         <div style={{ background: 'var(--bg-surface)', padding: '40px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)', width: '320px', textAlign: 'center' }}>
           <h2 style={{ margin: '0 0 20px 0', letterSpacing: '2px', color: 'var(--accent-blue)' }}>🔒 ÉCRAN DE CONTRÔLE</h2>
           
+          {!isOnline && (
+            <div style={{ background: 'var(--bg-hover)', color: 'var(--accent-amber)', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid var(--accent-amber)', fontSize: '0.85rem', fontWeight: 'bold', lineHeight: '1.4' }}>
+              ⚠️ ALERTE<br/>Absence de réseau IP détectée.
+            </div>
+          )}
+
+          {batteryInfo && !batteryInfo.charging && (
+            <div style={{ background: 'var(--bg-hover)', color: batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: `1px solid ${batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)'}`, fontSize: '0.85rem', fontWeight: 'bold', lineHeight: '1.4' }}>
+              {batteryInfo.level <= 20 ? '🚨' : '⚠️'} ALIMENTATION COUPÉE<br/>L'appareil est sur batterie ({batteryInfo.level}%).
+            </div>
+          )}
+
           {!showAdminPin ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px 0' }}>
               <button className="sensor-confirm-btn sensor-confirm-btn--xl" style={{ padding: '20px', fontSize: '18px' }} onClick={() => { setIsLocked(false); setKioskActiveRole('guest'); }}>CONNEXION INVITÉ</button>
@@ -314,6 +355,19 @@ function AdminRoute({
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin && (!isKioskMode || kioskActiveRole === 'admin') },
   ].filter(l => l.show);
 
+  let systemLedColor = '#22c55e'; // Vert : OK
+  let systemLedText = 'OK';
+  if (!isOnline) {
+    systemLedColor = 'var(--accent-amber)'; // Orange : Instable / Pas de réseau
+    systemLedText = 'INSTABLE';
+  } else if (pendingAlertsCount > 0) {
+    systemLedColor = 'var(--accent-red)'; // Rouge : Alerte / Panne
+    systemLedText = 'ALERTE / PANNE';
+    } else if (batteryInfo && !batteryInfo.charging) {
+      systemLedColor = batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)';
+      systemLedText = `SUR BATTERIE (${batteryInfo.level}%)`;
+  }
+
   return (
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
       <header className="app-header">
@@ -343,9 +397,9 @@ function AdminRoute({
 
           {config.showStatusPanel && (
             <div className="app-status-group">
-              <div className="app-status" style={{ color: isOnline ? undefined : 'var(--accent-red)' }}>
-                <span className="app-status-dot" style={{ background: isOnline ? undefined : 'var(--accent-red)', boxShadow: isOnline ? undefined : 'none' }} />
-                {isOnline ? 'EN LIGNE' : 'HORS LIGNE'}
+              <div className="app-status" style={{ color: systemLedColor }}>
+                <span className="app-status-dot" style={{ background: systemLedColor, boxShadow: `0 0 8px ${systemLedColor}` }} />
+                {systemLedText}
               </div>
               {isInstalledMode && (
                 <div className="app-installed-badge">
