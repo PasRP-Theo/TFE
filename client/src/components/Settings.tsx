@@ -908,6 +908,18 @@ function TabHelp() {
           <li style={{ marginBottom: '8px' }}><strong>Résilience (Coupure WiFi) :</strong> Si prévu dans le firmware, les nœuds autonomes sauvegardent sur leur carte MicroSD locale et synchroniseront les fichiers au retour du réseau.</li>
         </ul>
       </div>
+      
+      <div className="settings-section">
+        <div className="settings-section-label">À PROPOS & CRÉDITS</div>
+        <div className="settings-danger-zone-text" style={{ marginBottom: '16px', lineHeight: '1.6' }}>
+          <strong>SENTYS Surveillance</strong> est un système de monitoring et de vidéosurveillance auto-hébergé, développé dans le cadre d'un Travail de Fin d'Études.<br /><br />
+          <span style={{ color: 'var(--text-secondary)' }}>
+            © {new Date().getFullYear()} SENTYS Project<br />
+            Architecture : React, Node.js, FFmpeg, SQLite, HLS.js<br />
+            Matériel : Nœuds Raspberry Pi autonomes & Microcontrôleurs ESP32
+          </span>
+        </div>
+      </div>
 
       {showInstallHint && (
         <div className="settings-modal-overlay" onClick={() => setShowInstallHint(false)}>
@@ -948,7 +960,7 @@ export default function Settings() {
       <div className="settings-tabs">
         <button className={`sensor-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
         <button className={`sensor-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
-        <button className={`sensor-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & RÉSEAU</button>
+        <button className={`sensor-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & À PROPOS</button>
       </div>
 
       {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : <TabHelp />}

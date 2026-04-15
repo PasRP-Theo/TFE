@@ -403,7 +403,7 @@ export default function SystemInfo() {
         </Card>
       </div>
 
-      <div className="si-footer">{config.appName}{config.showSystemVersion ? ` · ${config.systemVersion}` : ''} — via Node.js systeminformation</div>
+      <div className="si-footer">{config.appName}{config.showSystemVersion ? ` · ${config.systemVersion}` : ''} — Propulsé par SENTYS Surveillance</div>
 
       {showPinPad && (
         <div className="settings-modal-overlay" onClick={() => setShowPinPad(false)} style={{ zIndex: 9999 }}>
