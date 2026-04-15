@@ -48,8 +48,6 @@ function AppShell() {
   const { config } = useAppConfig();
   const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
-  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallHint, setShowInstallHint] = useState(false);
   const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
   const location = useLocation();
 
@@ -74,11 +72,11 @@ function AppShell() {
     const handleBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as BeforeInstallPromptEvent;
       // On laisse le navigateur libre d'afficher son pop-up natif automatique
-      setInstallPromptEvent(promptEvent);
+      (window as any).deferredInstallPrompt = promptEvent;
     };
 
     const handleAppInstalled = () => {
-      setInstallPromptEvent(null);
+      (window as any).deferredInstallPrompt = null;
       refreshInstallState();
     };
 
@@ -108,16 +106,6 @@ function AppShell() {
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
-
-  const handleInstallClick = async () => {
-    if (installPromptEvent) {
-      await installPromptEvent.prompt();
-      await installPromptEvent.userChoice;
-      setInstallPromptEvent(null);
-    } else {
-      setShowInstallHint(true);
-    }
-  };
 
   useEffect(() => {
     if (!user) return;
@@ -332,11 +320,6 @@ function AppShell() {
                 <span className="app-status-dot" />
                 EN LIGNE · LOCAL
               </div>
-              {!isInstalledMode && (
-                <button className="app-install-btn" onClick={handleInstallClick} type="button">
-                  Installer
-                </button>
-              )}
               {isInstalledMode && (
                 <div className="app-installed-badge">
                   <span className="app-installed-badge-dot" />
@@ -384,27 +367,6 @@ function AppShell() {
         </Routes>
       </main>
 
-      {showInstallHint && (
-        <div className="settings-modal-overlay" onClick={() => setShowInstallHint(false)}>
-          <div className="settings-modal-card" onClick={e => e.stopPropagation()} style={{ width: '360px' }}>
-            <div className="settings-modal-title">INSTALLATION MANUELLE</div>
-            <div className="settings-modal-warning" style={{ marginTop: '0', paddingTop: '0', borderTop: 'none', color: '#d1d5db' }}>
-              Ton navigateur bloque le pop-up automatique (souvent car tu n'es pas en HTTPS ou que tu es sur iOS).
-            </div>
-            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6' }}>
-              <strong style={{ color: '#6cc7ff' }}>🍎 Sur iPhone / iPad (Safari) :</strong><br/>
-              1. Appuie sur le bouton <strong>Partager</strong> ⍐ en bas.<br/>
-              2. Choisis <strong>Sur l'écran d'accueil</strong> ➕<br/><br/>
-              <strong style={{ color: '#34d399' }}>🤖 Sur Android (Chrome) :</strong><br/>
-              1. Ouvre le menu (3 petits points) ⠇ en haut.<br/>
-              2. Choisis <strong>Ajouter à l'écran d'accueil</strong> 📱
-            </div>
-            <div className="settings-modal-actions">
-              <button className="sensor-confirm-btn" style={{ width: '100%' }} onClick={() => setShowInstallHint(false)}>J'ai compris</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
