@@ -43,7 +43,7 @@ function AdminRoute({
   return <>{children}</>;
 }
 
-function AppShell() {
+  function AppShell() {
   const { user, logout, loading } = useAuth();
   const { config } = useAppConfig();
   const { settings, toggleTheme } = useAppearance();
@@ -234,6 +234,25 @@ function AppShell() {
           if (newAttempts >= 3) {
             setLockoutUntil(new Date().getTime() + 60000);
             setLockError("SYSTÈME BLOQUÉ (1 MIN)");
+              
+              // Envoi immédiat de l'alerte de sécurité à l'administrateur
+              const currentToken = window.localStorage.getItem('token');
+              if (currentToken) {
+                fetch(apiUrl('/api/alerts'), {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${currentToken}`,
+                  },
+                  body: JSON.stringify({
+                    alert_type: 'security_kiosk_lock',
+                    level: 'critical',
+                    title: 'Tentatives d\'accès Kiosk échouées',
+                    message: `Le panneau de contrôle a été temporairement verrouillé suite à 3 codes PIN incorrects.`,
+                    source_type: 'system',
+                  })
+                }).catch(err => console.error('Erreur lors de l\'envoi de l\'alerte de sécurité', err));
+              }
           } else {
             setLockError(`CODE INCORRECT (${3 - newAttempts} ESSAIS)`);
           }
@@ -243,14 +262,14 @@ function AppShell() {
     };
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', width: '100vw', position: 'fixed', top: 0, left: 0, zIndex: 9999, background: '#08111d', color: '#fff', fontFamily: 'monospace' }}>
-        <div style={{ background: '#111b27', padding: '40px', borderRadius: '12px', border: '1px solid #1e2a3a', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', width: '320px', textAlign: 'center' }}>
-          <h2 style={{ margin: '0 0 20px 0', letterSpacing: '2px', color: '#6cc7ff' }}>🔒 ÉCRAN DE CONTRÔLE</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', width: '100vw', position: 'fixed', top: 0, left: 0, zIndex: 9999, background: 'var(--bg-base)', color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+        <div style={{ background: 'var(--bg-surface)', padding: '40px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)', width: '320px', textAlign: 'center' }}>
+          <h2 style={{ margin: '0 0 20px 0', letterSpacing: '2px', color: 'var(--accent-blue)' }}>🔒 ÉCRAN DE CONTRÔLE</h2>
           
           {!showAdminPin ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px 0' }}>
               <button className="sensor-confirm-btn sensor-confirm-btn--xl" style={{ padding: '20px', fontSize: '18px' }} onClick={() => { setIsLocked(false); setKioskActiveRole('guest'); }}>CONNEXION INVITÉ</button>
-              <button className="sensor-delete-btn sensor-delete-btn--xl" style={{ padding: '20px', fontSize: '18px', background: 'rgba(108, 199, 255, 0.1)', color: '#6cc7ff', border: '1px solid #6cc7ff' }} onClick={() => {
+              <button className="sensor-delete-btn sensor-delete-btn--xl" style={{ padding: '20px', fontSize: '18px', background: 'var(--accent-blue-bg)', color: 'var(--accent-blue)', border: '1px solid var(--accent-blue-border)' }} onClick={() => {
                 if (kioskPin) {
                   setShowAdminPin(true);
                 } else {
@@ -262,14 +281,14 @@ function AppShell() {
           ) : (
             <>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '30px' }}>
-                {[0, 1, 2, 3].map(i => <div key={i} style={{ width: '20px', height: '20px', borderRadius: '50%', background: enteredPin.length > i ? '#6cc7ff' : 'transparent', border: '2px solid #6cc7ff', transition: 'all 0.2s' }} />)}
+                {[0, 1, 2, 3].map(i => <div key={i} style={{ width: '20px', height: '20px', borderRadius: '50%', background: enteredPin.length > i ? 'var(--accent-blue)' : 'transparent', border: '2px solid var(--accent-blue)', transition: 'all 0.2s' }} />)}
               </div>
-              {lockError && <div style={{ color: '#ef4444', marginBottom: '20px', fontSize: '12px', fontWeight: 'bold' }}>{lockError}</div>}
+              {lockError && <div style={{ color: 'var(--accent-red)', marginBottom: '20px', fontSize: '12px', fontWeight: 'bold' }}>{lockError}</div>}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', opacity: isLockedOut ? 0.5 : 1, pointerEvents: isLockedOut ? 'none' : 'auto' }}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => <button key={num} onClick={() => handlePinPress(num.toString())} style={{ background: 'rgba(108, 199, 255, 0.1)', border: '1px solid rgba(108, 199, 255, 0.3)', color: '#fff', fontSize: '24px', padding: '20px 0', borderRadius: '8px', cursor: 'pointer' }}>{num}</button>)}
-                <button onClick={() => { setEnteredPin(""); setLockError(""); }} style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '20px', borderRadius: '8px', cursor: 'pointer' }}>C</button>
-                <button onClick={() => handlePinPress('0')} style={{ background: 'rgba(108, 199, 255, 0.1)', border: '1px solid rgba(108, 199, 255, 0.3)', color: '#fff', fontSize: '24px', padding: '20px 0', borderRadius: '8px', cursor: 'pointer' }}>0</button>
-                <button onClick={() => setEnteredPin(p => p.slice(0, -1))} style={{ background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#f59e0b', fontSize: '20px', borderRadius: '8px', cursor: 'pointer' }}>⌫</button>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => <button key={num} onClick={() => handlePinPress(num.toString())} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '24px', padding: '20px 0', borderRadius: '8px', cursor: 'pointer' }}>{num}</button>)}
+                <button onClick={() => { setEnteredPin(""); setLockError(""); }} style={{ background: 'var(--accent-red-bg)', border: '1px solid var(--accent-red-border)', color: 'var(--accent-red)', fontSize: '20px', borderRadius: '8px', cursor: 'pointer' }}>C</button>
+                <button onClick={() => handlePinPress('0')} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '24px', padding: '20px 0', borderRadius: '8px', cursor: 'pointer' }}>0</button>
+                <button onClick={() => setEnteredPin(p => p.slice(0, -1))} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--accent-amber)', fontSize: '20px', borderRadius: '8px', cursor: 'pointer' }}>⌫</button>
               </div>
               <div style={{ marginTop: '20px' }}>
                 <button className="sensor-link-btn" onClick={() => { setShowAdminPin(false); setEnteredPin(""); setLockError(""); }}>← Retour</button>
@@ -277,7 +296,7 @@ function AppShell() {
             </>
           )}
 
-          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #1e2a3a' }}>
+          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)' }}>
             <button className="sensor-link-btn" onClick={() => { window.localStorage.removeItem('sentys:kiosk_mode'); window.location.href = '/'; }}>Quitter le mode Kiosk</button>
           </div>
         </div>
@@ -324,8 +343,8 @@ function AppShell() {
 
           {config.showStatusPanel && (
             <div className="app-status-group">
-              <div className="app-status" style={{ color: isOnline ? undefined : '#ef4444' }}>
-                <span className="app-status-dot" style={{ background: isOnline ? undefined : '#ef4444', boxShadow: isOnline ? undefined : 'none' }} />
+              <div className="app-status" style={{ color: isOnline ? undefined : 'var(--accent-red)' }}>
+                <span className="app-status-dot" style={{ background: isOnline ? undefined : 'var(--accent-red)', boxShadow: isOnline ? undefined : 'none' }} />
                 {isOnline ? 'EN LIGNE' : 'HORS LIGNE'}
               </div>
               {isInstalledMode && (

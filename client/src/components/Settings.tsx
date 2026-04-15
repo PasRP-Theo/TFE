@@ -883,18 +883,18 @@ function TabHelp() {
         <div className="settings-danger-zone-text" style={{ marginBottom: '16px' }}>
           Ce système est conçu pour fonctionner localement. Pour y accéder depuis l'extérieur (4G/5G, autre réseau WiFi) en toute sécurité, il ne faut <strong>pas</strong> ouvrir les ports de votre routeur.
         </div>
-        <div className="sensor-add-form settings-add-form" style={{ display: 'block', padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-          <h4 style={{ margin: '0 0 8px 0', color: '#60a5fa' }}>1. Installation de Tailscale</h4>
+        <div className="sensor-add-form settings-add-form" style={{ display: 'block', padding: '16px', background: 'var(--bg-glass)', borderRadius: '8px' }}>
+          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>1. Installation de Tailscale</h4>
           <p style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.4' }}>
             Tailscale crée un réseau privé virtuel (VPN) "mesh" (Peer-to-Peer) basé sur WireGuard. Installez Tailscale sur l'appareil hôte (Raspberry Pi / Serveur) et sur vos appareils clients (Smartphone, PC portable).
           </p>
-          <h4 style={{ margin: '0 0 8px 0', color: '#60a5fa' }}>2. Configuration</h4>
+          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>2. Configuration</h4>
           <ul style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px' }}>
             <li style={{ marginBottom: '6px' }}>Connectez tous vos appareils au même compte Tailscale (Tailnet).</li>
             <li style={{ marginBottom: '6px' }}>Récupérez l'adresse IP Tailscale du serveur (qui commence généralement par <code>100.x.x.x</code>).</li>
             <li style={{ marginBottom: '6px' }}>Entrez cette adresse dans le navigateur de votre téléphone : <code>http://100.x.x.x:4000</code></li>
           </ul>
-          <h4 style={{ margin: '0 0 8px 0', color: '#60a5fa' }}>3. Avantages (Architecture SENTYS)</h4>
+          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>3. Avantages (Architecture SENTYS)</h4>
           <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>
             Le flux vidéo des caméras locales (Pi ou ESP32) reste strictement sur votre réseau. En vous connectant via Tailscale, le serveur SENTYS proxifie les flux (HLS) en toute sécurité vers votre téléphone sans passer par le Cloud d'un constructeur.
           </p>
@@ -902,7 +902,7 @@ function TabHelp() {
       </div>
       <div className="settings-section">
         <div className="settings-section-label">CAMÉRAS AUTONOMES (ESP32 & RASPBERRY PI)</div>
-        <ul style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px', color: '#cbd5e1' }}>
+        <ul style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
           <li style={{ marginBottom: '8px' }}><strong>ESP32-CAM / ESP32-S3 :</strong> Utilisez l'onglet Caméras puis "Ajouter {'->'} ESP32-CAM" pour lancer une découverte réseau (mDNS).</li>
           <li style={{ marginBottom: '8px' }}><strong>Raspberry Pi Node :</strong> Le Pi doit exécuter les scripts <code>announce_node.py</code> et <code>pir_sender.py</code>. Il apparaîtra automatiquement dans la section "Nœud Pi".</li>
           <li style={{ marginBottom: '8px' }}><strong>Résilience (Coupure WiFi) :</strong> Si prévu dans le firmware, les nœuds autonomes sauvegardent sur leur carte MicroSD locale et synchroniseront les fichiers au retour du réseau.</li>
@@ -913,14 +913,14 @@ function TabHelp() {
         <div className="settings-modal-overlay" onClick={() => setShowInstallHint(false)}>
           <div className="settings-modal-card" onClick={e => e.stopPropagation()} style={{ width: '360px' }}>
             <div className="settings-modal-title">INSTALLATION MANUELLE</div>
-            <div className="settings-modal-warning" style={{ marginTop: '0', paddingTop: '0', borderTop: 'none', color: '#d1d5db' }}>
+            <div className="settings-modal-warning" style={{ marginTop: '0', paddingTop: '0', borderTop: 'none', color: 'var(--text-secondary)' }}>
               Ton navigateur bloque le pop-up automatique (souvent car tu n'es pas en HTTPS ou que tu es sur iOS).
             </div>
-            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6' }}>
-              <strong style={{ color: '#6cc7ff' }}>🍎 Sur iPhone / iPad (Safari) :</strong><br/>
+            <div style={{ background: 'var(--bg-hover)', padding: '15px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6' }}>
+              <strong style={{ color: 'var(--accent-blue)' }}>🍎 Sur iPhone / iPad (Safari) :</strong><br/>
               1. Appuie sur le bouton <strong>Partager</strong> ⍐ en bas.<br/>
               2. Choisis <strong>Sur l'écran d'accueil</strong> ➕<br/><br/>
-              <strong style={{ color: '#34d399' }}>🤖 Sur Android (Chrome) :</strong><br/>
+              <strong style={{ color: 'var(--accent-green)' }}>🤖 Sur Android (Chrome) :</strong><br/>
               1. Ouvre le menu (3 petits points) ⠇ en haut.<br/>
               2. Choisis <strong>Ajouter à l'écran d'accueil</strong> 📱
             </div>

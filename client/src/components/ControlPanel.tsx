@@ -21,8 +21,8 @@ export default function ControlPanel() {
         <div className="alerts-panel">
           <div className="alerts-panel-title">MODE SURVEILLANCE</div>
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <div style={{ fontSize: '18px', marginBottom: '20px', color: '#9ca3af' }}>État Actuel du Système</div>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: surveillanceActive ? '#22c55e' : '#ef4444', marginBottom: '40px' }}>
+            <div style={{ fontSize: '18px', marginBottom: '20px', color: 'var(--text-muted)' }}>État Actuel du Système</div>
+            <div style={{ fontSize: '32px', fontWeight: 'bold', color: surveillanceActive ? 'var(--accent-green)' : 'var(--accent-red)', marginBottom: '40px' }}>
               {surveillanceActive ? 'ARMÉ (ACTIF)' : 'DÉSARMÉ (INACTIF)'}
             </div>
             
@@ -40,19 +40,19 @@ export default function ControlPanel() {
         <div className="alerts-panel">
           <div className="alerts-panel-title">RÉSUMÉ SYSTÈME</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
-            <div style={{ padding: '15px', background: 'rgba(108,199,255,0.1)', borderLeft: '4px solid #6cc7ff', borderRadius: '4px' }}>
+            <div style={{ padding: '15px', background: 'var(--accent-blue-bg)', borderLeft: '4px solid var(--accent-blue)', borderRadius: '4px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <strong style={{ color: '#6cc7ff' }}>CAMÉRAS EN LIGNE</strong>
+                <strong style={{ color: 'var(--accent-blue)' }}>CAMÉRAS EN LIGNE</strong>
               </div>
-              <div style={{ color: '#d1d5db', fontSize: '14px' }}>Le système vidéo est opérationnel.</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Le système vidéo est opérationnel.</div>
               <div style={{ marginTop: '10px' }}><Link to="/videos" className="sensor-link-btn">Voir le direct →</Link></div>
             </div>
             
-            <div style={{ padding: '15px', background: 'rgba(239,68,68,0.1)', borderLeft: '4px solid #ef4444', borderRadius: '4px' }}>
+            <div style={{ padding: '15px', background: 'var(--accent-red-bg)', borderLeft: '4px solid var(--accent-red)', borderRadius: '4px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <strong style={{ color: '#ef4444' }}>ALERTES EN ATTENTE</strong>
+                <strong style={{ color: 'var(--accent-red)' }}>ALERTES EN ATTENTE</strong>
               </div>
-              <div style={{ color: '#d1d5db', fontSize: '14px' }}>Consultez le centre d'alertes pour vérifier les détections récentes.</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Consultez le centre d'alertes pour vérifier les détections récentes.</div>
               <div style={{ marginTop: '10px' }}><Link to="/alerts" className="sensor-link-btn">Centre d'alertes →</Link></div>
             </div>
           </div>
