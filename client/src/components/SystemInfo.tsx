@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAppConfig } from "../hooks/useAppConfig";
+import { useAuth } from "../hooks/useAuth";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -167,6 +168,8 @@ const POLL_INTERVAL = 5000;
 
 export default function SystemInfo() {
   const { config } = useAppConfig();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [data, setData] = useState<SystemInfoData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -296,13 +299,19 @@ export default function SystemInfo() {
             <div style={{ fontSize: '20px', fontWeight: 'bold', color: surveillanceActive ? '#22c55e' : '#ef4444', marginBottom: '20px' }}>
               {surveillanceActive ? 'ARMÉ (ACTIF)' : 'DÉSARMÉ (INACTIF)'}
             </div>
-            <button 
-              className={surveillanceActive ? "sensor-delete-btn sensor-delete-btn--danger sensor-delete-btn--xl" : "sensor-confirm-btn sensor-confirm-btn--xl"} 
-              style={{ width: '100%', padding: '15px', fontSize: '16px', fontWeight: 'bold' }}
-              onClick={handleArmClick}
-            >
-              {surveillanceActive ? "DÉSACTIVER LES ALARMES" : "ARMER LE SYSTÈME"}
-            </button>
+            {isAdmin ? (
+              <button 
+                className={surveillanceActive ? "sensor-delete-btn sensor-delete-btn--danger sensor-delete-btn--xl" : "sensor-confirm-btn sensor-confirm-btn--xl"} 
+                style={{ width: '100%', padding: '15px', fontSize: '16px', fontWeight: 'bold' }}
+                onClick={handleArmClick}
+              >
+                {surveillanceActive ? "DÉSACTIVER LES ALARMES" : "ARMER LE SYSTÈME"}
+              </button>
+            ) : (
+              <div style={{ fontSize: '13px', color: '#9ca3af', marginTop: '10px' }}>
+                Action réservée aux administrateurs
+              </div>
+            )}
           </div>
         </Card>
 

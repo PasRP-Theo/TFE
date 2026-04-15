@@ -49,6 +49,7 @@ function AppShell() {
   const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const location = useLocation();
 
   useEffect(() => {
@@ -98,12 +99,19 @@ function AppShell() {
     const removeOverlayListener = addMediaListener(overlayMedia, updateInstalledMode);
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
       removeStandaloneListener();
       removeOverlayListener();
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -316,9 +324,9 @@ function AppShell() {
 
           {config.showStatusPanel && (
             <div className="app-status-group">
-              <div className="app-status">
-                <span className="app-status-dot" />
-                EN LIGNE · LOCAL
+              <div className="app-status" style={{ color: isOnline ? undefined : '#ef4444' }}>
+                <span className="app-status-dot" style={{ background: isOnline ? undefined : '#ef4444', boxShadow: isOnline ? undefined : 'none' }} />
+                {isOnline ? 'EN LIGNE' : 'HORS LIGNE'}
               </div>
               {isInstalledMode && (
                 <div className="app-installed-badge">
