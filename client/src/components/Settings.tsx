@@ -4,7 +4,7 @@ import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from '../lib/api';
 import { isPushSubscribed, subscribeUserToPush, unsubscribeUserFromPush } from '../lib/push';
-import { useVirtualKeyboard } from "./VirtualKeyboard";
+import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
