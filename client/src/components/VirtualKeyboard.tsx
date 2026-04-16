@@ -1,8 +1,10 @@
-import React, { useState, createContext, useContext, useRef, useCallback, useEffect } from 'react';
+import React, { useState, createContext, useContext, useRef, useCallback, useEffect, Suspense } from 'react';
 import type { KeyboardReactInterface } from 'react-simple-keyboard';
-import Keyboard from 'react-simple-keyboard';
 import 'react-simple-keyboard/build/css/index.css';
 import './VirtualKeyboard.css';
+
+// Chargement asynchrone (Lazy Load) pour optimiser les performances et isoler les erreurs
+const Keyboard = React.lazy(() => import('react-simple-keyboard'));
 
 interface KeyboardContextType {
   showKeyboard: (
@@ -82,12 +84,14 @@ export const VirtualKeyboardProvider: React.FC<{ children: React.ReactNode }> = 
       {children}
       {isVisible && (
         <div className="keyboard-container">
-          <Keyboard
-            keyboardRef={r => (keyboardRef.current = r)}
-            layoutName={layoutName}
-            onChange={handleKeyboardChange}
-            onKeyPress={onKeyPress}
-          />
+          <Suspense fallback={<div style={{ padding: '20px', color: 'var(--text-primary)', textAlign: 'center' }}>Chargement du clavier...</div>}>
+            <Keyboard
+              keyboardRef={r => (keyboardRef.current = r)}
+              layoutName={layoutName}
+              onChange={handleKeyboardChange}
+              onKeyPress={onKeyPress}
+            />
+          </Suspense>
         </div>
       )}
     </KeyboardContext.Provider>
