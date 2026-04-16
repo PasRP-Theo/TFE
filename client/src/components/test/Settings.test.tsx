@@ -46,6 +46,20 @@ vi.mock('../../hooks/useAppearance', () => {
   };
 });
 
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // obsolète mais parfois appelé
+    removeListener: vi.fn(), // obsolète mais parfois appelé
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 describe('Settings Component', () => {
   it('affiche l\'onglet Général par défaut au montage', () => {
     render(<Settings />);

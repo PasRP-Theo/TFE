@@ -1,0 +1,22 @@
+# Règles globales pour l'assistant IA
+
+## Qualité du code et Linting
+- Le projet utilise **TypeScript**, **React**, et **ESLint**.
+- Ne génère JAMAIS de type `any`. Utilise toujours des interfaces ou des types stricts.
+- Ne modifie JAMAIS l'état de React avec des fonctions impures (ex: `Date.now()`, `Math.random()`) directement pendant la phase de rendu. Calcule ces valeurs en amont ou dans des `useEffect`.
+- Fais très attention aux caractères d'échappement dans les expressions régulières (Regex) pour éviter les erreurs `no-useless-escape` ou `Unterminated regular expression`.
+
+## Formatage et Complétude
+- Ne tronque **JAMAIS** les blocs de code, surtout au milieu d'une expression régulière ou d'une chaîne de caractères.
+- Vérifie toujours que la syntaxe est 100% valide avant de renvoyer la réponse.
+- Si tu fais un remplacement (diff), assure-toi que les lignes de contexte correspondent exactement au code existant.
+
+## Tests
+- Le projet utilise **Vitest**.
+- Assure-toi que les modifications proposées ne casseront pas les tests existants.
+- Pense toujours à **mocker les API du navigateur** manquantes dans l'environnement de test (jsdom/happy-dom), comme `window.matchMedia` ou `ResizeObserver`.
+- Si un composant utilise un contexte (ex: `useAuth`, `useAppConfig`), **enveloppe-le obligatoirement** avec un mock de son Provider (ou le Provider lui-même) lors du rendu dans les tests pour éviter les erreurs de type `useAuth doit etre dans <AuthProvider>`.
+- Si tu modifies une logique d'API ou de composant, réfléchis aux impacts sur les tests unitaires associés (ex: `api.test.ts`).
+
+## Architecture globale
+- Le projet est divisé en `client/` (Frontend Vite/React/PWA) et `server/` (Backend Node.js/Express).
