@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [dots,     setDots]     = useState('');
   const [time,     setTime]     = useState(new Date());
   const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -25,6 +27,21 @@ export default function LoginPage() {
     const t = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 400);
     return () => clearInterval(t);
   }, [loading]);
+
+  useEffect(() => {
+    if (!lockoutUntil) return;
+    const interval = setInterval(() => {
+      const secondsLeft = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (secondsLeft > 0) {
+        setLockoutSecondsLeft(secondsLeft);
+      } else {
+        setLockoutUntil(null);
+        setLockoutSecondsLeft(0);
+        setError('');
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil]);
 
   useEffect(() => {
     const isLocalPanel = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.localStorage.getItem('sentys:kiosk_mode') === 'true';
@@ -43,14 +60,23 @@ export default function LoginPage() {
   const locale = config.interfaceLanguage;
   const use12HourClock = config.timeFormat === '12h';
 
+  const isLockedOut = useMemo(() => lockoutUntil !== null && lockoutUntil > Date.now(), [lockoutUntil]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (isLockedOut) return;
     setError('');
     setLoading(true);
     try {
       await login(username, password);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur de connexion');
+      const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
+      setError(errorMessage);
+      if (errorMessage.includes('Trop de tentatives')) {
+        const lockoutEndsAt = Date.now() + 15 * 60 * 1000;
+        setLockoutUntil(lockoutEndsAt);
+        setLockoutSecondsLeft(15 * 60);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,6 +84,8 @@ export default function LoginPage() {
 
   const timeStr = time.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: use12HourClock });
   const dateStr = time.toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  const lockoutMinutes = Math.floor(lockoutSecondsLeft / 60);
+  const lockoutSeconds = String(lockoutSecondsLeft % 60).padStart(2, '0');
 
   return (
     <div className="lp-root">
@@ -123,6 +151,7 @@ export default function LoginPage() {
                   onChange={e => setUsername(e.target.value)}
                   placeholder="admin"
                   required
+                  disabled={loading || isLockedOut}
                   autoFocus
                   autoComplete="username"
                 />
@@ -139,20 +168,27 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••••••"
+                  disabled={loading || isLockedOut}
                   required
                   autoComplete="current-password"
                 />
               </div>
             </div>
 
-            {error && (
+            {isLockedOut ? (
+              <div className="lp-error">
+                <span>⚠</span>
+                <span>Trop de tentatives. Réessayez dans {lockoutMinutes}m {lockoutSeconds}s.</span>
+              </div>
+            ) : error && (
               <div className="lp-error">
                 <span>⚠</span><span>{error}</span>
               </div>
             )}
 
-            <button className="lp-btn" type="submit" disabled={loading}>
-              {loading ? `AUTHENTIFICATION${dots}` : '→ ACCÉDER AU SYSTÈME'}
+            <button className="lp-btn" type="submit" disabled={loading || isLockedOut}>
+              {loading ? `AUTHENTIFICATION${dots}` : 
+               isLockedOut ? 'SYSTÈME VERROUILLÉ' : '→ ACCÉDER AU SYSTÈME'}
             </button>
           </form>
         </div>

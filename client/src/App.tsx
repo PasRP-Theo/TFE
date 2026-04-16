@@ -201,6 +201,7 @@ function getSystemStatus(
   const [lockError, setLockError] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetInactivityTimer = useCallback(() => {
@@ -230,10 +231,14 @@ function getSystemStatus(
   useEffect(() => {
     if (!lockoutUntil) return;
     const interval = setInterval(() => {
-      if (Date.now() > lockoutUntil) {
+      const secondsLeft = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (secondsLeft > 0) {
+        setLockoutSecondsLeft(secondsLeft);
+      } else {
         setLockoutUntil(null);
         setAttempts(0);
         setLockError("");
+        setLockoutSecondsLeft(0);
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -279,8 +284,10 @@ function getSystemStatus(
           const newAttempts = attempts + 1;
           setAttempts(newAttempts);
           if (newAttempts >= 3) {
-            setLockoutUntil(new Date().getTime() + 60000);
-            setLockError("SYSTÈME BLOQUÉ (1 MIN)");
+            const lockoutEndsAt = new Date().getTime() + 60000;
+            setLockoutUntil(lockoutEndsAt);
+            setLockoutSecondsLeft(Math.ceil((lockoutEndsAt - Date.now()) / 1000));
+            setLockError("SYSTÈME BLOQUÉ");
               
               // Envoi immédiat de l'alerte de sécurité à l'administrateur
               const currentToken = window.localStorage.getItem('token');
@@ -342,7 +349,10 @@ function getSystemStatus(
               <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '30px' }}>
                 {[0, 1, 2, 3].map(i => <div key={i} style={{ width: '20px', height: '20px', borderRadius: '50%', background: enteredPin.length > i ? 'var(--accent-blue)' : 'transparent', border: '2px solid var(--accent-blue)', transition: 'all 0.2s' }} />)}
               </div>
-              {lockError && <div style={{ color: 'var(--accent-red)', marginBottom: '20px', fontSize: '12px', fontWeight: 'bold' }}>{lockError}</div>}
+              {lockError && <div style={{ color: 'var(--accent-red)', marginBottom: '20px', fontSize: '12px', fontWeight: 'bold' }}>
+                {lockError}
+                {isLockedOut && ` - Réessayez dans ${lockoutSecondsLeft} seconde${lockoutSecondsLeft > 1 ? 's' : ''}.`}
+              </div>}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', opacity: isLockedOut ? 0.5 : 1, pointerEvents: isLockedOut ? 'none' : 'auto' }}>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => <button key={num} onClick={() => handlePinPress(num.toString())} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '24px', padding: '20px 0', borderRadius: '8px', cursor: 'pointer' }}>{num}</button>)}
                 <button onClick={() => { setEnteredPin(""); setLockError(""); }} style={{ background: 'var(--accent-red-bg)', border: '1px solid var(--accent-red-border)', color: 'var(--accent-red)', fontSize: '20px', borderRadius: '8px', cursor: 'pointer' }}>C</button>
