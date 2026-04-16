@@ -137,7 +137,7 @@ function TabSettings() {
   }, [config]);
 
   useEffect(() => {
-    const checkPwa = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    const checkPwa = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true;
     setIsPwa(checkPwa);
 
     if (!checkPwa) {
@@ -954,11 +954,14 @@ function TabHelp() {
   const [showInstallHint, setShowInstallHint] = useState(false);
 
   const handleInstallClick = async () => {
-    const promptEvent = (window as any).deferredInstallPrompt;
+    const promptEvent = (window as { deferredInstallPrompt?: {
+      prompt: () => Promise<void>;
+      userChoice: Promise<unknown>;
+    } }).deferredInstallPrompt;
     if (promptEvent) {
       await promptEvent.prompt();
       await promptEvent.userChoice;
-      (window as any).deferredInstallPrompt = null;
+      (window as { deferredInstallPrompt?: unknown }).deferredInstallPrompt = null;
     } else {
       setShowInstallHint(true);
     }
