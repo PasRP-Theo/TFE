@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks/useAppearance";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
-import { apiUrl, readJsonResponse } from "../lib/api";
+import { apiUrl, readJsonResponse } from '../lib/api';
+import { isPushSubscribed, subscribeUserToPush, unsubscribeUserFromPush } from '../lib/push';
 
 function SettingsDropdown({
   value,
@@ -76,13 +77,14 @@ function SettingsDropdown({
   );
 }
 
-function SettingToggle({ label, description, defaultChecked = false, ...props }: {
-  label: string; description?: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void;
+function SettingToggle({ label, description, defaultChecked = false, disabled = false, ...props }: {
+  label: string; description?: string; defaultChecked?: boolean; checked?: boolean; onChange?: (checked: boolean) => void; disabled?: boolean;
 }) {
   const [internalChecked, setInternalChecked] = useState(defaultChecked);
   const checked = typeof props.checked === 'boolean' ? props.checked : internalChecked;
 
   function handleToggle() {
+    if (disabled) return;
     const nextValue = !checked;
     if (typeof props.checked !== 'boolean') {
       setInternalChecked(nextValue);
@@ -91,7 +93,7 @@ function SettingToggle({ label, description, defaultChecked = false, ...props }:
   }
 
   return (
-    <button type="button" className={`settings-row ${checked ? 'settings-row--active' : ''}`} onClick={handleToggle}>
+    <button type="button" className={`settings-row ${checked ? 'settings-row--active' : ''}`} onClick={handleToggle} disabled={disabled}>
       <div className="settings-row-text">
         <span className="settings-row-label">{label}</span>
         {description && <span className="settings-row-desc">{description}</span>}
@@ -124,10 +126,65 @@ function TabSettings() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [kioskPin, setKioskPin] = useState(() => window.localStorage.getItem('sentys:kiosk_pin') || '');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushSupport, setPushSupport] = useState(true);
+  const [pushLoading, setPushLoading] = useState(true);
+  const [pushError, setPushError] = useState('');
 
   useEffect(() => {
     setDraftConfig(config);
   }, [config]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setPushSupport(false);
+      setPushLoading(false);
+      return;
+    }
+    isPushSubscribed().then(subscribed => {
+      setPushSubscribed(subscribed);
+      setPushLoading(false);
+    });
+  }, []);
+
+  const handlePushToggle = async (checked: boolean) => {
+    setPushLoading(true);
+    setPushError('');
+    try {
+      if (checked) {
+        await subscribeUserToPush();
+        setPushSubscribed(true);
+      } else {
+        await unsubscribeUserFromPush();
+        setPushSubscribed(false);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setPushError(message);
+      setPushSubscribed(await isPushSubscribed()); // Re-check state
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const sendTestNotification = async () => {
+    setPushError('');
+    try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(apiUrl('/api/notifications/test'), {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Failed to send test notification');
+        }
+        alert('Notification de test envoyée ! Elle devrait arriver dans quelques secondes.');
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Erreur inconnue';
+        setPushError(message);
+    }
+  };
 
   function updateDraft(patch: Partial<typeof draftConfig>) {
     setDraftConfig((current) => ({ ...current, ...patch }));
@@ -527,6 +584,33 @@ function TabSettings() {
         </div>
         {alertsError && <div className="settings-msg settings-msg--error">⚠ {alertsError}</div>}
         {alertsSuccess && <div className="settings-msg settings-msg--success">✓ {alertsSuccess}</div>}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label">NOTIFICATIONS PUSH (US-16)</div>
+        {!pushSupport ? (
+          <div className="settings-msg settings-msg--error">
+            ⚠ Les notifications push ne sont pas supportées par ce navigateur ou cette connexion (HTTPS est requis).
+          </div>
+        ) : (
+          <>
+            <div className="settings-toggle-list">
+              <SettingToggle
+                label="Recevoir les alertes critiques sur cet appareil"
+                description="Vous recevrez une notification même si l'application est fermée."
+                checked={pushSubscribed}
+                onChange={handlePushToggle}
+                disabled={pushLoading}
+              />
+            </div>
+            {pushError && <div className="settings-msg settings-msg--error">⚠ {pushError}</div>}
+            {pushSubscribed && (
+              <div style={{ marginTop: '16px' }}>
+                <button className="sensor-link-btn" onClick={sendTestNotification}>Envoyer une notification de test</button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="settings-section">
