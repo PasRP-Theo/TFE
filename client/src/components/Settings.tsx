@@ -4,6 +4,7 @@ import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from '../lib/api';
 import { isPushSubscribed, subscribeUserToPush, unsubscribeUserFromPush } from '../lib/push';
+import { useVirtualKeyboard } from "./VirtualKeyboard";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -111,6 +112,7 @@ function SettingToggle({ label, description, defaultChecked = false, disabled = 
 }
 
 function TabSettings() {
+  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const { settings, updateSettings, resetSettings } = useAppearance();
   const { token, logout } = useAuth();
   const { config, updateConfig } = useAppConfig();
@@ -336,15 +338,15 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Titre principal</span>
-            <input className="sensor-input" type="text" value={draftConfig.appName} onChange={event => updateDraft({ appName: event.target.value })} />
+            <input className="sensor-input" type="text" value={draftConfig.appName} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appName, (value) => updateDraft({ appName: value }))} onChange={event => updateDraft({ appName: event.target.value })} />
           </label>
           <label className="settings-field">
             <span className="settings-field-label">Sous-titre</span>
-            <input className="sensor-input" type="text" value={draftConfig.appSubtitle} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
+            <input className="sensor-input" type="text" value={draftConfig.appSubtitle} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appSubtitle, (value) => updateDraft({ appSubtitle: value }))} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
           </label>
           <label className="settings-field settings-field--wide">
             <span className="settings-field-label">Message d’accueil login</span>
-            <input className="sensor-input" type="text" value={draftConfig.loginMessage} onChange={event => updateDraft({ loginMessage: event.target.value })} />
+            <input className="sensor-input" type="text" value={draftConfig.loginMessage} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.loginMessage, (value) => updateDraft({ loginMessage: value }))} onChange={event => updateDraft({ loginMessage: event.target.value })} />
           </label>
           <div className="settings-field">
             <span className="settings-field-label">Langue</span>
@@ -508,6 +510,19 @@ function TabSettings() {
             checked={draftConfig.showStatusPanel}
             onChange={(checked) => updateDraft({ showStatusPanel: checked })}
           />
+          <SettingToggle
+            label="Utiliser le clavier virtuel à l'écran"
+            description="Affiche un clavier pour les champs de saisie. Utile pour les écrans tactiles."
+            checked={isKeyboardEnabled}
+            onChange={(checked) => {
+              if (checked) {
+                window.localStorage.setItem('sentys:virtual_keyboard', 'true');
+              } else {
+                window.localStorage.removeItem('sentys:virtual_keyboard');
+              }
+              window.location.reload();
+            }}
+          />
         </div>
         {displayError && <div className="settings-msg settings-msg--error">⚠ {displayError}</div>}
         {displaySuccess && <div className="settings-msg settings-msg--success">✓ {displaySuccess}</div>}
@@ -523,12 +538,12 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Rafraîchissement de la grille</span>
-            <input className="sensor-input" type="number" min="2" max="15" value={draftConfig.cameraRefreshSeconds} onChange={event => updateDraft({ cameraRefreshSeconds: Number(event.target.value) || 2 })} />
+            <input className="sensor-input" type="number" min="2" max="15" value={draftConfig.cameraRefreshSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraRefreshSeconds), (value) => updateDraft({ cameraRefreshSeconds: Number(value) || 2 }))} onChange={event => updateDraft({ cameraRefreshSeconds: Number(event.target.value) || 2 })} />
             <span className="settings-field-hint">Secondes entre deux synchronisations de la liste des caméras.</span>
           </label>
           <label className="settings-field">
             <span className="settings-field-label">Intervalle découverte nœuds / ESP32</span>
-            <input className="sensor-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
+            <input className="sensor-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraDiscoveryIntervalSeconds), (value) => updateDraft({ cameraDiscoveryIntervalSeconds: Number(value) || 3 }))} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
             <span className="settings-field-hint">Secondes entre deux rafraîchissements dans le panneau d’ajout caméra.</span>
           </label>
           <div className="settings-field">
@@ -639,7 +654,7 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <input className="sensor-input" type="password" maxLength={4} placeholder="Laisser vide pour désactiver" value={kioskPin} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} autoComplete="new-password" />
+            <input className="sensor-input" type="password" maxLength={4} placeholder="Laisser vide pour désactiver" value={kioskPin} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(kioskPin, (value) => setKioskPin(value.replace(/\D/g, '')))} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} autoComplete="new-password" />
             <span className="settings-field-hint">Ce code protègera l'armement du système et le déverrouillage de l'écran.</span>
           </label>
         </div>
@@ -706,6 +721,7 @@ interface User {
 }
 
 function TabUsers() {
+  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const { token, user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -838,8 +854,8 @@ function TabUsers() {
 
         {showAdd && (
           <div className="sensor-add-form settings-add-form">
-            <input className="sensor-input" type="text" placeholder="Identifiant" value={newUsername} onChange={event => setNewUsername(event.target.value)} autoFocus />
-            <input className="sensor-input" type="text" placeholder="Mot de passe" value={newPass} onChange={event => setNewPass(event.target.value)} />
+            <input className="sensor-input" type="text" placeholder="Identifiant" value={newUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newUsername, setNewUsername)} onChange={event => setNewUsername(event.target.value)} autoFocus />
+            <input className="sensor-input" type="text" placeholder="Mot de passe" value={newPass} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newPass, setNewPass)} onChange={event => setNewPass(event.target.value)} />
             <div style={{ flex: 1 }}>
               <SettingsDropdown
                 value={newRole}
@@ -940,8 +956,8 @@ function TabUsers() {
           <div className="settings-modal-card settings-modal-card--form" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title">MODIFIER LE COMPTE</div>
             <div className="settings-modal-form">
-              <input className="sensor-input" type="text" value={editUsername} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
-              <input className="sensor-input" type="password" value={editPassword} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
+              <input className="sensor-input" type="text" value={editUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editUsername, setEditUsername)} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
+              <input className="sensor-input" type="password" value={editPassword} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editPassword, setEditPassword)} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
             </div>
             <div className="settings-modal-warning">Le mot de passe initial root/root devient inactif dès que tu modifies ce compte bootstrap.</div>
             <div className="settings-modal-actions">

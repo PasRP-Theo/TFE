@@ -15,7 +15,8 @@
 - Le projet utilise **Vitest**.
 - Assure-toi que les modifications proposées ne casseront pas les tests existants.
 - Pense toujours à **mocker les API du navigateur** manquantes dans l'environnement de test (jsdom/happy-dom), comme `window.matchMedia` ou `ResizeObserver`.
-- Si un composant utilise un contexte (ex: `useAuth`, `useAppConfig`), **enveloppe-le obligatoirement** avec un mock de son Provider (ou le Provider lui-même) lors du rendu dans les tests pour éviter les erreurs de type `useAuth doit etre dans <AuthProvider>`.
+- Si un composant utilise un hook de contexte (`useAuth`, `useAppConfig`, `useAppearance`), **mocke toujours ce hook** avec `vi.mock` en haut du fichier de test. Assure-toi de renvoyer un objet contenant *toutes* les propriétés utilisées par le composant (ex: `token`, `user`, `logout`, `config`).
+- Si tu modifies la structure d'un type (ex: passer de `user.email` à `user.username`), **pense à mettre à jour les mocks correspondants** dans TOUS les fichiers de test (`.test.tsx`) pour éviter des propriétés manquantes.
 - Si tu modifies une logique d'API ou de composant, réfléchis aux impacts sur les tests unitaires associés (ex: `api.test.ts`).
 
 ## Architecture globale

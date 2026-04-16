@@ -12,6 +12,8 @@ import AlertsPage  from './components/AlertsPage';
 import BrandLogo from './components/BrandLogo.tsx';
 import { registerSW } from 'virtual:pwa-register';
 import { apiUrl, readJsonResponse } from './lib/api';
+import { KioskAuthHandler } from './components/KioskAuthHandler.tsx';
+import { VirtualKeyboardProvider } from './components/VirtualKeyboard.tsx';
 import './App.css';
 
 // ── Enregistrement de la PWA (Service Worker) ──────────────
@@ -484,8 +486,11 @@ export default function App() {
   return (
     <AppConfigProvider>
       <AuthProvider>
+        <KioskAuthHandler />
         <AppearanceProvider>
-          <AppShell />
+          <VirtualKeyboardProvider>
+            <AppShell />
+          </VirtualKeyboardProvider>
         </AppearanceProvider>
       </AuthProvider>
     </AppConfigProvider>
