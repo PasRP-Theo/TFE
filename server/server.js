@@ -34,7 +34,10 @@ app.use(express.json());
 
 // ── Rate limiting ──────────────────────────────────────────
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 10,
+  windowMs: 15 * 60 * 1000,
+  // En développement, on peut être plus permissif pour éviter les blocages dus au hot-reload.
+  // En production, la limite stricte est une bonne pratique de sécurité.
+  max: process.env.NODE_ENV === 'development' ? 50 : 10,
   message: { error: "Trop de tentatives, reessayez dans 15 minutes." },
   standardHeaders: true, legacyHeaders: false,
 });

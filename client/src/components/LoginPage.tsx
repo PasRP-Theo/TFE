@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false);
   const [dots,     setDots]     = useState('');
   const [time,     setTime]     = useState(new Date());
-  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
+  const autoLoginAttempted = useRef(false);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
 
@@ -44,18 +44,20 @@ export default function LoginPage() {
   }, [lockoutUntil]);
 
   useEffect(() => {
-    const isLocalPanel = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.localStorage.getItem('sentys:kiosk_mode') === 'true';
-    
-    if (isLocalPanel && !autoLoginAttempted) {
-      setAutoLoginAttempted(true);
+    const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
+
+    // On tente l'auto-login en mode Kiosk SEULEMENT si le compte bootstrap par défaut est actif
+    if (isKioskMode && config.defaultAdminActive && !autoLoginAttempted.current) {
+      autoLoginAttempted.current = true;
       setLoading(true);
-      login('admin', 'admin123').catch(() => {
-        console.warn("Auto-login Kiosk échoué.");
-        setError("Auto-login échoué (mot de passe admin123 invalide ?).");
+      // Utilise les identifiants par défaut du compte bootstrap (ex: root/root)
+      login(config.defaultAdminUsername, 'root').catch(() => {
+        console.warn("Auto-login Kiosk avec le compte bootstrap a échoué.");
+        setError("L'auto-login Kiosk a échoué. Le compte 'root' est peut-être désactivé.");
         setLoading(false);
       });
     }
-  }, [autoLoginAttempted, login]);
+  }, [login, config.defaultAdminActive, config.defaultAdminUsername]);
 
   const locale = config.interfaceLanguage;
   const use12HourClock = config.timeFormat === '12h';

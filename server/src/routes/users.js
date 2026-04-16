@@ -21,7 +21,7 @@ async function getAppSettings(client = pool) {
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, username, role, created_at FROM users ORDER BY created_at'
+      'SELECT id, email, role, created_at FROM users ORDER BY created_at'
     );
     res.json(rows);
   } catch {
@@ -31,8 +31,8 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 
 // POST /api/users — creation depuis le panel admin
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
-  const { username, password, role = 'user' } = req.body;
-  if (!username || !password)
+  const { email, password, role = 'user' } = req.body;
+  if (!email || !password)
     return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
   if (password.length < 6)
     return res.status(400).json({ error: 'Mot de passe trop court (6 caracteres min)' });
@@ -41,8 +41,8 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
-      'INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role, created_at',
-      [username.toLowerCase().trim(), hash, role]
+      'INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING id, email, role, created_at',
+      [email.toLowerCase().trim(), hash, role]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -56,20 +56,20 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   const userId = Number(req.params.id);
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Identifiant invalide' });
 
-  const nextUsername = typeof req.body.username === 'string' ? req.body.username.toLowerCase().trim() : undefined;
+  const nextEmail = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : undefined;
   const nextPassword = typeof req.body.password === 'string' ? req.body.password : undefined;
   const nextRole = typeof req.body.role === 'string' ? req.body.role : undefined;
 
   if (nextRole !== undefined && !['user', 'admin'].includes(nextRole))
     return res.status(400).json({ error: 'Role invalide' });
-  if (nextUsername !== undefined && !nextUsername)
+  if (nextEmail !== undefined && !nextEmail)
     return res.status(400).json({ error: 'Identifiant requis' });
   if (nextPassword !== undefined && nextPassword.length > 0 && nextPassword.length < 6)
     return res.status(400).json({ error: 'Mot de passe trop court (6 caracteres min)' });
 
   try {
     const currentResult = await pool.query(
-      'SELECT id, username, role FROM users WHERE id = $1',
+      'SELECT id, email, role FROM users WHERE id = $1',
       [userId]
     );
     const currentUser = currentResult.rows[0];
@@ -85,9 +85,9 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     const updates = [];
     const values = [];
 
-    if (nextUsername !== undefined && nextUsername !== currentUser.username) {
-      values.push(nextUsername);
-      updates.push(`username = $${values.length}`);
+    if (nextEmail !== undefined && nextEmail !== currentUser.email) {
+      values.push(nextEmail);
+      updates.push(`email = $${values.length}`);
     }
 
     if (nextRole !== undefined && nextRole !== currentUser.role) {
@@ -103,7 +103,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
 
     if (updates.length === 0) {
       const { rows } = await pool.query(
-        'SELECT id, username, role, created_at FROM users WHERE id = $1',
+        'SELECT id, email, role, created_at FROM users WHERE id = $1',
         [userId]
       );
       return res.json(rows[0]);
@@ -111,14 +111,14 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
 
     values.push(userId);
     const { rows } = await pool.query(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING id, username, role, created_at`,
+      `UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING id, email, role, created_at`,
       values
     );
 
     const settings = await getAppSettings();
     const editedBootstrapAdmin = settings.bootstrap_admin_user_id === userId
       && settings.default_admin_active
-      && ((nextUsername !== undefined && nextUsername !== 'root') || (nextPassword !== undefined && nextPassword.length > 0));
+      && ((nextEmail !== undefined && nextEmail !== 'root') || (nextPassword !== undefined && nextPassword.length > 0));
 
     if (editedBootstrapAdmin) {
       await pool.query(

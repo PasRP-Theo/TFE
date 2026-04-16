@@ -634,7 +634,7 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <input className="sensor-input" type="password" maxLength={4} placeholder="Laisser vide pour désactiver" value={kioskPin} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} />
+            <input className="sensor-input" type="password" maxLength={4} placeholder="Laisser vide pour désactiver" value={kioskPin} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} autoComplete="new-password" />
             <span className="settings-field-hint">Ce code protègera l'armement du système et le déverrouillage de l'écran.</span>
           </label>
         </div>
@@ -935,8 +935,8 @@ function TabUsers() {
           <div className="settings-modal-card settings-modal-card--form" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title">MODIFIER LE COMPTE</div>
             <div className="settings-modal-form">
-              <input className="sensor-input" type="text" value={editEmail} onChange={event => setEditEmail(event.target.value)} placeholder="Identifiant" />
-              <input className="sensor-input" type="password" value={editPassword} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" />
+              <input className="sensor-input" type="text" value={editEmail} onChange={event => setEditEmail(event.target.value)} placeholder="Identifiant" autoComplete="off" />
+              <input className="sensor-input" type="password" value={editPassword} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
             </div>
             <div className="settings-modal-warning">Le mot de passe initial root/root devient inactif dès que tu modifies ce compte bootstrap.</div>
             <div className="settings-modal-actions">

@@ -444,7 +444,11 @@ function getSystemStatus(
             {settings.theme === 'dark' ? '☀️' : '🌙'}
           </button>
 
-          <button className="app-logout-btn" onClick={logout} title="Se déconnecter">⏻</button>
+          <button className="app-logout-btn" onClick={() => {
+            logout();
+            window.localStorage.removeItem('token');
+            window.location.reload();
+          }} title="Se déconnecter">⏻</button>
         </div>
       </header>
 
