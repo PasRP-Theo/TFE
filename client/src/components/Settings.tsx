@@ -641,7 +641,7 @@ function TabSettings() {
         <div className="settings-toggle-list">
           <SettingToggle
             label="Activer le Mode Kiosk sur cet appareil"
-            description="Masque l'onglet Paramètres et verrouille automatiquement l'écran après 5 minutes d'inactivité."
+            description="Connexion automatique sans mot de passe, masque l'onglet Paramètres et verrouille l'écran après 5 minutes d'inactivité."
             checked={window.localStorage.getItem('sentys:kiosk_mode') === 'true'}
             onChange={(checked) => {
               if (checked) window.localStorage.setItem('sentys:kiosk_mode', 'true');
@@ -695,7 +695,7 @@ function TabSettings() {
 
 interface User {
   id: number;
-  email: string;
+  username: string;
   role: string;
   created_at: string;
 }
@@ -705,7 +705,7 @@ function TabUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
+  const [newUsername, setNewUsername] = useState("");
   const [newPass, setNewPass] = useState("");
   const [newRole, setNewRole] = useState("user");
   const [error, setError] = useState("");
@@ -714,7 +714,7 @@ function TabUsers() {
   const [deleteUserTarget, setDeleteUserTarget] = useState<User | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editEmail, setEditEmail] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [editPassword, setEditPassword] = useState('');
 
   const authHeaders = useMemo(() => token ? { Authorization: `Bearer ${token}` } : undefined, [token]);
@@ -740,17 +740,17 @@ function TabUsers() {
   async function createUser() {
     setError("");
     setSuccess("");
-    if (!newEmail || !newPass) { setError("Email et mot de passe requis"); return; }
+    if (!newUsername || !newPass) { setError("Identifiant et mot de passe requis"); return; }
     try {
       const res = await fetch(apiUrl('/api/users'), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(authHeaders || {}) },
-        body: JSON.stringify({ email: newEmail, password: newPass, role: newRole }),
+        body: JSON.stringify({ username: newUsername, password: newPass, role: newRole }),
       });
-      const data = await readJsonResponse<{ error?: string; email: string }>(res);
+      const data = await readJsonResponse<{ error?: string; username: string }>(res);
       if (!res.ok) { setError(data.error || 'Erreur serveur'); return; }
-      setSuccess(`Utilisateur ${data.email} créé !`);
-      setNewEmail("");
+      setSuccess(`Utilisateur ${data.username} créé !`);
+      setNewUsername("");
       setNewPass("");
       setNewRole('user');
       setShowAdd(false);
@@ -786,7 +786,7 @@ function TabUsers() {
       const data = await readJsonResponse<User & { error?: string }>(res);
       if (!res.ok) throw new Error(data.error || 'Erreur mise à jour rôle');
       setUsers(prev => prev.map(entry => entry.id === confirmUser.id ? data : entry));
-      setSuccess(`Rôle de ${confirmUser.email} changé en ${nextRole.toUpperCase()}`);
+      setSuccess(`Rôle de ${confirmUser.username} changé en ${nextRole.toUpperCase()}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur mise à jour rôle');
     } finally {
@@ -796,7 +796,7 @@ function TabUsers() {
 
   function startEditUser(target: User) {
     setEditingUser(target);
-    setEditEmail(target.email);
+    setEditUsername(target.username);
     setEditPassword('');
     setError('');
     setSuccess('');
@@ -808,12 +808,12 @@ function TabUsers() {
       const res = await fetch(apiUrl(`/api/users/${editingUser.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...(authHeaders || {}) },
-        body: JSON.stringify({ email: editEmail, password: editPassword || undefined }),
+        body: JSON.stringify({ username: editUsername, password: editPassword || undefined }),
       });
       const data = await readJsonResponse<User & { error?: string }>(res);
       if (!res.ok) throw new Error(data.error || 'Erreur mise à jour utilisateur');
       setUsers(prev => prev.map(entry => entry.id === editingUser.id ? data : entry));
-      setSuccess(`Compte ${data.email} mis à jour.`);
+      setSuccess(`Compte ${data.username} mis à jour.`);
       setEditingUser(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur mise à jour utilisateur');
@@ -833,7 +833,7 @@ function TabUsers() {
 
         {showAdd && (
           <div className="sensor-add-form settings-add-form">
-            <input className="sensor-input" type="email" placeholder="Email" value={newEmail} onChange={event => setNewEmail(event.target.value)} autoFocus />
+            <input className="sensor-input" type="text" placeholder="Identifiant" value={newUsername} onChange={event => setNewUsername(event.target.value)} autoFocus />
             <input className="sensor-input" type="text" placeholder="Mot de passe" value={newPass} onChange={event => setNewPass(event.target.value)} />
             <div style={{ flex: 1 }}>
               <SettingsDropdown
@@ -859,7 +859,7 @@ function TabUsers() {
           <table className="sensor-table settings-users-table">
             <thead>
               <tr>
-                <th className="sensor-th">EMAIL</th>
+                <th className="sensor-th">IDENTIFIANT</th>
                 <th className="sensor-th">RÔLE</th>
                 <th className="sensor-th">CRÉÉ LE</th>
                 <th className="sensor-th">COMPTE</th>
@@ -872,7 +872,7 @@ function TabUsers() {
               )}
               {users.map((entry, index) => (
                 <tr key={entry.id} className={index % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
-                  <td className="sensor-td"><span className="sensor-name">{entry.email}</span></td>
+                  <td className="sensor-td"><span className="sensor-name">{entry.username}</span></td>
                   <td className="sensor-td">
                     <button className="sensor-status-btn" onClick={() => setConfirmUser(entry)} title="Changer le rôle">
                       <span className={`sensor-badge ${entry.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
@@ -898,7 +898,7 @@ function TabUsers() {
         <div className="settings-modal-overlay" onClick={() => setConfirmUser(null)}>
           <div className="settings-modal-card" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title">MODIFIER LE RÔLE</div>
-            <div className="settings-modal-user">Utilisateur : <strong>{confirmUser.email}</strong></div>
+            <div className="settings-modal-user">Utilisateur : <strong>{confirmUser.username}</strong></div>
             <div className="settings-modal-roles">
               <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}><span className="sensor-badge-dot" />{confirmUser.role.toUpperCase()}</span>
               <span className="settings-role-arrow">→</span>
@@ -917,7 +917,7 @@ function TabUsers() {
         <div className="settings-modal-overlay" onClick={() => { setDeleteUserTarget(null); setDeleteError(''); }}>
           <div className="settings-modal-card settings-modal-card--danger" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER L'UTILISATEUR</div>
-            <div className="settings-modal-user">Utilisateur : <strong>{deleteUserTarget.email}</strong></div>
+            <div className="settings-modal-user">Utilisateur : <strong>{deleteUserTarget.username}</strong></div>
             <div className="settings-modal-warning settings-modal-warning--danger">
               Cette suppression est immédiate. L'utilisateur perdra définitivement l'accès à l'application.
             </div>
@@ -935,7 +935,7 @@ function TabUsers() {
           <div className="settings-modal-card settings-modal-card--form" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title">MODIFIER LE COMPTE</div>
             <div className="settings-modal-form">
-              <input className="sensor-input" type="text" value={editEmail} onChange={event => setEditEmail(event.target.value)} placeholder="Identifiant" autoComplete="off" />
+              <input className="sensor-input" type="text" value={editUsername} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
               <input className="sensor-input" type="password" value={editPassword} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
             </div>
             <div className="settings-modal-warning">Le mot de passe initial root/root devient inactif dès que tu modifies ce compte bootstrap.</div>

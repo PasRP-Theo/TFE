@@ -31,6 +31,7 @@ app.use(cors({
 }));
 app.options("/{*path}", cors());
 app.use(express.json());
+app.set('trust proxy', 'loopback');
 
 // ── Rate limiting ──────────────────────────────────────────
 const loginLimiter = rateLimit({
@@ -61,8 +62,8 @@ function getRequestUser(req) {
 
 // ── Auth ───────────────────────────────────────────────────
 app.post("/auth/register", async (req, res) => {
-  const { email, password, role = "user" } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
+  const { username, password, role = "user" } = req.body;
+  if (!username || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
   if (password.length < 6) return res.status(400).json({ error: "Mot de passe trop court (6 caracteres min)" });
   try {
     const existingUserResult = await pool.query('SELECT COUNT(*)::int AS count FROM users');
@@ -75,8 +76,8 @@ app.post("/auth/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
-      "INSERT INTO users (email, password, role) VALUES ($1,$2,$3) RETURNING id, email, role",
-      [email.toLowerCase().trim(), hash, hasUsers ? role : 'admin']
+      "INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role",
+      [username.toLowerCase().trim(), hash, hasUsers ? role : 'admin']
     );
     res.status(201).json({ message: "Utilisateur cree", user: rows[0] });
   } catch (err) {
@@ -88,18 +89,46 @@ app.post("/auth/register", async (req, res) => {
 
 app.post("/auth/login", loginLimiter, async (req, res) => {
   const { username, password } = req.body;
+
+  // Kiosk mode auto-login: if username is 'kiosk', no password is provided,
+  // and the request comes from localhost, log in as the primary admin.
+  const isKioskLogin = username.toLowerCase().trim() === 'kiosk' && !password;
+  const isLocal = req.ip === '127.0.0.1' || req.ip === '::1';
+
+  if (isKioskLogin && isLocal) {
+    try {
+      // Find the primary admin user (e.g., 'root' or the first one created)
+      const { rows } = await pool.query("SELECT * FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1");
+      const user = rows[0];
+
+      if (!user) {
+        return res.status(401).json({ error: "Aucun compte administrateur disponible pour le mode Kiosk." });
+      }
+
+      const token = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+      return res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+    } catch (err) {
+      console.error('[KIOSK LOGIN]', err);
+      return res.status(500).json({ error: "Erreur serveur lors de la connexion Kiosk" });
+    }
+  }
+
   if (!username || !password) return res.status(400).json({ error: "Champs manquants" });
   try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [username.toLowerCase().trim()]);
+    const { rows } = await pool.query("SELECT * FROM users WHERE username = $1", [username.toLowerCase().trim()]);
     const user  = rows[0];
     const valid = user ? await bcrypt.compare(password, user.password) : false;
     if (!valid) return res.status(401).json({ error: "Identifiant ou mot de passe incorrect" });
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
   } catch (err) { console.error(err); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
@@ -108,7 +137,7 @@ app.get("/auth/me", async (req, res) => {
   if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "Non authentifie" });
   try {
     const decoded = jwt.verify(header.slice(7), JWT_SECRET);
-    const { rows } = await pool.query("SELECT id, email, role FROM users WHERE id = $1", [decoded.id]);
+    const { rows } = await pool.query("SELECT id, username, role FROM users WHERE id = $1", [decoded.id]);
     if (!rows[0]) return res.status(404).json({ error: "Introuvable" });
     res.json({ user: rows[0] });
   } catch { res.status(401).json({ error: "Token invalide ou expire" }); }

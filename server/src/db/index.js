@@ -19,11 +19,18 @@ export async function initDB() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id         SERIAL PRIMARY KEY,
-        email      VARCHAR(255) UNIQUE NOT NULL,
+        username   VARCHAR(255) UNIQUE NOT NULL,
         password   VARCHAR(255) NOT NULL,
         role       VARCHAR(20)  DEFAULT 'user',
         created_at TIMESTAMP    DEFAULT NOW()
       );
+
+      DO $$
+      BEGIN
+        IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' and column_name='email') THEN
+          ALTER TABLE users RENAME COLUMN email TO username;
+        END IF;
+      END $$;
 
       CREATE TABLE IF NOT EXISTS app_settings (
         id                      SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -206,7 +213,7 @@ export async function initDB() {
     if (userCount === 0) {
       const passwordHash = await bcrypt.hash('root', 12);
       const { rows } = await client.query(
-        `INSERT INTO users (email, password, role)
+        `INSERT INTO users (username, password, role)
          VALUES ($1, $2, 'admin')
          RETURNING id`,
         ['root', passwordHash]
