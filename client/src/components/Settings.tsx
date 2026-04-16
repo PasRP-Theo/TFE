@@ -5,6 +5,11 @@ import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from '../lib/api';
 import { isPushSubscribed, subscribeUserToPush, unsubscribeUserFromPush } from '../lib/push';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 function SettingsDropdown({
   value,
   options,
@@ -954,14 +959,11 @@ function TabHelp() {
   const [showInstallHint, setShowInstallHint] = useState(false);
 
   const handleInstallClick = async () => {
-    const promptEvent = (window as { deferredInstallPrompt?: {
-      prompt: () => Promise<void>;
-      userChoice: Promise<unknown>;
-    } }).deferredInstallPrompt;
+    const promptEvent = (window as { deferredInstallPrompt?: BeforeInstallPromptEvent }).deferredInstallPrompt;
     if (promptEvent) {
       await promptEvent.prompt();
       await promptEvent.userChoice;
-      (window as { deferredInstallPrompt?: unknown }).deferredInstallPrompt = null;
+      (window as { deferredInstallPrompt?: BeforeInstallPromptEvent | null }).deferredInstallPrompt = null;
     } else {
       setShowInstallHint(true);
     }

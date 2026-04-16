@@ -24,6 +24,13 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
+interface BatteryManager extends EventTarget {
+  readonly charging: boolean;
+  readonly chargingTime: number;
+  readonly dischargingTime: number;
+  readonly level: number;
+}
+
 // ── Route protégée par rôle ────────────────────────────────
 function AdminRoute({ 
   children, 
@@ -92,11 +99,11 @@ function getSystemStatus(
     const handleBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as BeforeInstallPromptEvent;
       // On laisse le navigateur libre d'afficher son pop-up natif automatique
-      (window as any).deferredInstallPrompt = promptEvent;
+      (window as { deferredInstallPrompt?: BeforeInstallPromptEvent }).deferredInstallPrompt = promptEvent;
     };
 
     const handleAppInstalled = () => {
-      (window as any).deferredInstallPrompt = null;
+      (window as { deferredInstallPrompt?: BeforeInstallPromptEvent | null }).deferredInstallPrompt = null;
       refreshInstallState();
     };
 
@@ -135,7 +142,7 @@ function getSystemStatus(
   }, []);
 
   useEffect(() => {
-    let navBattery: any;
+    let navBattery: BatteryManager | null = null;
     const updateBattery = () => {
       if (navBattery) {
         setBatteryInfo({
@@ -146,7 +153,7 @@ function getSystemStatus(
     };
 
     if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((b: any) => {
+      (navigator as Navigator & { getBattery: () => Promise<BatteryManager> }).getBattery().then((b: BatteryManager) => {
         navBattery = b;
         updateBattery();
         b.addEventListener('chargingchange', updateBattery);
@@ -286,7 +293,7 @@ function getSystemStatus(
           if (newAttempts >= 3) {
             const lockoutEndsAt = new Date().getTime() + 60000;
             setLockoutUntil(lockoutEndsAt);
-            setLockoutSecondsLeft(Math.ceil((lockoutEndsAt - Date.now()) / 1000));
+            setLockoutSecondsLeft(60);
             setLockError("SYSTÈME BLOQUÉ");
               
               // Envoi immédiat de l'alerte de sécurité à l'administrateur
@@ -428,7 +435,7 @@ function getSystemStatus(
           )}
 
           <div className="app-user">
-            <span className="app-user-email">{isKioskMode && kioskActiveRole === 'guest' ? 'Mode Invité' : user.email}</span>
+            <span className="app-user-name">{isKioskMode && kioskActiveRole === 'guest' ? 'Mode Invité' : user.username}</span>
             <span className={`app-user-role ${isAdmin && (!isKioskMode || kioskActiveRole === 'admin') ? '' : 'app-user-role--user'}`}>
               {isKioskMode && kioskActiveRole === 'guest' ? 'GUEST' : (isAdmin ? 'ADMIN' : 'USER')}
             </span>
