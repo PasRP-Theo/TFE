@@ -16,6 +16,16 @@ vi.mock('../../hooks/useAppConfig', () => {
   };
 });
 
+// On simule le hook useAuth car SystemInfo vérifie le rôle admin
+vi.mock('../../hooks/useAuth', () => {
+  return {
+    useAuth: () => ({
+      user: { id: 1, username: 'admin', role: 'admin' },
+      token: 'fake-token'
+    })
+  };
+});
+
 describe('SystemInfo Component', () => {
   beforeEach(() => {
     global.fetch = vi.fn(() =>
