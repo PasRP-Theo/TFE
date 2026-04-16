@@ -128,6 +128,7 @@ function TabSettings() {
   const [kioskPin, setKioskPin] = useState(() => window.localStorage.getItem('sentys:kiosk_pin') || '');
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushSupport, setPushSupport] = useState(true);
+  const [isPwa, setIsPwa] = useState(true);
   const [pushLoading, setPushLoading] = useState(true);
   const [pushError, setPushError] = useState('');
 
@@ -136,6 +137,14 @@ function TabSettings() {
   }, [config]);
 
   useEffect(() => {
+    const checkPwa = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    setIsPwa(checkPwa);
+
+    if (!checkPwa) {
+      setPushLoading(false);
+      return;
+    }
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       setPushSupport(false);
       setPushLoading(false);
@@ -588,7 +597,11 @@ function TabSettings() {
 
       <div className="settings-section">
         <div className="settings-section-label">NOTIFICATIONS PUSH (US-16)</div>
-        {!pushSupport ? (
+        {!isPwa ? (
+          <div className="settings-msg settings-msg--error">
+            ⚠ Les notifications push sont uniquement disponibles lorsque l'application est installée (PWA). Veuillez installer l'application pour activer cette fonctionnalité.
+          </div>
+        ) : !pushSupport ? (
           <div className="settings-msg settings-msg--error">
             ⚠ Les notifications push ne sont pas supportées par ce navigateur ou cette connexion (HTTPS est requis).
           </div>
