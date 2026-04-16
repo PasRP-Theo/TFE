@@ -2,7 +2,7 @@ import React, { useState, createContext, useContext, useRef, useCallback, useEff
 import type { KeyboardReactInterface } from 'react-simple-keyboard';
 import Keyboard from 'react-simple-keyboard';
 import 'react-simple-keyboard/build/css/index.css';
-import '../styles/VirtualKeyboard.css';
+import './VirtualKeyboard.css';
 
 interface KeyboardContextType {
   showKeyboard: (
