@@ -43,6 +43,24 @@ function AdminRoute({
   return <>{children}</>;
 }
 
+function getSystemStatus(
+  isOnline: boolean,
+  pendingAlertsCount: number,
+  batteryInfo: { charging: boolean; level: number } | null
+): { color: string; text: string } {
+  if (!isOnline) {
+    return { color: 'var(--accent-amber)', text: 'INSTABLE' };
+  }
+  if (pendingAlertsCount > 0) {
+    return { color: 'var(--accent-red)', text: 'ALERTE / PANNE' };
+  }
+  if (batteryInfo && !batteryInfo.charging) {
+    const color = batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)';
+    return { color, text: `SUR BATTERIE (${batteryInfo.level}%)` };
+  }
+  return { color: '#22c55e', text: 'OK' };
+}
+
   function AppShell() {
   const { user, logout, loading } = useAuth();
   const { config } = useAppConfig();
@@ -355,18 +373,7 @@ function AdminRoute({
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin && (!isKioskMode || kioskActiveRole === 'admin') },
   ].filter(l => l.show);
 
-  let systemLedColor = '#22c55e'; // Vert : OK
-  let systemLedText = 'OK';
-  if (!isOnline) {
-    systemLedColor = 'var(--accent-amber)'; // Orange : Instable / Pas de réseau
-    systemLedText = 'INSTABLE';
-  } else if (pendingAlertsCount > 0) {
-    systemLedColor = 'var(--accent-red)'; // Rouge : Alerte / Panne
-    systemLedText = 'ALERTE / PANNE';
-    } else if (batteryInfo && !batteryInfo.charging) {
-      systemLedColor = batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)';
-      systemLedText = `SUR BATTERIE (${batteryInfo.level}%)`;
-  }
+  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, pendingAlertsCount, batteryInfo);
 
   return (
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
