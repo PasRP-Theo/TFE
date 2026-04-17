@@ -46,6 +46,17 @@ vi.mock('../../hooks/useAppearance', () => {
   };
 });
 
+vi.mock('../../hooks/useVirtualKeyboard', () => {
+  return {
+    useVirtualKeyboard: () => ({
+      showKeyboard: vi.fn(),
+      hideKeyboard: vi.fn(),
+      isKeyboardVisible: false,
+      isKeyboardEnabled: false,
+    })
+  };
+});
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation(query => ({
