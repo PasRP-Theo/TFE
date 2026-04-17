@@ -22,6 +22,17 @@ import { createAlert } from "./src/alerts/service.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+export async function logAudit(username, action, details, ip) {
+  try {
+    await pool.query(
+      "INSERT INTO audit_logs (username, action, details, ip_address) VALUES ($1, $2, $3, $4)",
+      [username, action, details, ip]
+    );
+  } catch (err) {
+    console.error('[AUDIT LOG ERROR]', err);
+  }
+}
+
 // ── CORS ───────────────────────────────────────────────────
 app.use(cors({
   origin: true,
@@ -79,6 +90,7 @@ app.post("/auth/register", async (req, res) => {
       "INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role",
       [username.toLowerCase().trim(), hash, hasUsers ? role : 'admin']
     );
+    await logAudit(requestUser ? requestUser.username : 'system', 'USER_REGISTER', `Création de l'utilisateur ${username} avec le rôle ${hasUsers ? role : 'admin'}`, req.ip);
     res.status(201).json({ message: "Utilisateur cree", user: rows[0] });
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "Identifiant deja utilise" });
@@ -110,6 +122,7 @@ app.post("/auth/login", loginLimiter, async (req, res) => {
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
+      await logAudit('kiosk', 'LOGIN_SUCCESS', 'Connexion automatique mode Kiosk', req.ip);
       return res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
     } catch (err) {
       console.error('[KIOSK LOGIN]', err);
@@ -122,12 +135,16 @@ app.post("/auth/login", loginLimiter, async (req, res) => {
     const { rows } = await pool.query("SELECT * FROM users WHERE username = $1", [username.toLowerCase().trim()]);
     const user  = rows[0];
     const valid = user ? await bcrypt.compare(password, user.password) : false;
-    if (!valid) return res.status(401).json({ error: "Identifiant ou mot de passe incorrect" });
+    if (!valid) {
+      await logAudit(username, 'LOGIN_FAILED', 'Échec de connexion (identifiants incorrects)', req.ip);
+      return res.status(401).json({ error: "Identifiant ou mot de passe incorrect" });
+    }
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
+    await logAudit(user.username, 'LOGIN_SUCCESS', 'Connexion réussie', req.ip);
     res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
   } catch (err) { console.error(err); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -160,6 +177,18 @@ app.use("/api/cameras", cameraRoutes);
 app.use("/api/app-config", appConfigRoutes);
 app.use("/api/alerts", alertsRoutes);
 
+app.get("/api/audit-logs", async (req, res) => {
+  const user = getRequestUser(req);
+  if (!user || user.role !== 'admin') return res.status(403).json({ error: "Accès refusé" });
+  try {
+    const { rows } = await pool.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 150");
+    res.json(rows);
+  } catch (err) {
+    console.error('[AUDIT]', err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 // ── Frontend React (build) ────────────────────────────────
@@ -170,6 +199,26 @@ app.get("/*", (_, res) => res.sendFile(path.join(distPath, "index.html")));
 // ── Démarrage ──────────────────────────────────────────────
 async function start() {
   await initDB();
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(255),
+      action VARCHAR(255) NOT NULL,
+      details TEXT,
+      ip_address VARCHAR(45),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Force l'ajout des colonnes si la table existait déjà dans une ancienne version
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS username VARCHAR(255)");
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(255)");
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT");
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)");
+
+  // Force le type TEXT pour la colonne details au cas où elle aurait été créée en JSON précédemment
+  await pool.query("ALTER TABLE audit_logs ALTER COLUMN details TYPE TEXT USING details::text").catch(() => {});
 
   const runOfflineAlertsCheck = async () => {
     try {

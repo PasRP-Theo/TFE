@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt      from 'bcryptjs';
 import { pool }    from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { logAudit } from '../../server.js';
 
 const router = Router();
 
@@ -44,6 +45,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       'INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role, created_at',
       [username.toLowerCase().trim(), hash, role]
     );
+    await logAudit(req.user?.username || 'admin', 'USER_CREATE', `Création de l'utilisateur ${username} (Rôle: ${role})`, req.ip);
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Identifiant deja utilise' });
@@ -115,6 +117,14 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
       values
     );
 
+    const changes = [];
+    if (nextUsername !== undefined && nextUsername !== currentUser.username) changes.push(`nom: ${currentUser.username} -> ${nextUsername}`);
+    if (nextRole !== undefined && nextRole !== currentUser.role) changes.push(`rôle: ${currentUser.role} -> ${nextRole}`);
+    if (nextPassword !== undefined && nextPassword.length > 0) changes.push(`mot de passe modifié`);
+    if (changes.length > 0) {
+      await logAudit(req.user?.username || 'admin', 'USER_UPDATE', `Modification de l'utilisateur ${currentUser.username} (${changes.join(', ')})`, req.ip);
+    }
+
     const settings = await getAppSettings();
     const editedBootstrapAdmin = settings.bootstrap_admin_user_id === userId
       && settings.default_admin_active
@@ -143,7 +153,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     const userId = Number(req.params.id);
     if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Identifiant invalide' });
 
-    const currentResult = await pool.query('SELECT id, role FROM users WHERE id = $1', [userId]);
+    const currentResult = await pool.query('SELECT id, username, role FROM users WHERE id = $1', [userId]);
     const currentUser = currentResult.rows[0];
     if (!currentUser) return res.status(404).json({ error: 'Utilisateur introuvable' });
 
@@ -156,6 +166,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 
     const { rowCount } = await pool.query('DELETE FROM users WHERE id=$1', [userId]);
     if (!rowCount) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    await logAudit(req.user?.username || 'admin', 'USER_DELETE', `Suppression de l'utilisateur ${currentUser.username}`, req.ip);
     res.json({ message: 'Supprime' });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });

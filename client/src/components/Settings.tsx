@@ -971,6 +971,77 @@ function TabUsers() {
   );
 }
 
+interface AuditLog {
+  id: number;
+  username: string;
+  action: string;
+  details: string;
+  ip_address: string;
+  created_at: string;
+}
+
+function TabAudit() {
+  const { token } = useAuth();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(apiUrl('/api/audit-logs'), { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) setError(data.error);
+        else setLogs(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setError("Erreur réseau"))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-label">JOURNAL DES ACTIONS (AUDIT)</div>
+      <div className="settings-danger-zone-text" style={{ marginBottom: '16px' }}>
+        Historique des actions sensibles, connexions et modifications de configuration.
+      </div>
+      
+      {error && <div className="settings-msg settings-msg--error">⚠ {error}</div>}
+      
+      {loading ? (
+        <div className="settings-loading">Chargement...</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="sensor-table settings-users-table">
+            <thead>
+              <tr>
+                <th className="sensor-th">DATE</th>
+                <th className="sensor-th">UTILISATEUR</th>
+                <th className="sensor-th">ACTION</th>
+                <th className="sensor-th">DÉTAILS</th>
+                <th className="sensor-th">IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.length === 0 && (
+                <tr><td colSpan={5} className="sensor-td settings-users-empty">Aucun journal disponible</td></tr>
+              )}
+              {logs.map((log, i) => (
+                <tr key={log.id} className={i % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
+                  <td className="sensor-td"><span className="sensor-type">{new Date(log.created_at).toLocaleString("fr-FR")}</span></td>
+                  <td className="sensor-td"><span className="sensor-name">{log.username || 'Système'}</span></td>
+                  <td className="sensor-td"><span className={`sensor-badge ${log.action.includes('FAIL') || log.action.includes('DELETE') ? 'sensor-badge--alert' : 'sensor-badge--ok'}`}><span className="sensor-badge-dot"/>{log.action}</span></td>
+                  <td className="sensor-td"><span className="sensor-type">{log.details}</span></td>
+                  <td className="sensor-td"><span className="sensor-type">{log.ip_address}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabHelp() {
   const [showInstallHint, setShowInstallHint] = useState(false);
 
@@ -1066,7 +1137,7 @@ function TabHelp() {
 
 export default function Settings() {
   const { config } = useAppConfig();
-  const [tab, setTab] = useState<"settings" | "users" | "help">("settings");
+  const [tab, setTab] = useState<"settings" | "users" | "audit" | "help">("settings");
 
   return (
     <div className="settings-wrapper">
@@ -1078,10 +1149,11 @@ export default function Settings() {
       <div className="settings-tabs">
         <button className={`sensor-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
         <button className={`sensor-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
+        <button className={`sensor-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
         <button className={`sensor-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & À PROPOS</button>
       </div>
 
-      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : <TabHelp />}
+      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : <TabHelp />}
     </div>
   );
 }
