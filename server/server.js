@@ -16,7 +16,7 @@ import cameraNodeRoutes      from "./src/routes/cameraNodes.js";
 import appConfigRoutes       from "./src/routes/appConfig.js";
 import alertsRoutes          from "./src/routes/alerts.js";
 import notificationsRoutes   from "./src/routes/notifications.js";
-import { configureVapid }    from "./src/lib/push.js";
+import { configureVapid }    from "./src/push.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
