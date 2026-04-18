@@ -17,6 +17,13 @@ vi.mock('../../hooks/useAppConfig', () => {
   };
 });
 
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: { id: 1, username: 'testadmin', role: 'admin' },
+    token: 'fake-token'
+  })
+}));
+
 describe('CameraFeed Component', () => {
   beforeEach(() => {
     global.fetch = vi.fn(() =>
