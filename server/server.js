@@ -228,6 +228,17 @@ async function start() {
   // Force le type TEXT pour la colonne details au cas où elle aurait été créée en JSON précédemment
   await pool.query("ALTER TABLE audit_logs ALTER COLUMN details TYPE TEXT USING details::text").catch(() => {});
 
+  // Création de la table des abonnements push
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      subscription_object JSONB NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS push_subs_idx ON push_subscriptions (user_id, (subscription_object->>'endpoint'))`).catch(() => {});
+
   const runOfflineAlertsCheck = async () => {
     try {
       const [cameraResult, nodeResult] = await Promise.all([
