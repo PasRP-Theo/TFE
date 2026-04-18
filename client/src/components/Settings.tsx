@@ -506,7 +506,7 @@ function TabSettings() {
         <div className="settings-toggle-list">
           <SettingToggle
             label="Afficher le panneau de statut"
-            description="Affiche les indicateurs EN LIGNE / MODE APP dans l’en-tête."
+            description="Affiche l'indicateur de statut du système dans l’en-tête."
             checked={draftConfig.showStatusPanel}
             onChange={(checked) => updateDraft({ showStatusPanel: checked })}
           />
