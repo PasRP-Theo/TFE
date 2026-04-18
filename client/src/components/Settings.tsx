@@ -877,7 +877,7 @@ function TabUsers() {
         {loading ? (
           <div className="settings-loading">Chargement...</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll-container">
             <table className="sensor-table settings-users-table">
               <thead>
                 <tr>
@@ -1012,7 +1012,7 @@ function TabAudit() {
       {loading ? (
         <div className="settings-loading">Chargement...</div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll-container">
           <table className="sensor-table settings-users-table">
             <thead>
               <tr>

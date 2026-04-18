@@ -4896,10 +4896,17 @@ a:focus-visible {
   padding: 12px 0;
 }
 
+.table-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 8px;
+}
+
 /* Table utilisateurs */
 .settings-users-table {
-  margin-top: 8px;
-  min-width: max-content;
+  margin-top: 0;
+  min-width: 650px;
 }
 .settings-users-table th,
 .settings-users-table td {
