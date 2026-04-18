@@ -877,41 +877,43 @@ function TabUsers() {
         {loading ? (
           <div className="settings-loading">Chargement...</div>
         ) : (
-          <table className="sensor-table settings-users-table">
-            <thead>
-              <tr>
-                <th className="sensor-th">IDENTIFIANT</th>
-                <th className="sensor-th">RÔLE</th>
-                <th className="sensor-th">CRÉÉ LE</th>
-                <th className="sensor-th">COMPTE</th>
-                <th className="sensor-th sensor-th--right">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 && (
-                <tr><td colSpan={5} className="sensor-td settings-users-empty">Aucun utilisateur</td></tr>
-              )}
-              {users.map((entry, index) => (
-                <tr key={entry.id} className={index % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
-                  <td className="sensor-td"><span className="sensor-name">{entry.username}</span></td>
-                  <td className="sensor-td">
-                    <button className="sensor-status-btn" onClick={() => setConfirmUser(entry)} title="Changer le rôle">
-                      <span className={`sensor-badge ${entry.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
-                        <span className="sensor-badge-dot" />
-                        {entry.role === "admin" ? "ADMIN" : "USER"}
-                      </span>
-                    </button>
-                  </td>
-                  <td className="sensor-td"><span className="sensor-type">{new Date(entry.created_at).toLocaleDateString("fr-FR")}</span></td>
-                  <td className="sensor-td"><span className="sensor-type">{currentUser?.id === entry.id ? 'Connecté' : 'Utilisateur'}</span></td>
-                  <td className="sensor-td sensor-td--right">
-                    <button className="sensor-link-btn" onClick={() => startEditUser(entry)} title="Modifier">Éditer</button>
-                    <button className="sensor-delete-btn" onClick={() => { setDeleteUserTarget(entry); setDeleteError(''); }} title="Supprimer">✕</button>
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="sensor-table settings-users-table">
+              <thead>
+                <tr>
+                  <th className="sensor-th">IDENTIFIANT</th>
+                  <th className="sensor-th">RÔLE</th>
+                  <th className="sensor-th">CRÉÉ LE</th>
+                  <th className="sensor-th">COMPTE</th>
+                  <th className="sensor-th sensor-th--right">ACTIONS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.length === 0 && (
+                  <tr><td colSpan={5} className="sensor-td settings-users-empty">Aucun utilisateur</td></tr>
+                )}
+                {users.map((entry, index) => (
+                  <tr key={entry.id} className={index % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
+                    <td className="sensor-td"><span className="sensor-name">{entry.username}</span></td>
+                    <td className="sensor-td">
+                      <button className="sensor-status-btn" onClick={() => setConfirmUser(entry)} title="Changer le rôle">
+                        <span className={`sensor-badge ${entry.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
+                          <span className="sensor-badge-dot" />
+                          {entry.role === "admin" ? "ADMIN" : "USER"}
+                        </span>
+                      </button>
+                    </td>
+                    <td className="sensor-td"><span className="sensor-type">{new Date(entry.created_at).toLocaleDateString("fr-FR")}</span></td>
+                    <td className="sensor-td"><span className="sensor-type">{currentUser?.id === entry.id ? 'Connecté' : 'Utilisateur'}</span></td>
+                    <td className="sensor-td sensor-td--right">
+                      <button className="sensor-link-btn" style={{ marginRight: '8px' }} onClick={() => startEditUser(entry)} title="Modifier">Éditer</button>
+                      <button className="sensor-delete-btn" onClick={() => { setDeleteUserTarget(entry); setDeleteError(''); }} title="Supprimer">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

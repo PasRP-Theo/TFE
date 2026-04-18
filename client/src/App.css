@@ -1526,7 +1526,10 @@ a:focus-visible {
   vertical-align: middle;
   font-size: var(--text-sm);
 }
-.sensor-td--right { text-align: right; }
+.sensor-td--right {
+  text-align: right;
+  white-space: nowrap;
+}
 
 .sensor-name {
   color: var(--text-secondary);
@@ -4896,6 +4899,11 @@ a:focus-visible {
 /* Table utilisateurs */
 .settings-users-table {
   margin-top: 8px;
+  min-width: max-content;
+}
+.settings-users-table th,
+.settings-users-table td {
+  white-space: nowrap;
 }
 
 .settings-system-actions {
