@@ -255,6 +255,7 @@ export default function LoginPage() {
                   </div>
                 )}
               </div>
+            )
           ) : (
             <form onSubmit={handleSubmit}>
               <div className="lp-field">
