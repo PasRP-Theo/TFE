@@ -6,7 +6,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PM2_APP_NAME: aubepines
+  PM2_APP_NAME: sentys
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
   REPOSITORY_URL: https://github.com/${{ github.repository }}.git
 

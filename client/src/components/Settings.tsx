@@ -3,7 +3,6 @@ import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from '../lib/api';
-import { isPushSubscribed, subscribeUserToPush, unsubscribeUserFromPush } from '../lib/push';
 import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -157,10 +156,9 @@ function TabSettings() {
       setPushLoading(false);
       return;
     }
-    isPushSubscribed().then(subscribed => {
-      setPushSubscribed(subscribed);
-      setPushLoading(false);
-    });
+
+    setPushSubscribed(Notification.permission === 'granted');
+    setPushLoading(false);
   }, []);
 
   const handlePushToggle = async (checked: boolean) => {
@@ -168,16 +166,15 @@ function TabSettings() {
     setPushError('');
     try {
       if (checked) {
-        await subscribeUserToPush();
-        setPushSubscribed(true);
+        const perm = await Notification.requestPermission();
+        setPushSubscribed(perm === 'granted');
+        if (perm !== 'granted') throw new Error("Permission refusée par le navigateur. Modifiez vos paramètres locaux.");
       } else {
-        await unsubscribeUserFromPush();
-        setPushSubscribed(false);
+        throw new Error("Pour désactiver, vous devez révoquer la permission directement dans les paramètres du navigateur.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
       setPushError(message);
-      setPushSubscribed(await isPushSubscribed()); // Re-check state
     } finally {
       setPushLoading(false);
     }
@@ -185,20 +182,10 @@ function TabSettings() {
 
   const sendTestNotification = async () => {
     setPushError('');
-    try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(apiUrl('/api/notifications/test'), {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error || 'Failed to send test notification');
-        }
-        alert('Notification de test envoyée ! Elle devrait arriver dans quelques secondes.');
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Erreur inconnue';
-        setPushError(message);
+    if (Notification.permission === 'granted') {
+        new Notification("Test SENTYS", { body: "Ceci est une notification en temps réel via Socket.IO !", icon: '/favicon.ico' });
+    } else {
+        setPushError("Permission non accordée par le système.");
     }
   };
 
