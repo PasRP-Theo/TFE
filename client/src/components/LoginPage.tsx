@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
-import BrandLogo from './BrandLogo.tsx';
+import BrandLogo from './BrandLogo';
 import { useVirtualKeyboard } from '../hooks/useVirtualKeyboard';
 
 export default function LoginPage() {

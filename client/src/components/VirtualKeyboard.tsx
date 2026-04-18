@@ -14,6 +14,7 @@ export const VirtualKeyboardProvider: React.FC<{ children: React.ReactNode }> = 
   const onCloseCallbackRef = useRef<() => void>(() => {});
   const keyboardRef = useRef<KeyboardReactInterface | null>(null);
   const [initialValue, setInitialValue] = useState('');
+  const isKeyboardEnabled = window.localStorage.getItem('sentys:virtual_keyboard') === 'true';
 
   const showKeyboard = useCallback((
     currentValue: string,
@@ -50,7 +51,7 @@ export const VirtualKeyboardProvider: React.FC<{ children: React.ReactNode }> = 
     if (button === '{enter}') hideKeyboard();
   };
 
-  const value = { showKeyboard, hideKeyboard, isKeyboardVisible: isVisible };
+  const value = { showKeyboard, hideKeyboard, isKeyboardVisible: isVisible, isKeyboardEnabled };
 
   return (
     <KeyboardContext.Provider value={value}>
