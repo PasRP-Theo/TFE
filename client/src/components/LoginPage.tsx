@@ -25,6 +25,8 @@ export default function LoginPage() {
     }
     return window.sessionStorage.getItem('sentys:control_panel') === 'true';
   }, []);
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pinInput, setPinInput] = useState('');
   const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
 
   useEffect(() => {
@@ -111,12 +113,31 @@ export default function LoginPage() {
 
   function handleAdminLogin() {
     if (isLockedOut) return;
+    setShowPinPrompt(true);
     setError('');
-    setLoading(true);
-    login('kiosk_admin', '').catch(err => {
-      setError(err instanceof Error ? err.message : 'Erreur Admin');
-      setLoading(false);
-    });
+  }
+
+  function handlePinPress(digit: string) {
+    if (isLockedOut || pinInput.length >= 4) return;
+    const nextPin = pinInput + digit;
+    setPinInput(nextPin);
+    setError('');
+
+    if (nextPin.length === 4) {
+      const savedPin = window.localStorage.getItem('sentys:kiosk_pin') || '1234';
+      if (nextPin === savedPin) {
+        setError('');
+        setLoading(true);
+        login('kiosk_admin', '').catch(err => {
+          setError(err instanceof Error ? err.message : 'Erreur Admin');
+          setLoading(false);
+          setPinInput('');
+        });
+      } else {
+        setError('Code PIN incorrect');
+        setTimeout(() => setPinInput(''), 500);
+      }
+    }
   }
 
   return (
