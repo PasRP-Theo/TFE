@@ -15,6 +15,8 @@ import cameraRoutes          from "./src/routes/cameras.js";
 import cameraNodeRoutes      from "./src/routes/cameraNodes.js";
 import appConfigRoutes       from "./src/routes/appConfig.js";
 import alertsRoutes          from "./src/routes/alerts.js";
+import notificationsRoutes   from "./src/routes/notifications.js";
+import { configureVapid }    from "./src/lib/push.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
@@ -176,6 +178,11 @@ app.use("/api/camera-nodes", cameraNodeRoutes);
 app.use("/api/cameras", cameraRoutes);
 app.use("/api/app-config", appConfigRoutes);
 app.use("/api/alerts", alertsRoutes);
+app.use("/api/notifications", (req, res, next) => {
+  const user = getRequestUser(req);
+  if (user) req.user = user;
+  next();
+}, notificationsRoutes);
 
 app.get("/api/audit-logs", async (req, res) => {
   const user = getRequestUser(req);
@@ -199,6 +206,7 @@ app.get("/*", (_, res) => res.sendFile(path.join(distPath, "index.html")));
 // ── Démarrage ──────────────────────────────────────────────
 async function start() {
   await initDB();
+  configureVapid();
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
