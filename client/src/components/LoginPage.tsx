@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
 import BrandLogo from './BrandLogo.tsx';
+import { useVirtualKeyboard } from '../hooks/useVirtualKeyboard';
 
 export default function LoginPage() {
   const { login }  = useAuth();
@@ -17,9 +18,16 @@ export default function LoginPage() {
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
 
-  const isControlPanel = window.location.pathname === '/controlpanel';
+  const isControlPanel = useMemo(() => {
+    if (window.location.pathname === '/controlpanel') {
+      window.sessionStorage.setItem('sentys:control_panel', 'true');
+      return true;
+    }
+    return window.sessionStorage.getItem('sentys:control_panel') === 'true';
+  }, []);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState('');
+  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -205,6 +213,8 @@ export default function LoginPage() {
                       disabled={loading || isLockedOut}
                       required
                       autoFocus
+                      readOnly={isKeyboardEnabled}
+                      onFocus={() => showKeyboard(pinInput, (val) => setPinInput(val.replace(/\D/g, '')))}
                     />
                   </div>
                 </div>
@@ -268,6 +278,8 @@ export default function LoginPage() {
                     disabled={loading || isLockedOut}
                     autoFocus
                     autoComplete="username"
+                    readOnly={isKeyboardEnabled}
+                    onFocus={() => showKeyboard(username, setUsername)}
                   />
                 </div>
               </div>
@@ -285,6 +297,8 @@ export default function LoginPage() {
                   disabled={loading || isLockedOut}
                   required
                   autoComplete="current-password"
+                  readOnly={isKeyboardEnabled}
+                  onFocus={() => showKeyboard(password, setPassword)}
                 />
               </div>
             </div>
