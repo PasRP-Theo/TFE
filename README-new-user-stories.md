@@ -40,7 +40,7 @@
 | **US-11** | Rate Limiting (5 échecs / 15 min) | P1 | À faire |
 | **US-12** | Détection mDNS/UDP des nœuds ESP32/Pi | P1 | À faire |
 | **US-13** | Rotation des logs (10 Mo / 7 jours) | P2 | À faire |
-| **US-14** | Heartbeat WebSockets (Ping/Pong) | P2 | À faire |
+| **US-14** | Heartbeat WebSockets & Socket.IO (Alertes en temps réel) | P2 | Terminé |
 | **US-15** | Backup de la base SQLite/JSON via API | P2 | À faire |
 
 -----

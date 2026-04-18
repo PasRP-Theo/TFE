@@ -19,6 +19,7 @@
     "mqtt": "^5.3.0",
     "multicast-dns": "^7.2.5",
     "pg": "^8.11.3",
+    "socket.io": "^4.8.3",
     "systeminformation": "^5.31.4",
     "web-push": "^3.6.7",
     "ws": "^8.16.0"

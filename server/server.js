@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express         from "express";
+import { createServer } from "http";
+import { Server }      from "socket.io";
 import cors            from "cors";
 import path            from "path";
 import { fileURLToPath } from "url";
@@ -23,6 +25,38 @@ import { createAlert } from "./src/alerts/service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+  }
+});
+
+// Middleware d'authentification pour Socket.IO (reutilise tes JWT)
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("Authentication error"));
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    socket.user = decoded;
+    next();
+  } catch (err) {
+    next(new Error("Authentication error"));
+  }
+});
+
+io.on("connection", (socket) => {
+  console.log(`[SOCKET] Utilisateur connecte : ${socket.user.username} (${socket.id})`);
+  socket.on("disconnect", () => {
+    console.log(`[SOCKET] Utilisateur deconnecte : ${socket.user.username}`);
+  });
+});
+
+// Rendre io accessible partout dans Express via req.app.get('io')
+app.set('io', io);
 
 export async function logAudit(username, action, details, ip) {
   try {
@@ -270,6 +304,7 @@ async function start() {
           dedupeKey: `camera-offline:${camera.id}`,
           cooldownSeconds: 1800,
         });
+      io.emit("new_alert", { level: "critical", title: `Caméra hors ligne - ${camera.name}` });
       }));
 
       await Promise.all(nodeResult.rows.map(async (node) => {
@@ -291,6 +326,7 @@ async function start() {
           dedupeKey: `node-offline:${node.device_id}`,
           cooldownSeconds: 1800,
         });
+      io.emit("new_alert", { level: "critical", title: `Nœud hors ligne - ${node.name}` });
       }));
     } catch (error) {
       console.error('[ALERT OFFLINE MONITOR]', error);
@@ -318,7 +354,7 @@ async function start() {
   setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
 
   const PORT = process.env.PORT || 4000;
-  app.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
+  httpServer.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
 }
 
 start().catch(err => { console.error(err); process.exit(1); });
