@@ -3,6 +3,7 @@ import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { apiUrl } from "../lib/api";
 import { useAppConfig } from "../hooks/useAppConfig";
+import { useAuth } from "../hooks/useAuth";
 
 type HlsConstructor = typeof import("hls.js").default;
 
@@ -384,6 +385,8 @@ function CameraControls({ cam, onAction }: {
 // ── Composant principal ────────────────────────────────────
 export default function CameraFeed() {
   const { config } = useAppConfig();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [focused, setFocused] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -783,14 +786,16 @@ export default function CameraFeed() {
         </div>
         <div className="cam-header-right">
           <span className="cam-clock">{time.toLocaleTimeString('fr-FR')}</span>
-          <button
-            type="button"
-            className={`panel-action-btn ${showAdd ? 'panel-action-btn--active' : ''}`}
-            onClick={toggleAddPanel}
-          >
-            <span className="panel-action-btn__icon" aria-hidden="true">{showAdd ? '×' : '+'}</span>
-            <span>{showAdd ? 'Fermer' : 'Ajouter une camera'}</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className={`panel-action-btn ${showAdd ? 'panel-action-btn--active' : ''}`}
+              onClick={toggleAddPanel}
+            >
+              <span className="panel-action-btn__icon" aria-hidden="true">{showAdd ? '×' : '+'}</span>
+              <span>{showAdd ? 'Fermer' : 'Ajouter une camera'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1002,7 +1007,9 @@ export default function CameraFeed() {
                   </button>
                 )}
                 <button className="cam-card-history" onClick={() => loadCameraHistory(focusedCam.id)}>📁 Historique</button>
+              {isAdmin && (
                 <button className="cam-card-delete" onClick={() => setCameraDeleteTarget(focusedCam)}>✕</button>
+              )}
               </div>
             </div>
             <div className="cam-screen-shell cam-screen-shell--focus-mode">
@@ -1040,8 +1047,10 @@ export default function CameraFeed() {
                     onClick={e => { e.stopPropagation(); loadCameraHistory(cam.id); }}>
                     📁
                   </button>
+                {isAdmin && (
                   <button className="cam-card-delete"
                     onClick={e => { e.stopPropagation(); setCameraDeleteTarget(cam); }}>✕</button>
+                )}
                 </div>
               </div>
               <CameraScreen cam={cam} time={time} />
@@ -1130,17 +1139,19 @@ export default function CameraFeed() {
               </div>
               <div className="cam-history-toolbar-side">
                 <span className="cam-history-retention">Suppression auto après {historyRetentionDays} jours</span>
-                <button
-                  type="button"
-                  className="sensor-delete-btn sensor-delete-btn--danger"
-                  onClick={() => {
-                    setHistoryDeleteError(null);
-                    setPurgeHistoryConfirm(true);
-                  }}
-                  disabled={historyRecords.length === 0 || historyDeleteLoading}
-                >
-                  Tout supprimer
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="sensor-delete-btn sensor-delete-btn--danger"
+                    onClick={() => {
+                      setHistoryDeleteError(null);
+                      setPurgeHistoryConfirm(true);
+                    }}
+                    disabled={historyRecords.length === 0 || historyDeleteLoading}
+                  >
+                    Tout supprimer
+                  </button>
+                )}
               </div>
             </div>
             {historyLoading && <div className="cam-history-empty-state">Chargement de l’historique…</div>}
@@ -1189,16 +1200,18 @@ export default function CameraFeed() {
                             >
                               Télécharger
                             </a>
-                            <button
-                              type="button"
-                              className="cam-history-link cam-history-link--danger"
-                              onClick={() => {
-                                setHistoryDeleteError(null);
-                                setRecordDeleteTarget(entry);
-                              }}
-                            >
-                              Supprimer
-                            </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  className="cam-history-link cam-history-link--danger"
+                                  onClick={() => {
+                                    setHistoryDeleteError(null);
+                                    setRecordDeleteTarget(entry);
+                                  }}
+                                >
+                                  Supprimer
+                                </button>
+                              )}
                           </div>
                         </div>
                       </div>

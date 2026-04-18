@@ -29,6 +29,13 @@ vi.mock('../../hooks/useAppConfig', () => {
   };
 });
 
+vi.mock('../../hooks/useVirtualKeyboard', () => ({
+  useVirtualKeyboard: () => ({
+    showKeyboard: vi.fn(),
+    isKeyboardEnabled: false,
+  })
+}));
+
 describe('LoginPage Component', () => {
   it('affiche correctement le formulaire de connexion et les variables de config', () => {
     render(<LoginPage />);
