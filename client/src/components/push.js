@@ -1,5 +1,5 @@
 import webPush from 'web-push';
-import { pool } from './db/index.js';
+import { pool } from '../db/index.js';
 
 let isVapidConfigured = false;
 

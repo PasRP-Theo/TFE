@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getVapidPublicKey, saveSubscription, sendNotificationToUser } from '../push.js';
+import { getVapidPublicKey, saveSubscription, sendNotificationToUser } from '../lib/push.js';
 
 const router = Router();
 
