@@ -427,12 +427,6 @@ function getSystemStatus(
                 <span className="app-status-dot" style={{ background: systemLedColor, boxShadow: `0 0 8px ${systemLedColor}` }} />
                 {systemLedText}
               </div>
-              {isInstalledMode && (
-                <div className="app-installed-badge">
-                  <span className="app-installed-badge-dot" />
-                  MODE APP
-                </div>
-              )}
             </div>
           )}
 

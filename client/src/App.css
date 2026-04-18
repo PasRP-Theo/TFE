@@ -449,9 +449,9 @@ a:focus-visible {
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: rgba(248, 113, 113, 0.16);
-  border: 1px solid rgba(248, 113, 113, 0.28);
-  color: #ffdede;
+  background: var(--accent-red-bg);
+  border: 1px solid var(--accent-red-border);
+  color: var(--accent-red);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
