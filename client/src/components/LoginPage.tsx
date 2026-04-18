@@ -256,20 +256,21 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit}>
               <div className="lp-field">
                 <label className="lp-label">IDENTIFIANT</label>
-                <span className="lp-input-prefix">›</span>
-                <input
-                  className="lp-input"
-                  type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  placeholder="admin"
-                  required
-                  disabled={loading || isLockedOut}
-                  autoFocus
-                  autoComplete="username"
-                />
+                <div className="lp-input-wrap">
+                  <span className="lp-input-prefix">›</span>
+                  <input
+                    className="lp-input"
+                    type="text"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    placeholder="admin"
+                    required
+                    disabled={loading || isLockedOut}
+                    autoFocus
+                    autoComplete="username"
+                  />
+                </div>
               </div>
-            </div>
 
             <div className="lp-field">
               <label className="lp-label">MOT DE PASSE</label>
