@@ -34,8 +34,9 @@ Ce script gère l'ordre de lancement au démarrage.
 # Cache la souris immédiatement
 unclutter -idle 0 &
 
-# Désactive la mise en veille
-xset s off -dpms s noblank
+# Active la mise en veille de l'écran après 5 minutes (300 secondes) d'inactivité
+xset s on +dpms
+xset dpms 300 300 300
 
 # Prépare le bus de communication (Accessibilité)
 export QT_ACCESSIBILITY=1
@@ -48,7 +49,7 @@ onboard -l Phone --force-to-top &
 sleep 4
 
 # Lance Chromium sur l'application React
-chromium --app="http://192.168.0.47" --start-fullscreen --no-first-run --disable-gpu
+chromium --app="http://192.168.0.47/controlpanel" --start-fullscreen --no-first-run --disable-gpu
 ```
 
 ### 2. `~/.config/openbox/rc.xml`
