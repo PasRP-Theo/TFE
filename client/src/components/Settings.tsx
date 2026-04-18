@@ -131,12 +131,14 @@ function TabSettings() {
   const [resetError, setResetError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [kioskPin, setKioskPin] = useState(() => window.localStorage.getItem('sentys:kiosk_pin') || '1234');
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushSupport, setPushSupport] = useState(true);
   const [isPwa, setIsPwa] = useState(true);
   const [pushLoading, setPushLoading] = useState(true);
   const [pushError, setPushError] = useState('');
+  const [securityError, setSecurityError] = useState('');
+  const [securitySuccess, setSecuritySuccess] = useState('');
+  const [securitySaving, setSecuritySaving] = useState(false);
 
   useEffect(() => {
     setDraftConfig(config);
@@ -303,15 +305,24 @@ function TabSettings() {
     }
   }
 
-  function saveKioskPin() {
-    const pin = kioskPin.trim();
-    if (pin.length === 4) {
-      window.localStorage.setItem('sentys:kiosk_pin', pin);
-      alert("Code PIN enregistré. Il protègera l'écran et les actions sensibles sur cet appareil.");
-    } else {
-      setKioskPin('1234');
-      window.localStorage.setItem('sentys:kiosk_pin', '1234');
-      alert("Le PIN doit faire exactement 4 chiffres. Il a été réinitialisé à 1234 par défaut.");
+  async function saveSecuritySettings() {
+    if (!token) return;
+    const pin = draftConfig.kioskPin.trim();
+    if (pin.length !== 4) {
+      alert("Le PIN doit faire exactement 4 chiffres.");
+      return;
+    }
+    setSecurityError('');
+    setSecuritySuccess('');
+    setSecuritySaving(true);
+    try {
+      const nextConfig = await updateConfig(token, { kioskPin: pin });
+      setDraftConfig(nextConfig);
+      setSecuritySuccess('Code PIN synchronisé avec succès pour tous les appareils.');
+    } catch (err: unknown) {
+      setSecurityError(err instanceof Error ? err.message : 'Erreur serveur');
+    } finally {
+      setSecuritySaving(false);
     }
   }
 
@@ -638,15 +649,30 @@ function TabSettings() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>SÉCURITÉ LOCALE & KIOSK</span>
-          <button className="sensor-confirm-btn" onClick={saveKioskPin}>Enregistrer le PIN</button>
+          <button className="sensor-confirm-btn" onClick={saveSecuritySettings} disabled={securitySaving}>
+            {securitySaving ? 'Enregistrement...' : 'Enregistrer le PIN'}
+          </button>
         </div>
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <input className="sensor-input" type="password" maxLength={4} placeholder="Ex: 1234" value={kioskPin} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(kioskPin, (value) => setKioskPin(value.replace(/\D/g, '')))} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} autoComplete="new-password" />
+            <input 
+              className="sensor-input" 
+              type="password" 
+              maxLength={4} 
+              placeholder="Ex: 1234" 
+              value={draftConfig.kioskPin} 
+              readOnly={isKeyboardEnabled} 
+              onFocus={() => showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))} 
+              onChange={e => updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })} 
+              style={{ maxWidth: '200px' }} 
+              autoComplete="new-password" 
+            />
             <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et l'accès Admin.</span>
           </label>
         </div>
+        {securityError && <div className="settings-msg settings-msg--error">⚠ {securityError}</div>}
+        {securitySuccess && <div className="settings-msg settings-msg--success">✓ {securitySuccess}</div>}
         <div className="settings-toggle-list">
           <SettingToggle
             label="Activer le Mode Kiosk sur cet appareil"

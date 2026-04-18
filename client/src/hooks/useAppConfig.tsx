@@ -26,6 +26,7 @@ export interface AppConfig {
   alertsDisconnectEnabled: boolean;
   defaultAdminUsername: string;
   defaultAdminActive: boolean;
+  kioskPin: string;
 }
 
 interface AppConfigContextType {
@@ -57,6 +58,7 @@ const DEFAULT_CONFIG: AppConfig = {
   alertsDisconnectEnabled: true,
   defaultAdminUsername: 'root',
   defaultAdminActive: false,
+  kioskPin: '1234',
 };
 
 const AppConfigContext = createContext<AppConfigContextType | null>(null);
@@ -87,6 +89,7 @@ function sanitizeConfig(value: unknown): AppConfig {
     alertsDisconnectEnabled: typeof candidate.alertsDisconnectEnabled === 'boolean' ? candidate.alertsDisconnectEnabled : DEFAULT_CONFIG.alertsDisconnectEnabled,
     defaultAdminUsername: typeof candidate.defaultAdminUsername === 'string' && candidate.defaultAdminUsername.trim() ? candidate.defaultAdminUsername.trim() : DEFAULT_CONFIG.defaultAdminUsername,
     defaultAdminActive: Boolean(candidate.defaultAdminActive),
+    kioskPin: typeof candidate.kioskPin === 'string' && candidate.kioskPin.trim().length === 4 ? candidate.kioskPin.trim() : DEFAULT_CONFIG.kioskPin,
   };
 }
 
