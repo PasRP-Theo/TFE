@@ -104,19 +104,23 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", loginLimiter, async (req, res) => {
   const { username, password } = req.body;
 
-  // Kiosk mode auto-login: if username is 'kiosk', no password is provided,
-  // and the request comes from localhost, log in as the primary admin.
-  const isKioskLogin = username.toLowerCase().trim() === 'kiosk' && !password;
-  const isLocal = req.ip === '127.0.0.1' || req.ip === '::1';
+  // Control Panel passwordless login:
+  const isKioskAdmin = username.toLowerCase().trim() === 'kiosk_admin' && !password;
+  const isKioskGuest = username.toLowerCase().trim() === 'kiosk_guest' && !password;
+  const ipStr = req.ip ? req.ip.replace(/^.*:/, '') : '';
+  const isLocalNetwork = ipStr === '127.0.0.1' || ipStr === '1' || ipStr.startsWith('192.168.') || ipStr.startsWith('10.') || ipStr.startsWith('172.');
 
-  if (isKioskLogin && isLocal) {
+  if ((isKioskAdmin || isKioskGuest) && isLocalNetwork) {
     try {
-      // Find the primary admin user (e.g., 'root' or the first one created)
-      const { rows } = await pool.query("SELECT * FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1");
-      const user = rows[0];
+      const roleTarget = isKioskAdmin ? 'admin' : 'user';
+      const { rows } = await pool.query("SELECT * FROM users WHERE role = $1 ORDER BY created_at ASC LIMIT 1", [roleTarget]);
+      let user = rows[0];
 
-      if (!user) {
-        return res.status(401).json({ error: "Aucun compte administrateur disponible pour le mode Kiosk." });
+      if (!user && isKioskGuest) {
+        // Fallback: Si aucun utilisateur 'user' n'existe, on crée un invité virtuel
+        user = { id: 9999, username: 'invité', role: 'user' };
+      } else if (!user) {
+        return res.status(401).json({ error: `Aucun compte ${roleTarget} disponible pour le panneau de contrôle.` });
       }
 
       const token = jwt.sign(
@@ -124,11 +128,11 @@ app.post("/auth/login", loginLimiter, async (req, res) => {
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
       );
-      await logAudit('kiosk', 'LOGIN_SUCCESS', 'Connexion automatique mode Kiosk', req.ip);
+      await logAudit(user.username, 'LOGIN_SUCCESS', `Connexion Control Panel (${roleTarget})`, req.ip);
       return res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
     } catch (err) {
-      console.error('[KIOSK LOGIN]', err);
-      return res.status(500).json({ error: "Erreur serveur lors de la connexion Kiosk" });
+      console.error('[CONTROL PANEL LOGIN]', err);
+      return res.status(500).json({ error: "Erreur serveur lors de la connexion Control Panel" });
     }
   }
 

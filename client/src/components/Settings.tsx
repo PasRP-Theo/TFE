@@ -740,16 +740,24 @@ function TabUsers() {
 
   const authHeaders = useMemo(() => token ? { Authorization: `Bearer ${token}` } : undefined, [token]);
 
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch(apiUrl('/api/users'), { headers: authHeaders });
       const data = await readJsonResponse<Array<User> & { error?: string }>(res);
+      if (!isMounted.current) return;
       if (!res.ok) throw new Error(data.error || 'Impossible de charger les utilisateurs');
       setUsers(data);
     } catch (err: unknown) {
+      if (!isMounted.current) return;
       setError(err instanceof Error ? err.message : 'Impossible de charger les utilisateurs');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   }, [authHeaders]);
 
@@ -990,14 +998,17 @@ function TabAudit() {
 
   useEffect(() => {
     if (!token) return;
+    let isMounted = true;
     fetch(apiUrl('/api/audit-logs'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
+        if (!isMounted) return;
         if (data.error) setError(data.error);
         else setLogs(Array.isArray(data) ? data : []);
       })
-      .catch(() => setError("Erreur réseau"))
-      .finally(() => setLoading(false));
+      .catch(() => { if (isMounted) setError("Erreur réseau"); })
+      .finally(() => { if (isMounted) setLoading(false); });
+    return () => { isMounted = false; };
   }, [token]);
 
   return (

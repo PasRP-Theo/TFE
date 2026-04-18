@@ -17,6 +17,10 @@ export default function LoginPage() {
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
 
+  const isControlPanel = window.location.pathname === '/controlpanel';
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
@@ -89,6 +93,49 @@ export default function LoginPage() {
   const lockoutMinutes = Math.floor(lockoutSecondsLeft / 60);
   const lockoutSeconds = String(lockoutSecondsLeft % 60).padStart(2, '0');
 
+  function handleGuestLogin() {
+    if (isLockedOut) return;
+    setError('');
+    setLoading(true);
+    login('kiosk_guest', '').catch(err => {
+      setError(err instanceof Error ? err.message : 'Erreur Invité');
+      setLoading(false);
+    });
+  }
+
+  function handleAdminLogin() {
+    if (isLockedOut) return;
+    const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
+    if (!savedPin) {
+      setError('');
+      setLoading(true);
+      login('kiosk_admin', '').catch(err => {
+        setError(err instanceof Error ? err.message : 'Erreur Admin');
+        setLoading(false);
+      });
+    } else {
+      setShowPinPrompt(true);
+      setError('');
+    }
+  }
+
+  function submitPin(e: FormEvent) {
+    e.preventDefault();
+    if (isLockedOut) return;
+    const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
+    if (pinInput === savedPin) {
+      setError('');
+      setLoading(true);
+      login('kiosk_admin', '').catch(err => {
+        setError(err instanceof Error ? err.message : 'Erreur Admin');
+        setLoading(false);
+      });
+    } else {
+      setError('Code PIN incorrect');
+      setPinInput('');
+    }
+  }
+
   return (
     <div className="lp-root">
       <div className="lp-grid" />
@@ -135,16 +182,80 @@ export default function LoginPage() {
           <div className="lp-login-message">{config.loginMessage}</div>
           <div className="lp-sep" />
 
-          {config.defaultAdminActive && (
+          {config.defaultAdminActive && !isControlPanel && (
             <div className="lp-error lp-error--info">
               <span>ℹ</span><span>Première connexion : {config.defaultAdminUsername} / root. Change ce compte immédiatement après connexion.</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="lp-field">
-              <label className="lp-label">IDENTIFIANT</label>
-              <div className="lp-input-wrap">
+          {isControlPanel ? (
+            showPinPrompt ? (
+              <form onSubmit={submitPin}>
+                <div className="lp-field">
+                  <label className="lp-label">CODE PIN (ADMIN)</label>
+                  <div className="lp-input-wrap">
+                    <span className="lp-input-prefix">#</span>
+                    <input
+                      className="lp-input"
+                      type="password"
+                      maxLength={4}
+                      value={pinInput}
+                      onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))}
+                      placeholder="••••"
+                      disabled={loading || isLockedOut}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                {isLockedOut ? (
+                  <div className="lp-error">
+                    <span>⚠</span>
+                    <span>Trop de tentatives. Réessayez dans {lockoutMinutes}m {lockoutSeconds}s.</span>
+                  </div>
+                ) : error && (
+                  <div className="lp-error">
+                    <span>⚠</span><span>{error}</span>
+                  </div>
+                )}
+                <button className="lp-btn" type="submit" disabled={loading || isLockedOut}>
+                  {loading ? `VÉRIFICATION${dots}` : 'VALIDER'}
+                </button>
+                <button 
+                  className="lp-btn" 
+                  type="button" 
+                  onClick={() => { setShowPinPrompt(false); setError(''); setPinInput(''); }} 
+                  disabled={loading}
+                  style={{ marginTop: '12px', background: 'transparent', border: '1px dashed var(--border-subtle)', color: 'var(--text-muted)' }}
+                >
+                  RETOUR
+                </button>
+              </form>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <button className="lp-btn" type="button" onClick={handleAdminLogin} disabled={loading || isLockedOut}>
+                  {loading ? `CONNEXION${dots}` : '🛡️ CONNEXION ADMIN'}
+                </button>
+                <button 
+                  className="lp-btn" 
+                  type="button" 
+                  onClick={handleGuestLogin} 
+                  disabled={loading || isLockedOut} 
+                  style={{ background: 'transparent', border: '1px dashed var(--border-subtle)', color: 'var(--text-muted)' }}
+                >
+                  👁️ CONNEXION INVITÉ
+                </button>
+                {error && (
+                  <div className="lp-error" style={{ marginTop: '0' }}>
+                    <span>⚠</span><span>{error}</span>
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="lp-field">
+                <label className="lp-label">IDENTIFIANT</label>
                 <span className="lp-input-prefix">›</span>
                 <input
                   className="lp-input"
@@ -193,6 +304,7 @@ export default function LoginPage() {
                isLockedOut ? 'SYSTÈME VERROUILLÉ' : '→ ACCÉDER AU SYSTÈME'}
             </button>
           </form>
+          )}
         </div>
 
         <div className="lp-card-footer">
