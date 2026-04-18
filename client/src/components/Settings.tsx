@@ -1093,8 +1093,11 @@ function TabHelp() {
           <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>2. Configuration</h4>
           <ul style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px' }}>
             <li style={{ marginBottom: '6px' }}>Connectez tous vos appareils au même compte Tailscale (Tailnet).</li>
-            <li style={{ marginBottom: '6px' }}>Récupérez l'adresse IP Tailscale du serveur (qui commence généralement par <code>100.x.x.x</code>).</li>
-            <li style={{ marginBottom: '6px' }}>Entrez cette adresse dans le navigateur de votre téléphone : <code>http://100.x.x.x:4000</code></li>
+            <li style={{ marginBottom: '6px' }}>Assurez-vous que l'appareil client est connecté au VPN Tailscale.</li>
+            <li style={{ marginBottom: '6px' }}>
+              <strong>Lien d'accès direct (MagicDNS) : </strong>
+              <a href="https://sentys.tail83d439.ts.net/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)', textDecoration: 'underline', fontWeight: 'bold' }}>https://sentys.tail83d439.ts.net/</a>
+            </li>
           </ul>
           <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>3. Avantages (Architecture SENTYS)</h4>
           <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>
