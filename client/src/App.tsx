@@ -201,7 +201,7 @@ function getSystemStatus(
   }, [user]);
 
   const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
-  const kioskPin = window.localStorage.getItem('sentys:kiosk_pin') || '';
+  const kioskPin = window.localStorage.getItem('sentys:kiosk_pin') || '1234';
 
   const [isLocked, setIsLocked] = useState(isKioskMode);
   const [kioskActiveRole, setKioskActiveRole] = useState<'guest' | 'admin' | null>(null);
@@ -345,12 +345,7 @@ function getSystemStatus(
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px 0' }}>
               <button className="sensor-confirm-btn sensor-confirm-btn--xl" style={{ padding: '20px', fontSize: '18px' }} onClick={() => { setIsLocked(false); setKioskActiveRole('guest'); }}>CONNEXION INVITÉ</button>
               <button className="sensor-delete-btn sensor-delete-btn--xl" style={{ padding: '20px', fontSize: '18px', background: 'var(--accent-blue-bg)', color: 'var(--accent-blue)', border: '1px solid var(--accent-blue-border)' }} onClick={() => {
-                if (kioskPin) {
-                  setShowAdminPin(true);
-                } else {
-                  setIsLocked(false);
-                  setKioskActiveRole('admin');
-                }
+                setShowAdminPin(true);
               }}>CONNEXION ADMIN</button>
             </div>
           ) : (

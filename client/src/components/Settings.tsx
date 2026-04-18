@@ -131,7 +131,7 @@ function TabSettings() {
   const [resetError, setResetError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [kioskPin, setKioskPin] = useState(() => window.localStorage.getItem('sentys:kiosk_pin') || '');
+  const [kioskPin, setKioskPin] = useState(() => window.localStorage.getItem('sentys:kiosk_pin') || '1234');
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushSupport, setPushSupport] = useState(true);
   const [isPwa, setIsPwa] = useState(true);
@@ -304,12 +304,14 @@ function TabSettings() {
   }
 
   function saveKioskPin() {
-    if (kioskPin.trim()) {
-      window.localStorage.setItem('sentys:kiosk_pin', kioskPin.trim());
+    const pin = kioskPin.trim();
+    if (pin.length === 4) {
+      window.localStorage.setItem('sentys:kiosk_pin', pin);
       alert("Code PIN enregistré. Il protègera l'écran et les actions sensibles sur cet appareil.");
     } else {
-      window.localStorage.removeItem('sentys:kiosk_pin');
-      alert("Code PIN désactivé.");
+      setKioskPin('1234');
+      window.localStorage.setItem('sentys:kiosk_pin', '1234');
+      alert("Le PIN doit faire exactement 4 chiffres. Il a été réinitialisé à 1234 par défaut.");
     }
   }
 
@@ -641,8 +643,8 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <input className="sensor-input" type="password" maxLength={4} placeholder="Laisser vide pour désactiver" value={kioskPin} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(kioskPin, (value) => setKioskPin(value.replace(/\D/g, '')))} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} autoComplete="new-password" />
-            <span className="settings-field-hint">Ce code protègera l'armement du système et le déverrouillage de l'écran.</span>
+            <input className="sensor-input" type="password" maxLength={4} placeholder="Ex: 1234" value={kioskPin} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(kioskPin, (value) => setKioskPin(value.replace(/\D/g, '')))} onChange={e => setKioskPin(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: '200px' }} autoComplete="new-password" />
+            <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et l'accès Admin.</span>
           </label>
         </div>
         <div className="settings-toggle-list">

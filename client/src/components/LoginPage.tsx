@@ -113,24 +113,14 @@ export default function LoginPage() {
 
   function handleAdminLogin() {
     if (isLockedOut) return;
-    const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
-    if (!savedPin) {
-      setError('');
-      setLoading(true);
-      login('kiosk_admin', '').catch(err => {
-        setError(err instanceof Error ? err.message : 'Erreur Admin');
-        setLoading(false);
-      });
-    } else {
-      setShowPinPrompt(true);
-      setError('');
-    }
+    setShowPinPrompt(true);
+    setError('');
   }
 
   function submitPin(e: FormEvent) {
     e.preventDefault();
     if (isLockedOut) return;
-    const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
+    const savedPin = window.localStorage.getItem('sentys:kiosk_pin') || '1234';
     if (pinInput === savedPin) {
       setError('');
       setLoading(true);

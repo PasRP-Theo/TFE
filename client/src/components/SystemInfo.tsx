@@ -205,14 +205,9 @@ export default function SystemInfo() {
   }, [fetchInfo]);
 
   const handleArmClick = () => {
-    const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
-    if (savedPin) {
-      setShowPinPad(true);
-      setEnteredPin("");
-      setPinError("");
-    } else {
-      setSurveillanceActive(!surveillanceActive);
-    }
+    setShowPinPad(true);
+    setEnteredPin("");
+    setPinError("");
   };
 
   const handlePinPress = (digit: string) => {
@@ -222,7 +217,7 @@ export default function SystemInfo() {
     setPinError("");
 
     if (nextPin.length === 4) {
-      const savedPin = window.localStorage.getItem('sentys:kiosk_pin');
+      const savedPin = window.localStorage.getItem('sentys:kiosk_pin') || '1234';
       if (nextPin === savedPin) {
         setSurveillanceActive(!surveillanceActive);
         setShowPinPad(false);
