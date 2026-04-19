@@ -194,7 +194,7 @@ function getSystemStatus(
     };
   }, [user]);
 
-  const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
+  const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true' || window.sessionStorage.getItem('sentys:control_panel') === 'true';
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
