@@ -330,8 +330,10 @@ function getSystemStatus(
           <h2 style={{ margin: '0 0 20px 0', letterSpacing: '2px', color: 'var(--accent-blue)' }}>🔒 ÉCRAN DE CONTRÔLE</h2>
           
           {/* Debug : Affichage du PIN actuel configuré en mémoire */}
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '15px' }}>
-            PIN Actuel (Debug) : {kioskPin}
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '15px', background: 'var(--bg-hover)', padding: '10px', borderRadius: '8px' }}>
+            PIN Utilisé : {kioskPin} <br/>
+            Reçu du serveur : {config.kioskPin ? `OUI (${config.kioskPin})` : 'NON (Vide)'} <br/>
+            Compte Pi : {user?.username || 'Aucun'}
           </div>
 
           {!isOnline && (
