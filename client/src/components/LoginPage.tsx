@@ -19,6 +19,13 @@ export default function LoginPage() {
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
 
   const isControlPanel = useMemo(() => {
+    // Porte de sortie secrète : si l'URL contient ?kiosk=off, on désactive le mode sur cet appareil
+    if (window.location.search.includes('kiosk=off')) {
+      window.localStorage.removeItem('sentys:kiosk_mode');
+      window.sessionStorage.removeItem('sentys:control_panel');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return false;
+    }
     if (window.location.pathname === '/controlpanel') {
       window.sessionStorage.setItem('sentys:control_panel', 'true');
       return true;
