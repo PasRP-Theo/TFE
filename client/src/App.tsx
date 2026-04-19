@@ -334,6 +334,15 @@ function getSystemStatus(
             PIN Utilisé : {kioskPin} <br/>
             Reçu du serveur : {config.kioskPin ? `OUI (${config.kioskPin})` : 'NON (Vide)'} <br/>
             Compte Pi : {user?.username || 'Aucun'}
+            <div style={{ marginTop: '10px' }}>
+              <button 
+                className="sensor-link-btn" 
+                style={{ padding: '6px 12px', fontSize: '11px', background: 'var(--bg-base)' }}
+                onClick={() => { window.location.reload(); }}
+              >
+                🔄 Forcer l'actualisation
+              </button>
+            </div>
           </div>
 
           {!isOnline && (

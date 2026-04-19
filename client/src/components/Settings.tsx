@@ -139,6 +139,7 @@ function TabSettings() {
   const [securityError, setSecurityError] = useState('');
   const [securitySuccess, setSecuritySuccess] = useState('');
   const [securitySaving, setSecuritySaving] = useState(false);
+  const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
     setDraftConfig(config);
@@ -656,18 +657,23 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <input 
-              className="sensor-input" 
-              type="password" 
-              maxLength={4} 
-              placeholder="Ex: 1234" 
-              value={draftConfig.kioskPin} 
-              readOnly={isKeyboardEnabled} 
-              onFocus={() => showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))} 
-              onChange={e => updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })} 
-              style={{ maxWidth: '200px' }} 
-              autoComplete="new-password" 
-            />
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input 
+                className="sensor-input" 
+                type={showPin ? "text" : "password"} 
+                maxLength={4} 
+                placeholder="Ex: 1234" 
+                value={draftConfig.kioskPin} 
+                readOnly={isKeyboardEnabled} 
+                onFocus={() => showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))} 
+                onChange={e => updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })} 
+                style={{ maxWidth: '200px' }} 
+                autoComplete="new-password" 
+              />
+              <button type="button" className="sensor-link-btn" onClick={() => setShowPin(!showPin)}>
+                {showPin ? 'Cacher' : 'Voir'}
+              </button>
+            </div>
             <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et l'accès Admin.</span>
           </label>
         </div>
