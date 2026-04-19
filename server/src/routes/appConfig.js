@@ -33,6 +33,7 @@ function serializeConfig(row) {
     alertsDisconnectEnabled: row.alerts_disconnect_enabled,
     defaultAdminUsername: 'root',
     defaultAdminActive: row.default_admin_active,
+    kioskPin: row.kiosk_pin,
   };
 }
 
@@ -45,7 +46,7 @@ async function getConfigRow() {
             default_camera_add_mode, camera_discovery_interval_seconds,
             alerts_realtime_enabled, alerts_daily_summary_enabled,
             alerts_sound_enabled, alerts_disconnect_enabled,
-            default_admin_active
+            default_admin_active, kiosk_pin
      FROM app_settings
      WHERE id = 1`
   );
@@ -94,6 +95,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
   const nextAlertsDailySummaryEnabled = readBoolean(req.body.alertsDailySummaryEnabled);
   const nextAlertsSoundEnabled = readBoolean(req.body.alertsSoundEnabled);
   const nextAlertsDisconnectEnabled = readBoolean(req.body.alertsDisconnectEnabled);
+  const nextKioskPin = readString(req.body.kioskPin);
 
   if (nextAppName !== undefined && !nextAppName) {
     return res.status(400).json({ error: 'Le titre principal ne peut pas être vide' });
@@ -125,6 +127,9 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
   if (nextCameraDiscoveryIntervalSeconds !== undefined && (nextCameraDiscoveryIntervalSeconds < 3 || nextCameraDiscoveryIntervalSeconds > 30)) {
     return res.status(400).json({ error: 'L’intervalle de découverte doit être compris entre 3 et 30 secondes' });
   }
+  if (nextKioskPin !== undefined && !/^\d{4}$/.test(nextKioskPin)) {
+    return res.status(400).json({ error: 'Le code PIN doit comporter exactement 4 chiffres' });
+  }
 
   try {
     const current = await getConfigRow();
@@ -147,6 +152,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
       alertsDailySummaryEnabled: nextAlertsDailySummaryEnabled ?? current.alerts_daily_summary_enabled,
       alertsSoundEnabled: nextAlertsSoundEnabled ?? current.alerts_sound_enabled,
       alertsDisconnectEnabled: nextAlertsDisconnectEnabled ?? current.alerts_disconnect_enabled,
+      kioskPin: nextKioskPin ?? current.kiosk_pin,
     };
 
     const { rows } = await pool.query(
@@ -169,6 +175,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
            alerts_daily_summary_enabled = $16,
            alerts_sound_enabled = $17,
            alerts_disconnect_enabled = $18,
+           kiosk_pin = $19,
            updated_at = NOW()
        WHERE id = 1
        RETURNING app_name, app_subtitle, system_version,
@@ -178,7 +185,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
                  default_camera_add_mode, camera_discovery_interval_seconds,
                  alerts_realtime_enabled, alerts_daily_summary_enabled,
                  alerts_sound_enabled, alerts_disconnect_enabled,
-                 default_admin_active`,
+                 default_admin_active, kiosk_pin`,
       [
         values.appName,
         values.appSubtitle,
@@ -198,6 +205,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
         values.alertsDailySummaryEnabled,
         values.alertsSoundEnabled,
         values.alertsDisconnectEnabled,
+        values.kioskPin,
       ]
     );
 
