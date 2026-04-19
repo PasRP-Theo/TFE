@@ -329,22 +329,6 @@ function getSystemStatus(
         <div style={{ background: 'var(--bg-surface)', padding: '40px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)', width: '320px', textAlign: 'center' }}>
           <h2 style={{ margin: '0 0 20px 0', letterSpacing: '2px', color: 'var(--accent-blue)' }}>🔒 ÉCRAN DE CONTRÔLE</h2>
           
-          {/* Debug : Affichage du PIN actuel configuré en mémoire */}
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '15px', background: 'var(--bg-hover)', padding: '10px', borderRadius: '8px' }}>
-            PIN Utilisé : {kioskPin} <br/>
-            Reçu du serveur : {config.kioskPin ? `OUI (${config.kioskPin})` : 'NON (Vide)'} <br/>
-            Compte Pi : {user?.username || 'Aucun'}
-            <div style={{ marginTop: '10px' }}>
-              <button 
-                className="sensor-link-btn" 
-                style={{ padding: '6px 12px', fontSize: '11px', background: 'var(--bg-base)' }}
-                onClick={() => { window.location.reload(); }}
-              >
-                🔄 Forcer l'actualisation
-              </button>
-            </div>
-          </div>
-
           {!isOnline && (
             <div style={{ background: 'var(--bg-hover)', color: 'var(--accent-amber)', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid var(--accent-amber)', fontSize: '0.85rem', fontWeight: 'bold', lineHeight: '1.4' }}>
               ⚠️ ALERTE<br/>Absence de réseau IP détectée.
@@ -384,10 +368,6 @@ function getSystemStatus(
               </div>
             </>
           )}
-
-          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)' }}>
-            <button className="sensor-link-btn" onClick={() => { window.localStorage.removeItem('sentys:kiosk_mode'); window.location.href = '/'; }}>Quitter le mode Kiosk</button>
-          </div>
         </div>
       </div>
     );

@@ -649,7 +649,7 @@ function TabSettings() {
 
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
-          <span>SÉCURITÉ LOCALE & KIOSK</span>
+          <span>SÉCURITÉ LOCALE</span>
           <button className="sensor-confirm-btn" onClick={saveSecuritySettings} disabled={securitySaving}>
             {securitySaving ? 'Enregistrement...' : 'Enregistrer le PIN'}
           </button>
@@ -681,8 +681,8 @@ function TabSettings() {
         {securitySuccess && <div className="settings-msg settings-msg--success">✓ {securitySuccess}</div>}
         <div className="settings-toggle-list">
           <SettingToggle
-            label="Activer le Mode Kiosk sur cet appareil"
-            description="Connexion automatique sans mot de passe, masque l'onglet Paramètres et verrouille l'écran après 5 minutes d'inactivité."
+            label="Activer l'écran de contrôle sur cet appareil"
+            description="Active le verrouillage par code PIN après 5 minutes d'inactivité et masque l'onglet Paramètres."
             checked={window.localStorage.getItem('sentys:kiosk_mode') === 'true'}
             onChange={(checked) => {
               if (checked) window.localStorage.setItem('sentys:kiosk_mode', 'true');
