@@ -23,7 +23,7 @@ export default function LoginPage() {
       window.sessionStorage.setItem('sentys:control_panel', 'true');
       return true;
     }
-    return window.sessionStorage.getItem('sentys:control_panel') === 'true';
+    return window.sessionStorage.getItem('sentys:control_panel') === 'true' || window.localStorage.getItem('sentys:kiosk_mode') === 'true';
   }, []);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState('');

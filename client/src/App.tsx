@@ -12,7 +12,6 @@ import AlertsPage  from './components/AlertsPage';
 import BrandLogo from './components/BrandLogo.tsx';
 import { registerSW } from 'virtual:pwa-register';
 import { apiUrl, readJsonResponse } from './lib/api';
-import { KioskAuthHandler } from './components/KioskAuthHandler.tsx';
 import { VirtualKeyboardProvider } from './components/VirtualKeyboard.tsx';
 import './App.css';
 
@@ -35,18 +34,13 @@ interface BatteryManager extends EventTarget {
 
 // ── Route protégée par rôle ────────────────────────────────
 function AdminRoute({ 
-  children, 
-  isKioskMode, 
-  kioskActiveRole 
+  children 
 }: { 
   children: React.ReactNode;
-  isKioskMode: boolean;
-  kioskActiveRole: 'guest' | 'admin' | null;
 }) {
   const { user } = useAuth();
-  const hasAccess = user?.role === 'admin' && (!isKioskMode || kioskActiveRole === 'admin');
   
-  // Redirige automatiquement vers l'accueil si le rôle n'est pas suffisant (ex: Mode Invité)
+  const hasAccess = user?.role === 'admin';
   if (!hasAccess) return <Navigate to="/videos" replace />;
 
   return <>{children}</>;
@@ -201,31 +195,19 @@ function getSystemStatus(
   }, [user]);
 
   const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
-  const kioskPin = config.kioskPin || '1234';
 
-  const [isLocked, setIsLocked] = useState(isKioskMode);
-  const [kioskActiveRole, setKioskActiveRole] = useState<'guest' | 'admin' | null>(null);
-  const [showAdminPin, setShowAdminPin] = useState(false);
-  const [enteredPin, setEnteredPin] = useState("");
-  const [lockError, setLockError] = useState("");
-  const [attempts, setAttempts] = useState(0);
-  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
-  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetInactivityTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (isKioskMode && !isLocked) {
+    if (isKioskMode) {
       timerRef.current = setTimeout(() => {
-        setIsLocked(true);
-        setKioskActiveRole(null);
-        setShowAdminPin(false);
-        setEnteredPin("");
-        setAttempts(0);
-        setLockError("");
+        logout();
+        window.localStorage.removeItem('token');
+        window.location.reload();
       }, 5 * 60 * 1000); // 5 minutes
     }
-  }, [isKioskMode, isLocked]);
+  }, [isKioskMode, logout]);
 
   useEffect(() => {
     resetInactivityTimer();
@@ -237,21 +219,6 @@ function getSystemStatus(
     };
   }, [resetInactivityTimer]);
 
-  useEffect(() => {
-    if (!lockoutUntil) return;
-    const interval = setInterval(() => {
-      const secondsLeft = Math.ceil((lockoutUntil - Date.now()) / 1000);
-      if (secondsLeft > 0) {
-        setLockoutSecondsLeft(secondsLeft);
-      } else {
-        setLockoutUntil(null);
-        setAttempts(0);
-        setLockError("");
-        setLockoutSecondsLeft(0);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [lockoutUntil]);
 
   if (loading) {
     return (
@@ -442,14 +409,14 @@ function getSystemStatus(
           )}
 
           <div className="app-user">
-            <span className="app-user-name">{isKioskMode && kioskActiveRole === 'guest' ? 'Mode Invité' : user.username}</span>
-            <span className={`app-user-role ${isAdmin && (!isKioskMode || kioskActiveRole === 'admin') ? '' : 'app-user-role--user'}`}>
-              {isKioskMode && kioskActiveRole === 'guest' ? 'GUEST' : (isAdmin ? 'ADMIN' : 'USER')}
+            <span className="app-user-name">{user.username}</span>
+            <span className={`app-user-role ${isAdmin ? '' : 'app-user-role--user'}`}>
+              {isAdmin ? 'ADMIN' : 'USER'}
             </span>
           </div>
 
           {isKioskMode && (
-            <button className="app-theme-btn" onClick={() => { setIsLocked(true); setKioskActiveRole(null); setShowAdminPin(false); setEnteredPin(""); }} title="Verrouiller l'écran">🔒</button>
+            <button className="app-theme-btn" onClick={() => { logout(); window.localStorage.removeItem('token'); window.location.reload(); }} title="Verrouiller l'écran">🔒</button>
           )}
 
           <button className="app-theme-btn"
@@ -474,7 +441,7 @@ function getSystemStatus(
           {/* <Route path="/courses" element={<GroceryList />} />*/}
           <Route path="/system"  element={<SystemInfo />} />
           <Route path="/settings" element={
-            <AdminRoute isKioskMode={isKioskMode} kioskActiveRole={kioskActiveRole}>
+            <AdminRoute>
               <Settings />
             </AdminRoute>
           } />
@@ -491,7 +458,6 @@ export default function App() {
   return (
     <AppConfigProvider>
       <AuthProvider>
-        <KioskAuthHandler />
         <AppearanceProvider>
           <VirtualKeyboardProvider>
             <AppShell />
