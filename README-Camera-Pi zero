@@ -1,0 +1,122 @@
+Voici le **README.md** final, totalement "nettoyé", unifié et structuré pour être copié-collé. J'ai intégré la partie IA directement dans le flux logique du document.
+
+***
+
+# 📹 Système de Surveillance Multi-Satellites (IP Cam + AI)
+
+Ce projet permet de déployer 3 unités de caméras autonomes basées sur le **Raspberry Pi Zero 2 W**. Chaque unité diffuse un flux vidéo via Wi-Fi vers un **PC Host** central qui gère l'analyse par **Intelligence Artificielle** et l'affichage sur un **Dashboard React**.
+
+---
+
+## 📦 1. Liste du Matériel (Pour 1 unité)
+*Multipliez par 3 pour le projet complet.*
+
+* **Cerveau :** Raspberry Pi Zero 2 W (Quad-core 1GHz).
+* **Optique :** Caméra InnoMaker 5MP (Capteur OV5647, monture M12).
+* **Énergie :** Module UPS Geekworm X306 V1.3 + Batterie LiPo 3.7V (2000mAh+).
+* **Connectique :** Câble nappe étroit spécifique pour Pi Zero.
+* **Stockage :** Carte MicroSD "High Endurance" (16/32 Go).
+* **Alimentation :** Bloc secteur USB 5V / 3A (connecté au module X306).
+
+---
+
+## 🛠 2. Montage & Configuration Physique
+
+### Assemblage
+1.  **Refroidissement :** Coller un dissipateur thermique sur le CPU du Pi Zero 2 W.
+2.  **Caméra :** Connecter la nappe étroite sur le port CSI du Pi (contacts vers la carte). Relier l'autre extrémité à la caméra InnoMaker.
+3.  **UPS X306 :** Fixer le Pi Zero sur le module X306 via les entretoises. Les "pogo pins" assurent le contact d'alimentation sous le Pi.
+4.  **Batterie :** Brancher la batterie LiPo sur le port `BAT` du X306.
+
+### Logiciel (OS & Streaming)
+1.  Flasher **Raspberry Pi OS Lite (64-bit)** via *Raspberry Pi Imager*.
+2.  Pré-configurer le **SSH** et le **Wi-Fi** (options avancées d'Imager).
+3.  Assigner un nom d'hôte unique (`cam1`, `cam2`, `cam3`).
+4.  **Diffusion :** Installer **MediaMTX** ou utiliser `libcamera-vid` pour créer un flux RTSP :
+    ```bash
+    libcamera-vid -t 0 --inline -o - | cvlc stream:///stdin --sout '#rtp{sdp=rtsp://:8554/mystream}' :demux=h264
+    ```
+
+---
+
+## 🧠 3. Détection par Intelligence Artificielle (PC Host)
+
+Le traitement lourd est déporté sur le PC Host pour garantir la fiabilité et éviter la surchauffe des Pi Zero.
+
+### Configuration Frigate (IA de détection)
+Utilisez **Frigate NVR** (via Docker) pour identifier des objets réels (personnes, chiens, voitures) :
+
+```yaml
+# config.yml (Extrait)
+cameras:
+  cam_salon:
+    ffmpeg:
+      inputs:
+        - path: rtsp://192.168.1.50:8554/mystream
+          roles: [- detect, - rtmp]
+    detect:
+      enabled: True
+      width: 1280
+      height: 720
+      fps: 5
+    objects:
+      track: [person, dog, car]
+```
+
+---
+
+## ⚛️ 4. Dashboard React & Intégration
+
+### Installation Frontend
+```bash
+npm install video.js socket.io-client
+```
+
+### Composant de Visualisation (`CameraView.jsx`)
+```jsx
+import React, { useEffect, useRef } from 'react';
+import videojs from 'video.js';
+import 'video.js/dist/video-js.css';
+
+const CameraView = ({ src, title, hasMotion }) => {
+  const videoRef = useRef(null);
+  const playerRef = useRef(null);
+
+  useEffect(() => {
+    if (!playerRef.current && videoRef.current) {
+      playerRef.current = videojs(videoRef.current, {
+        autoplay: true,
+        muted: true,
+        controls: true,
+        sources: [{ src, type: 'application/x-mpegURL' }] // Flux converti en HLS
+      });
+    }
+  }, [src]);
+
+  return (
+    <div style={{ border: hasMotion ? '3px solid red' : '1px solid gray' }}>
+      <h3>{title} {hasMotion && "⚠️ MOUVEMENT"}</h3>
+      <video ref={videoRef} className="video-js vjs-16-9" />
+    </div>
+  );
+};
+```
+
+---
+
+## 🏗️ 5. Schéma de la Chaîne de Données
+
+1.  **CAPTURE :** Le Pi Zero 2 W compresse et envoie le flux via RTSP.
+2.  **ANALYSE :** Le PC Host (Frigate/IA) analyse les formes en temps réel.
+3.  **NOTIFICATION :** Si une personne est détectée, le PC envoie un signal via **Socket.io**.
+4.  **AFFICHAGE :** L'app React reçoit le signal et fait clignoter l'interface.
+
+---
+
+## ⚠️ 6. Maintenance & Fiabilité 24/7
+
+* **Gestion Thermique :** Surveiller la température (`vcgencmd measure_temp`). Si > 70°C, améliorer l'aération.
+* **Alimentation :** Le module X306 doit rester branché sur secteur. La batterie sert de secours en cas de coupure (UPS).
+* **IP Statiques :** Fixer les adresses IP des Pi dans votre box internet pour éviter les déconnexions du dashboard.
+
+***
