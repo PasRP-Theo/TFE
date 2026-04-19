@@ -329,6 +329,11 @@ function getSystemStatus(
         <div style={{ background: 'var(--bg-surface)', padding: '40px', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)', width: '320px', textAlign: 'center' }}>
           <h2 style={{ margin: '0 0 20px 0', letterSpacing: '2px', color: 'var(--accent-blue)' }}>🔒 ÉCRAN DE CONTRÔLE</h2>
           
+          {/* Debug : Affichage du PIN actuel configuré en mémoire */}
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            PIN Actuel (Debug) : {kioskPin}
+          </div>
+
           {!isOnline && (
             <div style={{ background: 'var(--bg-hover)', color: 'var(--accent-amber)', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid var(--accent-amber)', fontSize: '0.85rem', fontWeight: 'bold', lineHeight: '1.4' }}>
               ⚠️ ALERTE<br/>Absence de réseau IP détectée.
