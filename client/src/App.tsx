@@ -247,7 +247,7 @@ function getSystemStatus(
     { to: '/alerts',   label: 'Alertes',    shortLabel: 'Alertes',  icon: '⚠', show: true, badge: pendingAlertsCount > 0 ? String(pendingAlertsCount) : '' },
     { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: true },
     //{ to: '/courses',  label: 'Courses',    show: true    },
-    { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin && (!isKioskMode || kioskActiveRole === 'admin') },
+    { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
   const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, pendingAlertsCount, batteryInfo);
