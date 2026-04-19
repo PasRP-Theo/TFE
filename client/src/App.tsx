@@ -201,7 +201,7 @@ function getSystemStatus(
   }, [user]);
 
   const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
-  const kioskPin = window.localStorage.getItem('sentys:kiosk_pin') || '1234';
+  const kioskPin = config.kioskPin || '1234';
 
   const [isLocked, setIsLocked] = useState(isKioskMode);
   const [kioskActiveRole, setKioskActiveRole] = useState<'guest' | 'admin' | null>(null);
