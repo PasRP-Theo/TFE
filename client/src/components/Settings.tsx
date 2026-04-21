@@ -543,7 +543,7 @@ function TabSettings() {
             <span className="settings-field-hint">Secondes entre deux synchronisations de la liste des caméras.</span>
           </label>
           <label className="settings-field">
-            <span className="settings-field-label">Intervalle découverte nœuds / ESP32</span>
+    <span className="settings-field-label">Intervalle découverte (Nœuds / Scan)</span>
             <input className="sensor-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraDiscoveryIntervalSeconds), (value) => updateDraft({ cameraDiscoveryIntervalSeconds: Number(value) || 3 }))} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
             <span className="settings-field-hint">Secondes entre deux rafraîchissements dans le panneau d’ajout caméra.</span>
           </label>
@@ -553,7 +553,7 @@ function TabSettings() {
               value={draftConfig.defaultCameraAddMode}
               options={[
                 { value: 'node', label: 'Nœud Pi' },
-                { value: 'discover', label: 'ESP32-CAM' },
+        { value: 'discover', label: 'Scan Réseau' },
                 { value: 'manual', label: 'Manuel' }
               ]}
               onChange={val => updateDraft({ defaultCameraAddMode: val as typeof draftConfig.defaultCameraAddMode })}
@@ -1115,9 +1115,9 @@ function TabHelp() {
         </div>
       </div>
       <div className="settings-section">
-        <div className="settings-section-label">CAMÉRAS AUTONOMES (ESP32 & RASPBERRY PI)</div>
+        <div className="settings-section-label">CAMÉRAS AUTONOMES (RASPBERRY PI)</div>
         <ul style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
-          <li style={{ marginBottom: '8px' }}><strong>ESP32-CAM / ESP32-S3 :</strong> Utilisez l'onglet Caméras puis "Ajouter {'->'} ESP32-CAM" pour lancer une découverte réseau (mDNS).</li>
+          <li style={{ marginBottom: '8px' }}><strong>Scan Réseau :</strong> Utilisez l'onglet Caméras puis "Ajouter {'->'} Scan Réseau" pour détecter automatiquement les Raspberry Pi Zero (port 8889).</li>
           <li style={{ marginBottom: '8px' }}><strong>Raspberry Pi Node :</strong> Le Pi doit exécuter les scripts <code>announce_node.py</code> et <code>pir_sender.py</code>. Il apparaîtra automatiquement dans la section "Nœud Pi".</li>
           <li style={{ marginBottom: '8px' }}><strong>Résilience (Coupure WiFi) :</strong> Si prévu dans le firmware, les nœuds autonomes sauvegardent sur leur carte MicroSD locale et synchroniseront les fichiers au retour du réseau.</li>
         </ul>
@@ -1130,7 +1130,7 @@ function TabHelp() {
           <span style={{ color: 'var(--text-secondary)' }}>
             © {new Date().getFullYear()} SENTYS Project<br />
             Architecture : React, Node.js, FFmpeg, SQLite, HLS.js<br />
-            Matériel : Nœuds Raspberry Pi autonomes & Microcontrôleurs ESP32
+            Matériel : Nœuds Raspberry Pi autonomes
           </span>
         </div>
       </div>

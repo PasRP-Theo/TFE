@@ -16,28 +16,11 @@ Les stories sont organisees par epic et priorisees selon leur importance pour le
 
 ---
 
-## Epic 1 - Firmware ESP32-S3
-
-| ID | User story | Criteres d'acceptation | Prio | Etat |
-| --- | --- | --- | --- | --- |
-| US-01 | En tant que systeme, je veux basculer en mode autonome (SD) quand le WiFi disparait, afin de ne jamais perdre d'enregistrement. | Bascule en moins de 5 s ; ecriture SD immediate ; log `MODE_AUTONOME` sur port serie ; tentative de reconnexion toutes les 30 min. | P1 | A faire |
-| US-02 | En tant que systeme, je veux creer un hotspot WiFi (mode AP) si aucun reseau n'est disponible, afin de rester accessible localement. | AP `SENTYS_CAMx` visible ; page HTML `/status` accessible sur `192.168.4.1`. | P1 | A faire |
-| US-03 | En tant que systeme, je veux entrer en deep sleep 60 s apres le dernier mouvement detecte, afin de maximiser l'autonomie batterie. | Deep sleep apres 60 s sans PIR ; consommation inferieure a `0,02 mA` en veille ; reveil PIR en moins de 2 s. | P1 | A faire |
-| US-05 | En tant que systeme, je veux synchroniser les fichiers SD vers le serveur des que le WiFi est retabli. | Detection auto de reconnexion ; upload multipart `POST /upload` ; fichiers marques comme synchronises apres succes. | P1 | A faire |
-| US-07 | En tant que systeme, je veux envoyer une alerte batterie au serveur quand le niveau descend sous 15 %. | `POST /alert` envoye sous 15 % ; pas de repetition tant que le niveau ne remonte pas au-dessus de 20 %. | P2 | A faire |
-
-### Notes d'adaptation
-
-- Cet epic concerne principalement le firmware ESP32-S3 et n'est pas couvert aujourd'hui par le code frontend/backend principal du depot.
-- Il faudra probablement un sous-projet dedie pour separer le firmware, les endpoints serveur et les tests materiels.
-
----
-
 ## Epic 2 - Serveur Node.js
 
 | ID | User story | Criteres d'acceptation | Prio | Etat |
 | --- | --- | --- | --- | --- |
-| US-08 | En tant que serveur, je veux recevoir et relayer le flux MJPEG de chaque camera. | Route `GET /streams/:camId` qui proxifie le flux ESP32 ; reconnexion automatique si la camera coupe. | P1 | Partiel |
+| US-08 | En tant que serveur, je veux recevoir et relayer le flux MJPEG/H264 de chaque camera. | Route qui proxifie le flux de la caméra ; reconnexion automatique si la camera coupe. | P1 | Partiel |
 | US-09 | En tant que serveur, je veux recevoir et stocker les fichiers video envoyes par les cameras apres une coupure WiFi. | `POST /upload` accepte fichier + metadata ; enregistrement dans `/recordings/` et en base. | P1 | A faire |
 | US-10 | En tant que serveur, je veux enregistrer en continu les flux camera via ffmpeg en segments de 5 minutes. | `ffmpeg` demarre au lancement ; segments nommes avec timestamp ; redemarrage auto si le flux coupe. | P1 | Partiel |
 | US-11 | En tant que serveur, je veux surveiller l'etat de chaque camera toutes les 30 secondes. | Poll `GET /status` ; alerte si camera offline, batterie < 15 %, SD < 1 Go ; push WebSocket. | P1 | Partiel |
@@ -138,13 +121,13 @@ Les stories sont organisees par epic et priorisees selon leur importance pour le
 
 Si l'objectif est de terminer le projet de facon pragmatique, l'ordre conseille est :
 
-1. Finaliser le coeur surveillance deja entame.
+1. **Finaliser le coeur surveillance deja entame.**
    - US-10
    - US-11
    - US-13
    - US-18
 
-2. Ajouter le vrai cycle d'alertes.
+2. **Ajouter le vrai cycle d'alertes.**
    - US-15
    - US-16
    - US-22
@@ -153,21 +136,14 @@ Si l'objectif est de terminer le projet de facon pragmatique, l'ordre conseille 
    - US-30
    - US-31
 
-3. Gerer la robustesse des noeuds autonomes ESP32-S3.
-   - US-01
-   - US-02
-   - US-03
-   - US-05
-   - US-07
-
-4. Terminer la couche exploitation / installation.
+3. **Terminer la couche exploitation / installation.**
    - US-12
    - US-20
    - US-21
    - US-23
    - US-26
 
-5. Ajouter une couche d'analyse simple et exploitable.
+4. **Ajouter une couche d'analyse simple et exploitable.**
    - US-32
    - US-33
    - US-34
@@ -196,8 +172,7 @@ Fonctionnalites encore structurantes a faire :
 - notifications push
 - resumes et statistiques d'activite
 - detection d'anomalies simples
-- mode boitier de controle PIN
-- firmware autonome ESP32-S3 complet
+- mode boitier de controle PIN (Epic 4)
 - securisation d'acces externe via Tailscale
 
 ---

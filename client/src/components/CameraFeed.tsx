@@ -399,7 +399,7 @@ export default function CameraFeed() {
   const [cameraNodesLoading, setCameraNodesLoading] = useState(false);
   const [cameraNodesError, setCameraNodesError] = useState<string | null>(null);
   const [nodeMotionWindowSeconds, setNodeMotionWindowSeconds] = useState(20);
-  const [searchingEsp32, setSearchingEsp32] = useState(false);
+  const [searchingNetwork, setSearchingNetwork] = useState(false);
   const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredCamera[]>([]);
   const [discoveriesLoading, setDiscoveriesLoading] = useState(false);
@@ -430,7 +430,7 @@ export default function CameraFeed() {
     try {
       const res = await fetch(apiUrl('/api/cameras/discoveries'));
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible de charger les ESP32 détectées');
+      if (!res.ok) throw new Error(data.error || 'Impossible de charger les caméras détectées');
       setDiscoveredDevices(Array.isArray(data.devices) ? data.devices : []);
       setDiscoveriesTtlMinutes(typeof data.ttlMinutes === 'number' ? data.ttlMinutes : 10);
       setDiscoveriesError(null);
@@ -529,24 +529,24 @@ export default function CameraFeed() {
     } catch { /* ignore */ }
   }
 
-  async function searchEsp32Cameras() {
-    setSearchingEsp32(true);
-    setDiscoverMessage('Recherche des ESP32-CAM en cours…');
+  async function searchNetworkCameras() {
+    setSearchingNetwork(true);
+    setDiscoverMessage('Recherche des caméras en cours…');
     try {
       const res = await fetch(apiUrl('/api/cameras/discover'));
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur de recherche ESP32-CAM');
+      if (!res.ok) throw new Error(data.error || 'Erreur de recherche sur le réseau');
       await fetchDiscoveries(true);
       if (Array.isArray(data.results) && data.results.length > 0) {
-        setDiscoverMessage(`${data.results.length} ESP32-CAM détectée${data.results.length > 1 ? 's' : ''}.`);
+        setDiscoverMessage(`${data.results.length} caméra(s) détectée(s).`);
       } else {
-        setDiscoverMessage('Aucune ESP32-CAM trouvée pour le moment.');
+        setDiscoverMessage('Aucune caméra trouvée pour le moment.');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
       setDiscoverMessage(message);
     } finally {
-      setSearchingEsp32(false);
+      setSearchingNetwork(false);
     }
   }
 
@@ -589,7 +589,7 @@ export default function CameraFeed() {
     setNewName(device.name || device.device_id);
     setNewRtsp(device.stream_url);
     setNewLoc(device.location || device.host);
-    setDiscoverMessage(`ESP32 détectée sélectionnée : ${device.name} (${device.host})`);
+    setDiscoverMessage(`Caméra détectée sélectionnée : ${device.name} (${device.host})`);
   }
 
   async function addDiscoveredDevice(device: DiscoveredCamera) {
@@ -822,7 +822,7 @@ export default function CameraFeed() {
                     className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
                     onClick={() => setAddMode('discover')}
                   >
-                    ESP32-CAM
+            Scan Réseau
                   </button>
                   <button
                     type="button"
@@ -903,16 +903,16 @@ export default function CameraFeed() {
               <section className="cam-discovery-panel">
               <div className="cam-discovery-header">
                 <div>
-                  <h3 className="cam-discovery-title">ESP32 vues récemment</h3>
+          <h3 className="cam-discovery-title">Caméras réseau détectées</h3>
                   <p className="cam-discovery-subtitle">Fenêtre de visibilité : {discoveriesTtlMinutes} min</p>
                 </div>
                 <button
                   type="button"
                   className="sensor-link-btn"
-                  onClick={searchEsp32Cameras}
-                  disabled={searchingEsp32}
+                  onClick={searchNetworkCameras}
+                  disabled={searchingNetwork}
                 >
-                  {searchingEsp32 ? 'Recherche...' : 'Chercher ESP32-CAM'}
+          {searchingNetwork ? 'Recherche...' : 'Lancer le scan'}
                 </button>
               </div>
               {discoverMessage && (
@@ -920,10 +920,10 @@ export default function CameraFeed() {
                   <p>{discoverMessage}</p>
                 </div>
               )}
-              {discoveriesLoading && <p>Chargement des annonces ESP32…</p>}
+      {discoveriesLoading && <p>Chargement des annonces réseau…</p>}
               {discoveriesError && <p className="cam-discovery-error">{discoveriesError}</p>}
               {!discoveriesLoading && !discoveriesError && discoveredDevices.length === 0 && (
-                <p className="cam-discovery-empty">Aucune annonce reçue. Lancez une recherche pour remplir la liste.</p>
+        <p className="cam-discovery-empty">Aucune caméra réseau trouvée. Lancez un scan pour remplir la liste.</p>
               )}
               {discoveredDevices.length > 0 && (
                 <ul className="cam-discovery-list">
@@ -966,7 +966,7 @@ export default function CameraFeed() {
               </div>
               <input className="sensor-input" placeholder="Nom de la caméra"
                 value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
-              <input className="sensor-input" placeholder="IP ou URL de flux (rtsp://... / http://... )"
+      <input className="sensor-input" placeholder="Ex: http://192.168.0.213:8889/cam1/ ou rtsp://..."
                 value={newRtsp} onChange={e => setNewRtsp(e.target.value)} />
               <input className="sensor-input" placeholder="Emplacement (optionnel)"
                 value={newLoc} onChange={e => setNewLoc(e.target.value)} />

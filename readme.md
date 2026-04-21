@@ -8,7 +8,7 @@ Conçu pour être déployé sur une unité centrale (comme un Raspberry Pi ou un
 ## Fonctionnalités principales
 
 - **Vidéosurveillance centralisée** : Affichage des flux vidéo (RTSP/HTTP) en temps réel via HLS, gestion des enregistrements et historique avec lecteur intégré.
-- **Découverte automatique (Plug & Play)** : Détection automatique des nœuds caméras autonomes (Raspberry Pi) et des modules ESP32-CAM sur le réseau local via mDNS ou scan réseau.
+- **Découverte automatique (Plug & Play)** : Détection automatique des nœuds caméras autonomes (Raspberry Pi) sur le réseau local via scan réseau.
 - **Monitoring IoT & Capteurs** : Suivi en direct de divers capteurs (Température, Humidité, Mouvement, Fumée, CO2) et système d'alertes en temps réel.
 - **Tableau de bord Système** : Surveillance des performances de la machine hôte (CPU, RAM, Disques, Réseau, Batterie).
 - **Administration & Sécurité** : Gestion multi-utilisateurs avec rôles (Admin/User), personnalisation avancée de l'interface (thème, densité), et accès protégé.
