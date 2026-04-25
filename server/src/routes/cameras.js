@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import path from 'path';
+import { networkInterfaces } from 'os';
+import { Socket } from 'net';
 import { existsSync, promises as fs } from 'fs';
 import { pool } from '../db/index.js';
 import {
@@ -300,6 +302,59 @@ router.get('/discover', async (req, res) => {
     console.error('[CAM DISCOVER]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la découverte' });
   }
+});
+
+// GET /api/cameras/scan — Scan rapide MediaMTX (Pi Zero 2W) sur le réseau local
+router.get('/scan', async (req, res) => {
+  const foundCameras = [];
+  const subnet = '192.168.0'; // Ton réseau
+  const port = 9997;
+
+  const allIps = Array.from({ length: 254 }, (_, i) => `${subnet}.${i + 1}`);
+  const activeIps = [];
+
+  // 1. Scan TCP (très rapide) par lots pour éviter de saturer Node.js
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < allIps.length; i += BATCH_SIZE) {
+    const batch = allIps.slice(i, i + BATCH_SIZE);
+    const checks = await Promise.all(batch.map(ip => {
+      return new Promise((resolve) => {
+        const socket = new Socket();
+        socket.setTimeout(800); // 800ms max pour le ping TCP
+        socket.once('connect', () => { socket.destroy(); resolve(ip); });
+        socket.once('timeout', () => { socket.destroy(); resolve(null); });
+        socket.once('error', () => { socket.destroy(); resolve(null); });
+        socket.connect(port, ip);
+      });
+    }));
+    activeIps.push(...checks.filter(Boolean));
+  }
+
+  // 2. Requête HTTP uniquement sur les IPs ouvertes (avec un délai plus long pour le Pi Zero)
+  for (const ip of activeIps) {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 2000); // 2 secondes de marge
+      const response = await fetch(`http://${ip}:${port}/v3/paths/list`, { signal: controller.signal });
+      clearTimeout(id);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.items && data.items.length > 0) {
+          foundCameras.push({
+            ip: ip,
+            name: data.items[0].name,
+            hlsUrl: `http://${ip}:8888/${data.items[0].name}`,
+            rtspUrl: `rtsp://${ip}:8554/${data.items[0].name}`
+          });
+        }
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  res.json(foundCameras);
 });
 
 // DELETE /api/cameras/:id

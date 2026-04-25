@@ -71,7 +71,14 @@ interface MotionEventEntry {
   created_at: string;
 }
 
-type AddMode = 'node' | 'discover' | 'manual';
+interface ScannedCamera {
+  ip: string;
+  name: string;
+  hlsUrl: string;
+  rtspUrl: string;
+}
+
+type AddMode = 'node' | 'scan' | 'discover' | 'manual';
 type HistorySort = 'recent' | 'oldest' | 'largest';
 
 function formatStorageSize(sizeInBytes: number) {
@@ -424,6 +431,8 @@ export default function CameraFeed() {
   const [motionHistoryLoading, setMotionHistoryLoading] = useState(false);
   const [motionHistoryError, setMotionHistoryError] = useState<string | null>(null);
   const [sysInfo, setSysInfo] = useState<{ hasBattery: boolean; isCharging: boolean; percent?: number } | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<ScannedCamera[]>([]);
 
   async function fetchDiscoveries(silent = false) {
     if (!silent) setDiscoveriesLoading(true);
@@ -617,6 +626,44 @@ export default function CameraFeed() {
     }
   }
 
+  async function scanNetwork() {
+    setIsScanning(true);
+    setScanResults([]);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl('/api/cameras/scan'), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setScanResults(data);
+      }
+    } catch (err) {
+      console.error("Erreur de scan:", err);
+    } finally {
+      setIsScanning(false);
+    }
+  }
+
+  async function addScannedCamera(cam: ScannedCamera) {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl('/api/cameras'), {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ name: `Pi-${cam.name}-${cam.ip.split('.').pop()}`, rtsp_url: cam.rtspUrl, location: cam.ip })
+      });
+      const data = await res.json();
+      setCameras(prev => [...prev, data]);
+      setScanResults(prev => prev.filter(c => c.rtspUrl !== cam.rtspUrl));
+    } catch {
+      // ignore
+    }
+  }
+
   async function confirmDeleteCamera() {
     if (!cameraDeleteTarget) return;
     await fetch(apiUrl(`/api/cameras/${cameraDeleteTarget.id}`), { method: 'DELETE' });
@@ -787,6 +834,7 @@ export default function CameraFeed() {
         <div className="cam-header-right">
           <span className="cam-clock">{time.toLocaleTimeString('fr-FR')}</span>
           {isAdmin && (
+            <>
             <button
               type="button"
               className={`panel-action-btn ${showAdd ? 'panel-action-btn--active' : ''}`}
@@ -795,6 +843,7 @@ export default function CameraFeed() {
               <span className="panel-action-btn__icon" aria-hidden="true">{showAdd ? '×' : '+'}</span>
               <span>{showAdd ? 'Fermer' : 'Ajouter une camera'}</span>
             </button>
+            </>
           )}
         </div>
       </div>
@@ -819,10 +868,20 @@ export default function CameraFeed() {
                   </button>
                   <button
                     type="button"
+                    className={`cam-add-mode-btn ${addMode === 'scan' ? 'cam-add-mode-btn--active' : ''}`}
+                    onClick={() => {
+                      setAddMode('scan');
+                      if (!isScanning && scanResults.length === 0) scanNetwork();
+                    }}
+                  >
+                    Scan MediaMTX
+                  </button>
+                  <button
+                    type="button"
                     className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
                     onClick={() => setAddMode('discover')}
                   >
-            Scan Réseau
+                    Annonces Réseau
                   </button>
                   <button
                     type="button"
@@ -896,6 +955,53 @@ export default function CameraFeed() {
                   ))}
                 </ul>
               )}
+              </section>
+            )}
+
+            {addMode === 'scan' && (
+              <section className="cam-discovery-panel">
+                <div className="cam-discovery-header">
+                  <div>
+                    <h3 className="cam-discovery-title">Caméras MediaMTX détectées</h3>
+                    <p className="cam-discovery-subtitle">Scan local rapide des flux RTSP/HLS ouverts.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="sensor-link-btn"
+                    onClick={scanNetwork}
+                    disabled={isScanning}
+                  >
+                    {isScanning ? 'Actualisation...' : 'Actualiser'}
+                  </button>
+                </div>
+                {isScanning && <p>Scan du réseau en cours (attente ~4s)…</p>}
+                {!isScanning && scanResults.length === 0 && (
+                  <p className="cam-discovery-empty">Aucune caméra MediaMTX trouvée. Cliquez sur Actualiser pour scanner le réseau.</p>
+                )}
+                {scanResults.length > 0 && (
+                  <ul className="cam-discovery-list">
+                    {scanResults.map((cam, idx) => (
+                      <li key={idx} className="cam-discovery-item">
+                        <div className="cam-discovery-item-head">
+                          <strong>{cam.name}</strong>
+                          <span className="cam-discovery-source cam-discovery-source--probe">MediaMTX Pi Zero</span>
+                        </div>
+                        <div className="cam-discovery-meta">{cam.ip}</div>
+                        <div className="cam-discovery-meta">Vu le {new Date().toLocaleString('fr-FR')}</div>
+                        <div className="cam-inline-actions">
+                          <StatusBadge status="running" />
+                          <button
+                            type="button"
+                            className="sensor-confirm-btn"
+                            onClick={() => addScannedCamera(cam)}
+                          >
+                            Connecter
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </section>
             )}
 
