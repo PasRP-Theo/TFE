@@ -307,14 +307,33 @@ router.get('/discover', async (req, res) => {
 // GET /api/cameras/scan — Scan rapide MediaMTX (Pi Zero 2W) sur le réseau local
 router.get('/scan', async (req, res) => {
   const foundCameras = [];
-  const subnet = '192.168.0'; // Ton réseau
   const port = 9997;
+  const auth = Buffer.from('admin:admin').toString('base64');
 
-  const allIps = Array.from({ length: 254 }, (_, i) => `${subnet}.${i + 1}`);
+  // Détection dynamique des sous-réseaux (inclut ton réseau, localhost, et d'éventuels réseaux VPN/Docker)
+  const interfaces = networkInterfaces();
+  const subnets = new Set(['192.168.0']); 
+  
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        const parts = iface.address.split('.');
+        subnets.add(`${parts[0]}.${parts[1]}.${parts[2]}`);
+      }
+    }
+  }
+
+  const allIps = ['127.0.0.1'];
+  for (const subnet of subnets) {
+    for (let i = 1; i <= 254; i++) {
+      allIps.push(`${subnet}.${i}`);
+    }
+  }
+
   const activeIps = [];
 
   // 1. Scan TCP (très rapide) par lots pour éviter de saturer Node.js
-  const BATCH_SIZE = 100;
+  const BATCH_SIZE = 500;
   for (let i = 0; i < allIps.length; i += BATCH_SIZE) {
     const batch = allIps.slice(i, i + BATCH_SIZE);
     const checks = await Promise.all(batch.map(ip => {
@@ -335,17 +354,34 @@ router.get('/scan', async (req, res) => {
     try {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 2000); // 2 secondes de marge
-      const response = await fetch(`http://${ip}:${port}/v3/paths/list`, { signal: controller.signal });
+      const response = await fetch(`http://${ip}:${port}/v3/paths/list`, { 
+        signal: controller.signal,
+        headers: { 'Authorization': `Basic ${auth}` }
+      });
       clearTimeout(id);
       
       if (response.ok) {
         const data = await response.json();
         if (data && data.items && data.items.length > 0) {
+          const name = data.items[0].name;
+          const rtspUrl = `rtsp://${ip}:8554/${name}`;
+          
+          // On enregistre la caméra MediaMTX dans la table persistante des Nœuds
+          await pool.query(
+            `INSERT INTO camera_nodes (device_id, name, host, stream_url, location, model, source, last_seen_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+             ON CONFLICT (device_id) DO UPDATE SET
+               name = EXCLUDED.name,
+               stream_url = EXCLUDED.stream_url,
+               last_seen_at = NOW()`,
+            [`mediamtx:${ip}`, `Pi Zero 2W (${name})`, ip, rtspUrl, ip, 'MediaMTX Pi Zero', 'mediamtx']
+          ).catch(err => console.error('[SCAN UPSERT NODE]', err));
+
           foundCameras.push({
             ip: ip,
-            name: data.items[0].name,
-            hlsUrl: `http://${ip}:8888/${data.items[0].name}`,
-            rtspUrl: `rtsp://${ip}:8554/${data.items[0].name}`
+            name: name,
+            hlsUrl: `http://${ip}:8888/${name}`,
+            rtspUrl: rtspUrl
           });
         }
       }
