@@ -71,7 +71,7 @@ interface MotionEventEntry {
   created_at: string;
 }
 
-type AddMode = 'node' | 'scan' | 'discover' | 'manual';
+type AddMode = 'discover' | 'manual';
 type HistorySort = 'recent' | 'oldest' | 'largest';
 
 function formatStorageSize(sizeInBytes: number) {
@@ -729,7 +729,7 @@ export default function CameraFeed() {
     setShowAdd((current) => {
       const next = !current;
       if (next) {
-        setAddMode(config.defaultCameraAddMode);
+            setAddMode((config.defaultCameraAddMode === 'node' || config.defaultCameraAddMode as string === 'scan') ? 'discover' : config.defaultCameraAddMode as AddMode);
       } else {
         setDiscoverMessage(null);
       }
@@ -798,27 +798,10 @@ export default function CameraFeed() {
             <div className="cam-add-topbar">
               <div>
                 <h3 className="cam-add-title">Ajouter une caméra</h3>
-                <p className="cam-add-subtitle">Noeud Raspberry Pi, ESP32-CAM ou flux manuel.</p>
+              <p className="cam-add-subtitle">Annonces réseau ou flux manuel.</p>
               </div>
               <div className="cam-add-topbar-actions">
                 <div className="cam-add-mode-switch">
-                  <button
-                    type="button"
-                    className={`cam-add-mode-btn ${addMode === 'node' ? 'cam-add-mode-btn--active' : ''}`}
-                    onClick={() => setAddMode('node')}
-                  >
-                    Noeud Pi
-                  </button>
-                  <button
-                    type="button"
-                    className={`cam-add-mode-btn ${addMode === 'scan' ? 'cam-add-mode-btn--active' : ''}`}
-                    onClick={() => {
-                      setAddMode('scan');
-                      if (!isScanning && cameraNodes.filter(n => n.source === 'mediamtx').length === 0) scanNetwork();
-                    }}
-                  >
-                    Scan MediaMTX
-                  </button>
                   <button
                     type="button"
                     className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
@@ -839,114 +822,6 @@ export default function CameraFeed() {
                 </button>
               </div>
             </div>
-
-            {addMode === 'node' && (
-              <section className="cam-discovery-panel">
-              <div className="cam-discovery-header">
-                <div>
-                  <h3 className="cam-discovery-title">Noeuds Raspberry Pi detectes</h3>
-                  <p className="cam-discovery-subtitle">Mouvement actif pendant {nodeMotionWindowSeconds} secondes apres la derniere detection.</p>
-                </div>
-                <button
-                  type="button"
-                  className="sensor-link-btn"
-                  onClick={() => fetchCameraNodes()}
-                  disabled={cameraNodesLoading}
-                >
-                  {cameraNodesLoading ? 'Actualisation...' : 'Actualiser'}
-                </button>
-              </div>
-              {discoverMessage && (
-                <div className="sensor-note">
-                  <p>{discoverMessage}</p>
-                </div>
-              )}
-              {cameraNodesLoading && <p>Chargement des noeuds camera…</p>}
-              {cameraNodesError && <p className="cam-discovery-error">{cameraNodesError}</p>}
-              {!cameraNodesLoading && !cameraNodesError && cameraNodes.length === 0 && (
-                <p className="cam-discovery-empty">Aucun noeud detecte. Lance le script d’annonce sur le Raspberry Pi.</p>
-              )}
-              {cameraNodes.filter(n => n.source !== 'mediamtx').length > 0 && (
-                <ul className="cam-discovery-list">
-                  {cameraNodes.filter(n => n.source !== 'mediamtx').map(node => (
-                    <li key={node.device_id} className="cam-discovery-item">
-                      <div className="cam-discovery-item-head">
-                        <strong>{node.name}</strong>
-                        <span className={`cam-discovery-source cam-discovery-source--${node.source}`}>{node.model || node.source}</span>
-                      </div>
-                      <div className="cam-discovery-meta">{node.host}{node.location ? ` · ${node.location}` : ''}</div>
-                      <div className="cam-discovery-meta">Vu le {new Date(node.last_seen_at).toLocaleString('fr-FR')}</div>
-                      <div className="cam-inline-actions">
-                        <StatusBadge status={node.connected ? 'running' : 'stopped'} />
-                        <MotionBadge active={node.motionActive} />
-                        <button
-                          type="button"
-                          className="sensor-link-btn"
-                          onClick={() => loadMotionHistory(node.device_id, node.name)}
-                        >
-                          Historique mouvement
-                        </button>
-                        <button
-                          type="button"
-                          className="sensor-confirm-btn"
-                          onClick={() => connectCameraNode(node)}
-                        >
-                          {node.connected ? 'Reconnecter vue' : 'Connecter'}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              </section>
-            )}
-
-            {addMode === 'scan' && (
-              <section className="cam-discovery-panel">
-                <div className="cam-discovery-header">
-                  <div>
-                    <h3 className="cam-discovery-title">Caméras MediaMTX détectées</h3>
-                    <p className="cam-discovery-subtitle">Scan local rapide des flux RTSP/HLS ouverts.</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="sensor-link-btn"
-                    onClick={scanNetwork}
-                    disabled={isScanning}
-                  >
-                    {isScanning ? 'Actualisation...' : 'Actualiser'}
-                  </button>
-                </div>
-                {isScanning && <p>Scan du réseau en cours (attente ~4s)…</p>}
-                {!isScanning && cameraNodes.filter(n => n.source === 'mediamtx').length === 0 && (
-                  <p className="cam-discovery-empty">Aucune caméra MediaMTX trouvée. Cliquez sur Actualiser pour scanner le réseau.</p>
-                )}
-                {cameraNodes.filter(n => n.source === 'mediamtx').length > 0 && (
-                  <ul className="cam-discovery-list">
-                    {cameraNodes.filter(n => n.source === 'mediamtx').map((node) => (
-                      <li key={node.device_id} className="cam-discovery-item">
-                        <div className="cam-discovery-item-head">
-                          <strong>{node.name}</strong>
-                          <span className="cam-discovery-source cam-discovery-source--probe">{node.model || 'MediaMTX Pi Zero'}</span>
-                        </div>
-                        <div className="cam-discovery-meta">{node.host}</div>
-                        <div className="cam-discovery-meta">Vu le {new Date(node.last_seen_at).toLocaleString('fr-FR')}</div>
-                        <div className="cam-inline-actions">
-                          <StatusBadge status={node.connected ? 'running' : 'stopped'} />
-                          <button
-                            type="button"
-                            className="sensor-confirm-btn"
-                            onClick={() => connectCameraNode(node)}
-                          >
-                            {node.connected ? 'Reconnecter vue' : 'Connecter'}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )}
 
             {addMode === 'discover' && (
               <section className="cam-discovery-panel">
@@ -1025,8 +900,8 @@ export default function CameraFeed() {
                 </div>
               )}
               <div className="cam-add-actions">
-                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('node')}>
-                  Retour aux noeuds Pi
+                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('discover')}>
+                  Retour aux annonces
                 </button>
                 <button className="sensor-confirm-btn" onClick={addCamera} disabled={!canAddManually}>Ajouter</button>
               </div>

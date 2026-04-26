@@ -552,7 +552,6 @@ function TabSettings() {
             <SettingsDropdown
               value={draftConfig.defaultCameraAddMode}
               options={[
-                { value: 'node', label: 'Nœud Pi' },
         { value: 'discover', label: 'Scan Réseau' },
                 { value: 'manual', label: 'Manuel' }
               ]}
