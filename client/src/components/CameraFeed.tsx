@@ -131,8 +131,11 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
 
-    setLoading(true);
-    setError(false);
+    // N'affiche l'écran noir de chargement qu'au tout premier lancement
+    if (retryCount === 0) {
+      setLoading(true);
+      setError(false);
+    }
 
     const loadStream = async () => {
       const { default: HlsLib } = await import('hls.js');
@@ -157,8 +160,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
         hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
           if (data.fatal) {
             if (!disposed) {
-              setError(false); // Masque l'erreur violente
-              setLoading(true); // Affiche doucement le rechargement
+              // On ne touche plus à loading/error pour laisser la dernière image à l'écran (zéro clignotement)
               hls?.destroy();
               hls = null;
               retryTimer = setTimeout(() => {
