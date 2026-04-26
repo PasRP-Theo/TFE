@@ -111,21 +111,6 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     let hls: Hls | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
-    let lastProgressTime = Date.now();
-    let networkErrorCount = 0;
-
-    // Watchdog : Force le redémarrage si l'image est figée plus de 10 secondes
-    const watchdog = setInterval(() => {
-      if (!disposed && !video.paused && Date.now() - lastProgressTime > 10000) {
-        if (!disposed) setRetryCount(c => c + 1);
-      }
-    }, 3000);
-
-    const handleProgress = () => {
-      lastProgressTime = Date.now();
-      networkErrorCount = 0;
-    };
-    video.addEventListener('timeupdate', handleProgress);
 
     // N'affiche l'écran noir de chargement qu'au tout premier lancement
     if (retryCount === 0) {
@@ -156,12 +141,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
         hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
           if (data.fatal) {
             if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
-              networkErrorCount++;
-              if (networkErrorCount > 3) {
-                if (!disposed) setRetryCount(c => c + 1); // Si trop d'échecs, on redémarre le lecteur
-              } else {
-                hls?.startLoad(); // Récupère le segment manquant sans couper la vidéo
-              }
+              hls?.startLoad(); // Récupère le segment manquant sans couper la vidéo
             } else if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
               hls?.recoverMediaError(); // Répare les pixels corrompus sans couper la vidéo
             } else {
@@ -198,8 +178,6 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
     return () => {
       disposed = true;
-      clearInterval(watchdog);
-      video.removeEventListener('timeupdate', handleProgress);
       if (retryTimer) clearTimeout(retryTimer);
       if (hls) hls.destroy();
     };
