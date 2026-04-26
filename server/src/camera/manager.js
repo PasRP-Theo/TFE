@@ -461,7 +461,7 @@ export async function startCamera(camera) {
     ...audioCodecArgs,
     '-f', 'hls',
     '-hls_time', '2',
-    '-hls_list_size', '5',
+    '-hls_list_size', '8',
     '-hls_flags', 'delete_segments',
     '-hls_segment_type', 'fmp4', // Format ultra-compatible pour les navigateurs web modernes
     '-hls_fmp4_init_filename', `init_${runId}.mp4`, // Fichier d'initialisation contenant les headers

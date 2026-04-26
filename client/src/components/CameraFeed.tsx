@@ -5,8 +5,6 @@ import { apiUrl } from "../lib/api";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 
-type HlsConstructor = typeof import("hls.js").default;
-
 interface Camera {
   id:        number;
   name:      string;
@@ -44,23 +42,6 @@ interface DiscoveredCamera {
   source: string;
   last_seen_at: string;
   created_at: string;
-}
-
-interface CameraNode {
-  id: number;
-  device_id: string;
-  name: string;
-  host: string;
-  stream_url: string;
-  location: string;
-  model: string;
-  source: string;
-  motion_detected: boolean;
-  motionActive: boolean;
-  last_motion_at: string | null;
-  last_seen_at: string;
-  created_at: string;
-  connected: boolean;
 }
 
 interface MotionEventEntry {
@@ -143,9 +124,9 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
       if (HlsLib.isSupported()) {
         hls = new HlsLib({
-          lowLatencyMode: true,
-          liveSyncDurationCount: 2,
-          liveMaxLatencyDurationCount: 5
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 10,
+          maxBufferLength: 10,
         });
 
         hls.loadSource(fullUrl);
@@ -159,13 +140,18 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
         hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
           if (data.fatal) {
-            if (!disposed) {
-              // On ne touche plus à loading/error pour laisser la dernière image à l'écran (zéro clignotement)
-              hls?.destroy();
-              hls = null;
-              retryTimer = setTimeout(() => {
-                if (!disposed) setRetryCount(c => c + 1);
-              }, 1500); // Reconnexion plus rapide
+            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
+              hls?.startLoad(); // Récupère le segment manquant sans couper la vidéo
+            } else if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
+              hls?.recoverMediaError(); // Répare les pixels corrompus sans couper la vidéo
+            } else {
+              if (!disposed) {
+                hls?.destroy();
+                hls = null;
+                retryTimer = setTimeout(() => {
+                  if (!disposed) setRetryCount(c => c + 1);
+                }, 1500);
+              }
             }
           }
         });
@@ -329,11 +315,7 @@ export default function CameraFeed() {
   const [newRtsp, setNewRtsp] = useState('');
   const [newLoc,  setNewLoc]  = useState('');
   const [loading, setLoading] = useState(true);
-  const [addMode, setAddMode] = useState<AddMode>('node');
-  const [cameraNodes, setCameraNodes] = useState<CameraNode[]>([]);
-  const [cameraNodesLoading, setCameraNodesLoading] = useState(false);
-  const [cameraNodesError, setCameraNodesError] = useState<string | null>(null);
-  const [nodeMotionWindowSeconds, setNodeMotionWindowSeconds] = useState(20);
+  const [addMode, setAddMode] = useState<AddMode>('discover');
   const [searchingNetwork, setSearchingNetwork] = useState(false);
   const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredCamera[]>([]);
@@ -359,7 +341,6 @@ export default function CameraFeed() {
   const [motionHistoryLoading, setMotionHistoryLoading] = useState(false);
   const [motionHistoryError, setMotionHistoryError] = useState<string | null>(null);
   const [sysInfo, setSysInfo] = useState<{ hasBattery: boolean; isCharging: boolean; percent?: number } | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
 
   async function fetchDiscoveries(silent = false) {
     if (!silent) setDiscoveriesLoading(true);
@@ -382,27 +363,6 @@ export default function CameraFeed() {
     }
   }
 
-  async function fetchCameraNodes(silent = false) {
-    if (!silent) setCameraNodesLoading(true);
-    try {
-      const res = await fetch(apiUrl('/api/camera-nodes'));
-      if (!res.ok) {
-        const isJson = res.headers.get('content-type')?.includes('application/json');
-        const data = isJson ? await res.json() : null;
-        throw new Error(data?.error || `Impossible de charger les noeuds camera (${res.status})`);
-      }
-      const data = await res.json();
-      setCameraNodes(Array.isArray(data.nodes) ? data.nodes : []);
-      setNodeMotionWindowSeconds(typeof data.motionActiveWindowSeconds === 'number' ? data.motionActiveWindowSeconds : 20);
-      setCameraNodesError(null);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      setCameraNodesError(message);
-    } finally {
-      if (!silent) setCameraNodesLoading(false);
-    }
-  }
-
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
@@ -415,11 +375,9 @@ export default function CameraFeed() {
     setAddMode(config.defaultCameraAddMode);
 
     fetchDiscoveries();
-    fetchCameraNodes();
     const interval = setInterval(() => {
       if (!stopped) {
         fetchDiscoveries(true);
-        fetchCameraNodes(true);
       }
     }, config.cameraDiscoveryIntervalSeconds * 1000);
 
@@ -521,30 +479,6 @@ export default function CameraFeed() {
     }
   }
 
-  async function connectCameraNode(node: CameraNode) {
-    try {
-      const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(node.device_id)}/connect`), {
-        method: 'POST',
-      });
-      if (!res.ok) {
-        const isJson = res.headers.get('content-type')?.includes('application/json');
-        const data = isJson ? await res.json() : null;
-        throw new Error(data?.error || `Impossible de connecter le noeud camera (${res.status})`);
-      }
-      const data = await res.json();
-
-      const camera = data.camera as Camera | undefined;
-      if (camera) {
-        setCameras(prev => prev.some(item => item.id === camera.id) ? prev.map(item => item.id === camera.id ? camera : item) : [...prev, camera]);
-      }
-      setDiscoverMessage(data.alreadyConnected ? `Noeud ${node.name} deja connecte.` : `Noeud ${node.name} connecte.`);
-      fetchCameraNodes(true);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      setDiscoverMessage(message);
-    }
-  }
-
   function selectDiscoveredDevice(device: DiscoveredCamera) {
     setAddMode('manual');
     setNewName(device.name || device.device_id);
@@ -579,23 +513,6 @@ export default function CameraFeed() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erreur inconnue';
       setDiscoverMessage(message);
-    }
-  }
-
-  async function scanNetwork() {
-    setIsScanning(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(apiUrl('/api/cameras/scan'), {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (res.ok) {
-        await fetchCameraNodes(true); // Rafraîchit la liste des nœuds depuis la base de données
-      }
-    } catch (err) {
-      console.error("Erreur de scan:", err);
-    } finally {
-      setIsScanning(false);
     }
   }
 
