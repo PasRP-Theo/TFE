@@ -71,13 +71,6 @@ interface MotionEventEntry {
   created_at: string;
 }
 
-interface ScannedCamera {
-  ip: string;
-  name: string;
-  hlsUrl: string;
-  rtspUrl: string;
-}
-
 type AddMode = 'node' | 'scan' | 'discover' | 'manual';
 type HistorySort = 'recent' | 'oldest' | 'largest';
 
@@ -723,7 +716,7 @@ export default function CameraFeed() {
         const data = isJson ? await res.json() : null;
         throw new Error(data?.error || `Impossible de supprimer l’enregistrement (${res.status})`);
       }
-      const data = await res.json();
+      await res.json();
       setHistoryRecords(prev => prev.filter(entry => entry.filename !== recordDeleteTarget.filename));
       setRecordDeleteTarget(null);
     } catch (err: unknown) {
@@ -746,7 +739,7 @@ export default function CameraFeed() {
         const data = isJson ? await res.json() : null;
         throw new Error(data?.error || `Impossible de supprimer tous les enregistrements (${res.status})`);
       }
-      const data = await res.json();
+      await res.json();
       setHistoryRecords([]);
       setPurgeHistoryConfirm(false);
     } catch (err: unknown) {

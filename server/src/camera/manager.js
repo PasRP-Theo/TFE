@@ -505,7 +505,7 @@ export async function startCamera(camera) {
 
   proc.on('close', code => {
     const s = states.get(id);
-    if (s && s.status !== 'stopped') {
+    if (s && s.status !== 'stopped' && s.status !== 'paused') {
       console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
       s.status = 'reconnecting';
       broadcast(id);
