@@ -638,12 +638,20 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   const mp4File = path.join(recDir, `${ts}.mp4`);
 
   // Copie de flux ultra-légère pour générer l'enregistrement sans tuer le CPU
-  const args = ['-y', '-i', s.sourceUrl, '-t', String(durationSeconds), '-map', '0:v:0', '-c:v', 'copy', '-an', mp4File];
-  if (/^rtsp:/i.test(s.sourceUrl)) args.unshift('-rtsp_transport', RTSP_TRANSPORT);
+  const args = ['-y', '-fflags', '+genpts'];
+  if (/^rtsp:/i.test(s.sourceUrl)) args.push('-rtsp_transport', RTSP_TRANSPORT);
+  args.push('-i', s.sourceUrl, '-t', String(durationSeconds), '-map', '0:v:0', '-c:v', 'copy', '-an', '-movflags', 'frag_keyframe+empty_moov', mp4File);
 
-  const proc = spawn(FFMPEG_BIN, args, { stdio: 'ignore' });
+  const proc = spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   activeRecordings.set(id, proc);
   
+  proc.stderr.on('data', data => {
+    const txt = data.toString();
+    if (txt.includes('Error') || txt.includes('error') || txt.includes('Invalid')) {
+      console.error(`[CAM ${id} REC] ffmpeg: ${txt.trim()}`);
+    }
+  });
+
   s.recording = true; // Allume la pastille "REC" sur l'interface
   broadcast(id);
   console.log(`[CAM ${id}] 🎥 Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
