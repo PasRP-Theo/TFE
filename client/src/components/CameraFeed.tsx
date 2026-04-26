@@ -169,6 +169,10 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     const scheduleRetry = (delay = 1500) => {
       if (disposed || retryTimer) return;
       destroyPlayer();
+      if (!disposed) {
+        setLoading(true);
+        setError(false);
+      }
       retryTimer = setTimeout(() => {
         retryTimer = null;
         if (!disposed) {
@@ -217,10 +221,6 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       hls.on(HlsLib.Events.LEVEL_LOADED, markProgress);
       hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
         if (!data || !data.fatal) return;
-        if (!disposed) {
-          setError(true);
-          setLoading(false);
-        }
         if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
           try {
             hls?.startLoad();
@@ -235,7 +235,10 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
           scheduleRetry(1800);
           return;
         }
-        scheduleRetry(1800);
+        if (!disposed) {
+          setError(true);
+          setLoading(false);
+        }
       });
       hls.loadSource(fullUrl);
       hls.attachMedia(video);
@@ -259,7 +262,13 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       setupHls(HlsLib);
     };
 
-    const handlePlaybackSignal = () => markProgress();
+    const handlePlaybackSignal = () => {
+      if (!disposed) {
+        setLoading(false);
+        setError(false);
+      }
+      markProgress();
+    };
     const handlePotentialStall = () => {
       if (!video.paused) scheduleRetry(1400);
     };
