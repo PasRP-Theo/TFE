@@ -157,13 +157,13 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
         hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
           if (data.fatal) {
             if (!disposed) {
-              setError(true);
-              setLoading(false);
+              setError(false); // Masque l'erreur violente
+              setLoading(true); // Affiche doucement le rechargement
               hls?.destroy();
               hls = null;
               retryTimer = setTimeout(() => {
                 if (!disposed) setRetryCount(c => c + 1);
-              }, 3000);
+              }, 1500); // Reconnexion plus rapide
             }
           }
         });
