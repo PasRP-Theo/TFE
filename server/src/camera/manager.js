@@ -422,7 +422,7 @@ export async function startCamera(camera) {
   try {
     const oldFiles = await fsPromises.readdir(hlsDir);
     for (const f of oldFiles) {
-      if (f.endsWith('.ts') || f.endsWith('.m3u8')) {
+      if (f.endsWith('.ts') || f.endsWith('.m3u8') || f.endsWith('.m4s') || f.endsWith('.mp4')) {
         await fsPromises.unlink(path.join(hlsDir, f));
       }
     }
@@ -460,7 +460,9 @@ export async function startCamera(camera) {
     '-hls_time', '2',
     '-hls_list_size', '5',
     '-hls_flags', 'delete_segments',
-    '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.ts`), // Nom unique pour bypasser le cache
+    '-hls_segment_type', 'fmp4', // Format ultra-compatible pour les navigateurs web modernes
+    '-hls_fmp4_init_filename', `init_${runId}.mp4`, // Fichier d'initialisation contenant les headers
+    '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.m4s`), // Segments MP4 fragmentés
     hlsIndex,
     '-map', '0:v:0',
     ...videoCodecArgs,
