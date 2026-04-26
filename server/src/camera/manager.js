@@ -418,7 +418,18 @@ export async function startCamera(camera) {
   ensureDir(hlsDir);
   ensureDir(recDir);
 
+  // Nettoyer les vieux segments HLS pour éviter les conflits et corruptions
+  try {
+    const oldFiles = await fsPromises.readdir(hlsDir);
+    for (const f of oldFiles) {
+      if (f.endsWith('.ts') || f.endsWith('.m3u8')) {
+        await fsPromises.unlink(path.join(hlsDir, f));
+      }
+    }
+  } catch (err) { /* ignore */ }
+
   const ts       = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const runId    = Date.now();
   const hlsIndex = path.join(hlsDir, 'index.m3u8');
   const mp4File  = path.join(recDir, `${ts}.mp4`);
   let sourceUrl = camera.rtsp_url;
@@ -429,6 +440,7 @@ export async function startCamera(camera) {
   }
 
   const args = [];
+  args.push('-fflags', '+genpts'); // Force la génération de timestamps corrects pour le web
   if (isRtsp) args.push('-rtsp_transport', RTSP_TRANSPORT);
   args.push('-y', '-i', sourceUrl);
 
@@ -448,7 +460,7 @@ export async function startCamera(camera) {
     '-hls_time', '2',
     '-hls_list_size', '5',
     '-hls_flags', 'delete_segments',
-    '-hls_segment_filename', path.join(hlsDir, 'seg%05d.ts'),
+    '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.ts`), // Nom unique pour bypasser le cache
     hlsIndex,
     '-map', '0:v:0',
     ...videoCodecArgs,
