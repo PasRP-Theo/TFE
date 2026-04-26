@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import bcrypt          from "bcryptjs";
 import jwt             from "jsonwebtoken";
 import rateLimit       from "express-rate-limit";
+import { existsSync, mkdirSync } from "fs";
 import { initDB, pool }      from "./src/db/index.js";
 // import sensorRoutes          from "./src/routes/sensors.js";
 import groceryRoutes         from "./src/routes/grocery.js";
@@ -200,8 +201,10 @@ app.get("/auth/me", async (req, res) => {
 
 // ── HLS static (flux vidéo live) ──────────────────────────
 const hlsDir = process.env.HLS_DIR || path.join(__dirname, '..', 'hls');
+if (!existsSync(hlsDir)) mkdirSync(hlsDir, { recursive: true });
 app.use('/hls', express.static(hlsDir));
 const recordingsDir = process.env.RECORDINGS_DIR || path.join(__dirname, '..', 'recordings');
+if (!existsSync(recordingsDir)) mkdirSync(recordingsDir, { recursive: true });
 app.use('/recordings', express.static(recordingsDir));
 
 // ── Routes API ─────────────────────────────────────────────
@@ -232,7 +235,14 @@ app.get("/health", (_, res) => res.json({ status: "ok" }));
 // ── Frontend React (build) ────────────────────────────────
 const distPath = path.join(__dirname, "../client/dist");
 app.use(express.static(distPath));
-app.get("/*", (_, res) => res.sendFile(path.join(distPath, "index.html")));
+app.get("/*", (_, res) => {
+  const indexPath = path.join(distPath, "index.html");
+  if (existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(503).send("Le build de l'interface React est en cours ou absent. Veuillez patienter.");
+  }
+});
 
 // ── Démarrage ──────────────────────────────────────────────
 async function start() {

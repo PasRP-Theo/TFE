@@ -119,6 +119,9 @@ function getHistoryGroupLabel(value: string) {
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fullUrl  = `${apiUrl(hlsUrl)}${hlsUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(streamKey)}`;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -130,6 +133,9 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     let disposed = false;
     let lastProgressAt = Date.now();
     let lastTime = -1;
+
+    setLoading(true);
+    setError(false);
 
     const resetVideoElement = () => {
       video.pause();
@@ -211,6 +217,10 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       hls.on(HlsLib.Events.LEVEL_LOADED, markProgress);
       hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
         if (!data || !data.fatal) return;
+        if (!disposed) {
+          setError(true);
+          setLoading(false);
+        }
         if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
           try {
             hls?.startLoad();
@@ -275,10 +285,25 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       video.removeEventListener('ended', handlePotentialStall);
       destroyPlayer();
     };
-  }, [fullUrl]);
+  }, [fullUrl, retryCount]);
 
   return (
-    <video ref={videoRef} autoPlay muted playsInline preload="auto" className="cam-video" />
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+      {loading && !error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', color: '#fff', zIndex: 10, fontSize: '14px' }}>
+          <span className="cam-rec-dot-anim" style={{ marginRight: '10px', backgroundColor: '#fff' }} /> Connexion au flux...
+        </div>
+      )}
+      {error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff', zIndex: 10, fontSize: '14px' }}>
+          <div style={{ marginBottom: '12px' }}>Flux indisponible</div>
+          <button type="button" className="sensor-confirm-btn" onClick={() => setRetryCount(c => c + 1)}>
+            Réessayer
+          </button>
+        </div>
+      )}
+      <video ref={videoRef} autoPlay muted playsInline preload="auto" className="cam-video" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    </div>
   );
 }
 

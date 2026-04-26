@@ -10,7 +10,7 @@ const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
 export const RECORDINGS_DIR  = process.env.RECORDINGS_DIR || path.join(PROJECT_ROOT, 'recordings');
 const HLS_DIR         = process.env.HLS_DIR        || path.join(PROJECT_ROOT, 'hls');
-const FFMPEG_BIN      = process.env.FFMPEG_PATH || ffmpegPath || 'ffmpeg';
+let FFMPEG_BIN        = process.env.FFMPEG_PATH || ffmpegPath || 'ffmpeg';
 const { readdir, stat, unlink, rm } = fsPromises;
 const RTSP_TRANSPORT  = process.env.RTSP_TRANSPORT || 'tcp';
 const HTTP_STREAM_CANDIDATES = [
@@ -412,6 +412,9 @@ export async function startCamera(camera) {
   const id  = String(camera.id);
   const cur = states.get(id);
   if (cur?.status === 'running') return;
+
+  ensureDir(HLS_DIR);
+  ensureDir(RECORDINGS_DIR);
 
   const hlsDir = path.join(HLS_DIR, id);
   const recDir = path.join(RECORDINGS_DIR, id);
