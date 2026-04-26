@@ -259,6 +259,7 @@ export const cameraEvents = new EventEmitter();
 
 // État en mémoire : camId (string) → { proc, status, recording, startedAt, hlsUrl }
 const states = new Map();
+const activeRecordings = new Map();
 
 function ensureDir(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -434,7 +435,6 @@ export async function startCamera(camera) {
   const ts       = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const runId    = Date.now();
   const hlsIndex = path.join(hlsDir, 'index.m3u8');
-  const mp4File  = path.join(recDir, `${ts}.mp4`);
   let sourceUrl = camera.rtsp_url;
   const normalizedUrl = sourceUrl.trim();
   const isRtsp    = /^rtsp:/i.test(normalizedUrl);
@@ -467,11 +467,6 @@ export async function startCamera(camera) {
     '-hls_fmp4_init_filename', `init_${runId}.mp4`, // Fichier d'initialisation contenant les headers
     '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.m4s`), // Segments MP4 fragmentés
     hlsIndex,
-    '-map', '0:v:0',
-    ...videoCodecArgs,
-    ...audioCodecArgs,
-    '-movflags', 'frag_keyframe+empty_moov',
-    mp4File,
   ];
 
   const argsFinal = [...args, ...outArgs];
@@ -487,6 +482,7 @@ export async function startCamera(camera) {
       recording: false,
       startedAt: null,
       hlsUrl: null,
+      sourceUrl: null,
     });
     broadcast(id);
   });
@@ -494,9 +490,10 @@ export async function startCamera(camera) {
   states.set(id, {
     proc,
     status:    'running',
-    recording: true,
+    recording: false,
     startedAt: new Date().toISOString(),
     hlsUrl:    `/hls/${id}/index.m3u8`,
+    sourceUrl: sourceUrl,
   });
   broadcast(id);
 
@@ -550,6 +547,10 @@ export function stopCamera(cameraId) {
   s.status    = 'stopped';
   s.recording = false;
   s.proc.kill('SIGKILL');
+  if (activeRecordings.has(id)) {
+    activeRecordings.get(id).kill('SIGKILL');
+    activeRecordings.delete(id);
+  }
   states.delete(id);
   broadcast(id);
   console.log(`[CAM ${id}] Arrêtée`);
@@ -623,4 +624,36 @@ export async function deleteAllRecordings(cameraId) {
 
   await rm(camDir, { recursive: true, force: true });
   return { deletedCount };
+}
+
+export function triggerMotionRecording(cameraId, durationSeconds = 30) {
+  const id = String(cameraId);
+  const s = states.get(id);
+  if (!s || s.status !== 'running' || !s.sourceUrl) return;
+  if (activeRecordings.has(id)) return; // Déjà en cours d'enregistrement
+
+  const recDir = path.join(RECORDINGS_DIR, id);
+  ensureDir(recDir);
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const mp4File = path.join(recDir, `${ts}.mp4`);
+
+  // Copie de flux ultra-légère pour générer l'enregistrement sans tuer le CPU
+  const args = ['-y', '-i', s.sourceUrl, '-t', String(durationSeconds), '-map', '0:v:0', '-c:v', 'copy', '-an', mp4File];
+  if (/^rtsp:/i.test(s.sourceUrl)) args.unshift('-rtsp_transport', RTSP_TRANSPORT);
+
+  const proc = spawn(FFMPEG_BIN, args, { stdio: 'ignore' });
+  activeRecordings.set(id, proc);
+  
+  s.recording = true; // Allume la pastille "REC" sur l'interface
+  broadcast(id);
+  console.log(`[CAM ${id}] 🎥 Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
+
+  proc.on('close', () => {
+    activeRecordings.delete(id);
+    if (states.has(id)) {
+      states.get(id).recording = false; // Éteint la pastille "REC"
+      broadcast(id);
+    }
+    console.log(`[CAM ${id}] 🛑 Fin de l'enregistrement de mouvement.`);
+  });
 }

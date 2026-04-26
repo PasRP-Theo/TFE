@@ -12,6 +12,7 @@ import {
   deleteRecording,
   deleteAllRecordings,
   getRecordingsRetentionDays,
+  triggerMotionRecording,
 } from '../camera/manager.js';
 
 const router = Router();
@@ -444,6 +445,16 @@ router.post('/:id/stop', (req, res) => {
 // GET /api/cameras/:id/state
 router.get('/:id/state', (req, res) => {
   res.json(getState(req.params.id));
+});
+
+// POST /api/cameras/:id/motion — Webhook pour l'IA
+router.post('/:id/motion', async (req, res) => {
+  try {
+    triggerMotionRecording(req.params.id, 30); // Enregistre 30 secondes de vidéo
+    res.json({ message: 'Mouvement détecté, enregistrement en cours' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 });
 
 // GET /api/cameras/:id/history
