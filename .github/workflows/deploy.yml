@@ -52,6 +52,9 @@ jobs:
             -e recordings \
             -e server/recordings
 
+      - name: Stop application to free RAM for build
+        run: pm2 stop "$PM2_APP_NAME" > /dev/null 2>&1 || true
+
       - name: Install & build client on host
         working-directory: ${{ vars.DEPLOY_PATH }}/client
         run: |

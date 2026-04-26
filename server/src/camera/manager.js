@@ -574,10 +574,6 @@ export async function cleanupOldRecordings({ retentionDays = Number(process.env.
         console.error(`[REC CLEANUP] impossible de supprimer ${filePath}: ${err.message}`);
       }
     }
-    const remaining = await readdir(camPath);
-    if (remaining.length === 0) {
-      await rm(camPath, { recursive: true, force: true });
-    }
   }
 }
 
@@ -603,11 +599,6 @@ export async function deleteRecording(cameraId, filename) {
   }
 
   await unlink(filePath);
-
-  const remaining = existsSync(camDir) ? await readdir(camDir) : [];
-  if (remaining.length === 0) {
-    await rm(camDir, { recursive: true, force: true });
-  }
 
   return { deleted: true, filename: safeName };
 }
