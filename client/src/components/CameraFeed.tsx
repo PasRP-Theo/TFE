@@ -118,7 +118,7 @@ function getHistoryGroupLabel(value: string) {
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fullUrl  = `${apiUrl(hlsUrl)}${hlsUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(streamKey)}`;
+  const fullUrl = `http://192.168.0.47${hlsUrl}?v=${encodeURIComponent(streamKey)}`;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -129,170 +129,69 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
     let hls: Hls | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let stallWatcher: ReturnType<typeof setInterval> | null = null;
     let disposed = false;
-    let lastProgressAt = Date.now();
-    let lastTime = -1;
 
     setLoading(true);
     setError(false);
 
-    const resetVideoElement = () => {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-    };
-
-    const destroyPlayer = ({ resetVideo = true } = {}) => {
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-      if (stallWatcher) {
-        clearInterval(stallWatcher);
-        stallWatcher = null;
-      }
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-      if (resetVideo) {
-        resetVideoElement();
-      }
-    };
-
-    const markProgress = () => {
-      lastProgressAt = Date.now();
-      lastTime = video.currentTime;
-    };
-
-    const scheduleRetry = (delay = 1500) => {
-      if (disposed || retryTimer) return;
-      destroyPlayer();
-      if (!disposed) {
-        setLoading(true);
-        setError(false);
-      }
-      retryTimer = setTimeout(() => {
-        retryTimer = null;
-        if (!disposed) {
-          void loadStream();
-        }
-      }, delay);
-    };
-
-    const startWatchdog = () => {
-      if (stallWatcher) clearInterval(stallWatcher);
-      stallWatcher = setInterval(() => {
-        if (disposed || video.paused || video.ended) return;
-        if (video.readyState < 2) {
-          if (Date.now() - lastProgressAt > 5000) scheduleRetry(1200);
-          return;
-        }
-        if (video.currentTime !== lastTime) {
-          markProgress();
-          return;
-        }
-        if (Date.now() - lastProgressAt > 8000) scheduleRetry(1200);
-      }, 3000);
-    };
-
-    const setupHls = (HlsLib: HlsConstructor) => {
-      if (disposed || !HlsLib.isSupported()) return;
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-      hls = new HlsLib({
-        lowLatencyMode: true,
-        liveSyncDurationCount: 3,
-        maxBufferLength: 12,
-        backBufferLength: 8,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingRetryDelay: 1000,
-        fragLoadingRetryDelay: 1000,
-      });
-      hls.on(HlsLib.Events.MANIFEST_PARSED, () => {
-        markProgress();
-        startWatchdog();
-        video.play().catch(() => {});
-      });
-      hls.on(HlsLib.Events.FRAG_LOADED, markProgress);
-      hls.on(HlsLib.Events.LEVEL_LOADED, markProgress);
-      hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
-        if (!data || !data.fatal) return;
-        if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
-          try {
-            hls?.startLoad();
-          } catch {
-            // noop
-          }
-          scheduleRetry(1500);
-          return;
-        }
-        if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
-          hls?.recoverMediaError();
-          scheduleRetry(1800);
-          return;
-        }
-        if (!disposed) {
-          setError(true);
-          setLoading(false);
-        }
-      });
-      hls.loadSource(fullUrl);
-      hls.attachMedia(video);
-    };
-
     const loadStream = async () => {
-      if (disposed) return;
-      markProgress();
-
-      if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        resetVideoElement();
-        video.src = fullUrl;
-        video.load();
-        startWatchdog();
-        video.play().catch(() => {});
-        return;
-      }
-
       const { default: HlsLib } = await import('hls.js');
-      if (disposed || !HlsLib.isSupported()) return;
-      setupHls(HlsLib);
-    };
+      if (disposed) return;
 
-    const handlePlaybackSignal = () => {
-      if (!disposed) {
-        setLoading(false);
-        setError(false);
+      if (HlsLib.isSupported()) {
+        hls = new HlsLib({
+          lowLatencyMode: true,
+          liveSyncDurationCount: 2,
+          liveMaxLatencyDurationCount: 5
+        });
+
+        hls.loadSource(fullUrl);
+        hls.attachMedia(video);
+
+        hls.on(HlsLib.Events.MANIFEST_PARSED, () => {
+          if (disposed) return;
+          setLoading(false);
+          video.play().catch(() => {});
+        });
+
+        hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
+          if (data.fatal) {
+            if (!disposed) {
+              setError(true);
+              setLoading(false);
+              hls?.destroy();
+              hls = null;
+              retryTimer = setTimeout(() => {
+                if (!disposed) setRetryCount(c => c + 1);
+              }, 3000);
+            }
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = fullUrl;
+        video.addEventListener('loadedmetadata', () => {
+          if (disposed) return;
+          setLoading(false);
+          video.play().catch(() => {});
+        });
+        video.addEventListener('error', () => {
+          if (!disposed) {
+            setError(true);
+            setLoading(false);
+            retryTimer = setTimeout(() => {
+              if (!disposed) setRetryCount(c => c + 1);
+            }, 3000);
+          }
+        });
       }
-      markProgress();
-    };
-    const handlePotentialStall = () => {
-      if (!video.paused) scheduleRetry(1400);
     };
 
-    video.addEventListener('playing', handlePlaybackSignal);
-    video.addEventListener('loadeddata', handlePlaybackSignal);
-    video.addEventListener('timeupdate', handlePlaybackSignal);
-    video.addEventListener('waiting', handlePotentialStall);
-    video.addEventListener('stalled', handlePotentialStall);
-    video.addEventListener('ended', handlePotentialStall);
-
-    void loadStream().catch(() => {
-      scheduleRetry(1500);
-    });
+    void loadStream();
 
     return () => {
       disposed = true;
-      video.removeEventListener('playing', handlePlaybackSignal);
-      video.removeEventListener('loadeddata', handlePlaybackSignal);
-      video.removeEventListener('timeupdate', handlePlaybackSignal);
-      video.removeEventListener('waiting', handlePotentialStall);
-      video.removeEventListener('stalled', handlePotentialStall);
-      video.removeEventListener('ended', handlePotentialStall);
-      destroyPlayer();
+      if (retryTimer) clearTimeout(retryTimer);
+      if (hls) hls.destroy();
     };
   }, [fullUrl, retryCount]);
 
