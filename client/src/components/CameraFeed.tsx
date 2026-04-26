@@ -437,8 +437,12 @@ export default function CameraFeed() {
     if (!silent) setDiscoveriesLoading(true);
     try {
       const res = await fetch(apiUrl('/api/cameras/discoveries'));
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de charger les caméras détectées (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible de charger les caméras détectées');
       setDiscoveredDevices(Array.isArray(data.devices) ? data.devices : []);
       setDiscoveriesTtlMinutes(typeof data.ttlMinutes === 'number' ? data.ttlMinutes : 10);
       setDiscoveriesError(null);
@@ -454,8 +458,12 @@ export default function CameraFeed() {
     if (!silent) setCameraNodesLoading(true);
     try {
       const res = await fetch(apiUrl('/api/camera-nodes'));
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de charger les noeuds camera (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible de charger les noeuds camera');
       setCameraNodes(Array.isArray(data.nodes) ? data.nodes : []);
       setNodeMotionWindowSeconds(typeof data.motionActiveWindowSeconds === 'number' ? data.motionActiveWindowSeconds : 20);
       setCameraNodesError(null);
@@ -496,6 +504,7 @@ export default function CameraFeed() {
   async function fetchCameras() {
     try {
       const res  = await fetch(apiUrl('/api/cameras'));
+      if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data)) setCameras(data);
     } catch { /* ignore */ }
@@ -542,8 +551,12 @@ export default function CameraFeed() {
     setDiscoverMessage('Recherche des caméras en cours…');
     try {
       const res = await fetch(apiUrl('/api/cameras/discover'));
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Erreur de recherche sur le réseau (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur de recherche sur le réseau');
       await fetchDiscoveries(true);
       if (Array.isArray(data.results) && data.results.length > 0) {
         setDiscoverMessage(`${data.results.length} caméra(s) détectée(s).`);
@@ -566,10 +579,18 @@ export default function CameraFeed() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, rtsp_url: newRtsp, location: newLoc }),
       });
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const errData = isJson ? await res.json() : null;
+        throw new Error(errData?.error || `Impossible d’ajouter la caméra (${res.status})`);
+      }
       const data = await res.json();
       setCameras(prev => [...prev, data]);
       setNewName(''); setNewRtsp(''); setNewLoc(''); setDiscoverMessage(null); setShowAdd(false);
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setDiscoverMessage(message);
+    }
   }
 
   async function connectCameraNode(node: CameraNode) {
@@ -577,8 +598,12 @@ export default function CameraFeed() {
       const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(node.device_id)}/connect`), {
         method: 'POST',
       });
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de connecter le noeud camera (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible de connecter le noeud camera');
 
       const camera = data.camera as Camera | undefined;
       if (camera) {
@@ -611,8 +636,12 @@ export default function CameraFeed() {
           location: device.location || device.host,
         }),
       });
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible d’ajouter la caméra détectée (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible d’ajouter la caméra détectée');
       setCameras(prev => [...prev, data]);
       setNewName('');
       setNewRtsp('');
@@ -661,8 +690,9 @@ export default function CameraFeed() {
     try {
       const res = await fetch(apiUrl(`/api/cameras/${id}/history`));
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Impossible de charger l’historique');
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de charger l’historique (${res.status})`);
       }
       const data = await res.json() as HistoryResponse | RecordingEntry[];
       if (Array.isArray(data)) {
@@ -688,8 +718,12 @@ export default function CameraFeed() {
       const res = await fetch(apiUrl(`/api/cameras/${historyCameraId}/history/${encodeURIComponent(recordDeleteTarget.filename)}`), {
         method: 'DELETE',
       });
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de supprimer l’enregistrement (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible de supprimer l’enregistrement');
       setHistoryRecords(prev => prev.filter(entry => entry.filename !== recordDeleteTarget.filename));
       setRecordDeleteTarget(null);
     } catch (err: unknown) {
@@ -707,8 +741,12 @@ export default function CameraFeed() {
       const res = await fetch(apiUrl(`/api/cameras/${historyCameraId}/history`), {
         method: 'DELETE',
       });
+      if (!res.ok) {
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de supprimer tous les enregistrements (${res.status})`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Impossible de supprimer tous les enregistrements');
       setHistoryRecords([]);
       setPurgeHistoryConfirm(false);
     } catch (err: unknown) {
@@ -726,8 +764,9 @@ export default function CameraFeed() {
     try {
       const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(deviceId)}/motion-history`));
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Impossible de charger l’historique mouvement');
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        const data = isJson ? await res.json() : null;
+        throw new Error(data?.error || `Impossible de charger l’historique mouvement (${res.status})`);
       }
       const data = await res.json();
       setMotionHistoryRecords(Array.isArray(data) ? data : []);
