@@ -444,7 +444,10 @@ export async function startCamera(camera) {
 
   const args = [];
   args.push('-fflags', '+genpts'); // Force la génération de timestamps corrects pour le web
-  if (isRtsp) args.push('-rtsp_transport', RTSP_TRANSPORT);
+  if (isRtsp) {
+    args.push('-rtsp_transport', RTSP_TRANSPORT);
+    args.push('-stimeout', '5000000'); // Timeout de 5s pour couper et redémarrer si le Wi-Fi de la caméra saute
+  }
   args.push('-y', '-i', sourceUrl);
 
   const useCopy = isRtsp;

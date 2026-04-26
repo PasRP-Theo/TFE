@@ -33,12 +33,12 @@ while True:
         continue
 
     frame_count += 1
-    # OPTIMISATION MAJEURE : On n'analyse qu'une image sur 5 (Ex: 3 fps au lieu de 15 fps)
-    if frame_count % 5 != 0:
+    # OPTIMISATION : On analyse une image sur 2 (largement supporté par un PC portable)
+    if frame_count % 2 != 0:
         continue
 
-    # Redimensionnement drastique (320x180) pour économiser la RAM et le CPU du Pi 2B
-    small_frame = cv2.resize(frame, (320, 180))
+    # Redimensionnement modéré (640x360) pour une meilleure précision
+    small_frame = cv2.resize(frame, (640, 360))
     
     fgmask = fgbg.apply(small_frame)
     _, thresh = cv2.threshold(fgmask, 200, 255, cv2.THRESH_BINARY)
@@ -46,8 +46,8 @@ while True:
 
     motion_detected = False
     for contour in contours:
-        # 300 pixels carrés sur une image de 320x180 = ~0.5% de l'image (très sensible)
-        if cv2.contourArea(contour) > 300:
+        # 1200 pixels carrés sur une image de 640x360 = ~0.5% de l'image (sensibilité standard)
+        if cv2.contourArea(contour) > 1200:
             motion_detected = True
             break
 
