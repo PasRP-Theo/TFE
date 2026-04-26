@@ -339,7 +339,7 @@ router.get('/scan', async (req, res) => {
     const checks = await Promise.all(batch.map(ip => {
       return new Promise((resolve) => {
         const socket = new Socket();
-        socket.setTimeout(800); // 800ms max pour le ping TCP
+        socket.setTimeout(1500); // 1500ms max pour le ping TCP (Pi Zero 2W Wi-Fi)
         socket.once('connect', () => { socket.destroy(); resolve(ip); });
         socket.once('timeout', () => { socket.destroy(); resolve(null); });
         socket.once('error', () => { socket.destroy(); resolve(null); });
@@ -349,11 +349,11 @@ router.get('/scan', async (req, res) => {
     activeIps.push(...checks.filter(Boolean));
   }
 
-  // 2. Requête HTTP uniquement sur les IPs ouvertes (avec un délai plus long pour le Pi Zero)
-  for (const ip of activeIps) {
+  // 2. Requêtes HTTP en parallèle sur les IPs ouvertes
+  await Promise.all(activeIps.map(async (ip) => {
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 2000); // 2 secondes de marge
+      const id = setTimeout(() => controller.abort(), 3500); // 3.5s de marge pour le Pi Zero
       const response = await fetch(`http://${ip}:${port}/v3/paths/list`, { 
         signal: controller.signal,
         headers: { 'Authorization': `Basic ${auth}` }
@@ -388,7 +388,7 @@ router.get('/scan', async (req, res) => {
     } catch (err) {
       // ignore
     }
-  }
+  }));
 
   res.json(foundCameras);
 });

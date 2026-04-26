@@ -438,21 +438,19 @@ export async function startCamera(camera) {
     ? ['-c:v', 'copy']
     : ['-c:v', videoCodec, '-preset', 'veryfast', '-tune', 'zerolatency', '-crf', '23', '-pix_fmt', 'yuv420p'];
 
-  const audioCodecArgs = isRtsp
-    ? ['-c:a', 'aac']
-    : ['-an'];
+  const audioCodecArgs = ['-an'];
 
   const outArgs = [
-    '-map', '0',
+    '-map', '0:v:0',
     ...videoCodecArgs,
     ...audioCodecArgs,
     '-f', 'hls',
     '-hls_time', '2',
-    '-hls_list_size', '10',
-    '-hls_flags', 'delete_segments+append_list',
+    '-hls_list_size', '5',
+    '-hls_flags', 'delete_segments',
     '-hls_segment_filename', path.join(hlsDir, 'seg%05d.ts'),
     hlsIndex,
-    '-map', '0',
+    '-map', '0:v:0',
     ...videoCodecArgs,
     ...audioCodecArgs,
     '-movflags', 'frag_keyframe+empty_moov',
