@@ -492,8 +492,29 @@ export async function startCamera(camera) {
     broadcast(id);
   });
 
+  // --- DÉMARRAGE DYNAMIQUE DE L'IA ---
+  const aiScript = path.join(PROJECT_ROOT, 'server', 'motion_detector.py');
+  let aiProc = null;
+  if (existsSync(aiScript)) {
+    console.log(`[CAM ${id}] 🤖 Lancement dynamique de l'IA Python...`);
+    const pythonBin = os.platform() === 'win32' ? 'python' : 'python3';
+    aiProc = spawn(pythonBin, [aiScript], {
+      env: { ...process.env, CAMERA_ID: id, RTSP_URL: sourceUrl }
+    });
+    aiProc.stdout.on('data', d => console.log(`[CAM ${id} IA] ${d.toString().trim()}`));
+    aiProc.stderr.on('data', d => {
+      const msg = d.toString().trim();
+      // On masque les alertes GStreamer d'OpenCV pour garder des logs Node.js propres
+      if (!msg.includes('GStreamer warning') && !msg.includes('error while decoding')) {
+        console.error(`[CAM ${id} IA] ${msg}`);
+      }
+    });
+    aiProc.on('error', err => console.error(`[CAM ${id} IA] Erreur: ${err.message}`));
+  }
+
   states.set(id, {
     proc,
+    aiProc,
     status:    'running',
     recording: false,
     startedAt: new Date().toISOString(),
