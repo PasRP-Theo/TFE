@@ -684,7 +684,7 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   args.push(
     '-i', s.sourceUrl, '-t', String(durationSeconds), 
     '-map', '0:v:0', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an', 
-    '-movflags', 'faststart', mp4File
+    '-movflags', 'frag_keyframe+empty_moov', mp4File
   );
 
   const proc = spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
