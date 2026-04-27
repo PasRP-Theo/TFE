@@ -99,7 +99,8 @@ function getHistoryGroupLabel(value: string) {
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fullUrl = `http://192.168.0.47${hlsUrl}?v=${encodeURIComponent(streamKey)}`;
+  //const fullUrl = `http://192.168.0.47${hlsUrl}?v=${encodeURIComponent(streamKey)}`;
+  const fullUrl = `${hlsUrl.startsWith('http') ? hlsUrl : `${window.location.origin}${hlsUrl}`}?v=${encodeURIComponent(streamKey)}`;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
