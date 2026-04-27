@@ -468,10 +468,10 @@ router.post('/:id/motion', async (req, res) => {
         if (updateRes.rowCount === 0) {
           deviceId = `ai_node:${host}`;
           await pool.query(
-            `INSERT INTO camera_nodes (device_id, name, host, source, last_seen_at, last_motion_at)
-             VALUES ($1, $2, $3, 'ia_detector', NOW(), NOW())
+            `INSERT INTO camera_nodes (device_id, name, host, stream_url, source, last_seen_at, last_motion_at)
+             VALUES ($1, $2, $3, $4, 'ia_detector', NOW(), NOW())
              ON CONFLICT (device_id) DO UPDATE SET last_motion_at = NOW()`,
-            [deviceId, `IA Caméra ${req.params.id}`, host]
+            [deviceId, `IA Caméra ${req.params.id}`, host, rows[0].rtsp_url]
           ).catch(err => console.error('[IA MOTION UPDATE ERROR]', err));
         } else {
           deviceId = updateRes.rows[0].device_id;

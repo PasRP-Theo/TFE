@@ -678,7 +678,6 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   const args = ['-y', '-fflags', '+genpts'];
   if (/^rtsp:/i.test(s.sourceUrl)) {
     args.push('-rtsp_transport', RTSP_TRANSPORT);
-    args.push('-stimeout', '5000000'); // Tolérance de 5 secondes pour la connexion
   }
   
   // Encodage rapide pour générer un MP4 valide même en cas de perte de paquets Wi-Fi
