@@ -6,7 +6,7 @@ const { Pool } = pg;
 export const pool = new Pool({
   host:     process.env.DB_HOST     || 'localhost',
   port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME     || 'aubepines',
+  database: process.env.DB_NAME     || 'sentys',
   user:     process.env.DB_USER     || 'postgres',
   password: String(process.env.DB_PASSWORD || 'admin'),
 });
@@ -194,7 +194,7 @@ export async function initDB() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_autostart_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_refresh_seconds INTEGER NOT NULL DEFAULT 3;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS show_offline_cameras BOOLEAN NOT NULL DEFAULT true;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_camera_add_mode VARCHAR(16) NOT NULL DEFAULT 'node';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS default_camera_add_mode VARCHAR(16) NOT NULL DEFAULT 'discover';
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS camera_discovery_interval_seconds INTEGER NOT NULL DEFAULT 5;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_realtime_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_daily_summary_enabled BOOLEAN NOT NULL DEFAULT false;
@@ -208,6 +208,9 @@ export async function initDB() {
        VALUES (1, 'AUBEPINES', 'Système de surveillance', 'v2.4.1')
        ON CONFLICT (id) DO NOTHING`
     );
+
+    // Force l'onglet par défaut sur "Annonces réseau" (discover)
+    await client.query("UPDATE app_settings SET default_camera_add_mode = 'discover' WHERE id = 1");
 
     const userCountResult = await client.query('SELECT COUNT(*)::int AS count FROM users');
     const userCount = userCountResult.rows[0]?.count ?? 0;
@@ -233,7 +236,7 @@ export async function initDB() {
       console.log('✅ Compte administrateur initial créé: root / root');
     }
 
-    console.log('✅ Base de données "aubepines" initialisée');
+    console.log('✅ Base de données "sentys" initialisée');
   } finally {
     client.release();
   }
