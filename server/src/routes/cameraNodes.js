@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
-import { startCamera, getState } from '../camera/manager.js';
+import { startCamera, getState, triggerMotionRecording } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
 
 const router = Router();
@@ -195,6 +195,12 @@ router.post('/motion', async (req, res) => {
         dedupeKey: `motion:${deviceId}`,
         cooldownSeconds: 300,
       }).catch((err) => console.error('[ALERT MOTION]', err));
+
+      // Déclenche l'enregistrement vidéo si une caméra est associée à ce noeud
+      const { rows: camRows } = await pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url]);
+      if (camRows[0]) {
+        triggerMotionRecording(camRows[0].id, 30);
+      }
     }
 
     const connectedHosts = await getConnectedHosts();
