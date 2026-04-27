@@ -14,6 +14,7 @@ import {
   getRecordingsRetentionDays,
   triggerMotionRecording,
 } from '../camera/manager.js';
+import { createAlert } from '../alerts/service.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -481,6 +482,26 @@ router.post('/:id/motion', async (req, res) => {
              VALUES ($1, true, NOW())`,
             [deviceId]
           ).catch(err => console.error('[IA MOTION EVENT INSERT ERROR]', err));
+
+          // Génère une alerte globale visible dans le Centre d'Alertes
+          await createAlert({
+            sourceType: 'camera',
+            sourceId: String(req.params.id),
+            cameraId: req.params.id,
+            alertType: 'motion_detected',
+            level: 'warning',
+            title: `Mouvement détecté - Caméra ${req.params.id}`,
+            message: `L'IA a détecté un mouvement sur le flux de la caméra (Hôte: ${host}).`,
+            metadata: { deviceId, host, detectedAt: new Date().toISOString() },
+            dedupeKey: `motion:ai:${req.params.id}`,
+            cooldownSeconds: 60, // Limite à 1 alerte par minute
+          }).catch(err => console.error('[ALERT AI MOTION ERROR]', err));
+
+          // Déclenche une notification en temps réel (WebSocket)
+          try {
+            const io = req.app.get('io');
+            if (io) io.emit('new_alert', { level: 'warning', title: `Mouvement détecté - Caméra ${req.params.id}` });
+          } catch (e) {}
         }
       }
     }

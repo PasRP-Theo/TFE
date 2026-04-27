@@ -629,7 +629,7 @@ export async function deleteAllRecordings(cameraId) {
 export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   const id = String(cameraId);
   const s = states.get(id);
-  if (!s || s.status !== 'running' || !s.sourceUrl) return;
+  if (!s || !s.sourceUrl) return; // Permet de lancer l'enregistrement même si HLS est en "reconnecting"
   if (activeRecordings.has(id)) return; // Déjà en cours d'enregistrement
 
   const recDir = path.join(RECORDINGS_DIR, id);
@@ -637,10 +637,15 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const mp4File = path.join(recDir, `${ts}.mp4`);
 
-  // Copie de flux ultra-légère pour générer l'enregistrement sans tuer le CPU
   const args = ['-y', '-fflags', '+genpts'];
   if (/^rtsp:/i.test(s.sourceUrl)) args.push('-rtsp_transport', RTSP_TRANSPORT);
-  args.push('-i', s.sourceUrl, '-t', String(durationSeconds), '-map', '0:v:0', '-c:v', 'copy', '-an', '-movflags', 'frag_keyframe+empty_moov', mp4File);
+  
+  // Encodage rapide pour générer un MP4 valide même en cas de perte de paquets Wi-Fi
+  args.push(
+    '-i', s.sourceUrl, '-t', String(durationSeconds), 
+    '-map', '0:v:0', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an', 
+    '-movflags', 'faststart', mp4File
+  );
 
   const proc = spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   activeRecordings.set(id, proc);
@@ -662,6 +667,12 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
       states.get(id).recording = false; // Éteint la pastille "REC"
       broadcast(id);
     }
+    
+    // Nettoie le fichier s'il est vide/corrompu suite à une déconnexion totale
+    stat(mp4File).then(stats => {
+      if (stats.size < 1024) unlink(mp4File).catch(() => {});
+    }).catch(() => {});
+
     console.log(`[CAM ${id}] 🛑 Fin de l'enregistrement de mouvement.`);
   });
 }
