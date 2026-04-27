@@ -457,17 +457,30 @@ router.post('/:id/motion', async (req, res) => {
     if (rows[0]) {
       const host = getHostFromStreamUrl(rows[0].rtsp_url);
       if (host) {
+        let deviceId = null;
         // Met à jour la date de mouvement du noeud (s'il a été ajouté via un scan réseau)
-        const updateRes = await pool.query('UPDATE camera_nodes SET last_motion_at = NOW() WHERE host = $1', [host]);
+        const updateRes = await pool.query('UPDATE camera_nodes SET last_motion_at = NOW() WHERE host = $1 RETURNING device_id', [host]);
         
         // Si aucun noeud n'existe pour cet hôte, on crée un noeud virtuel "IA"
         if (updateRes.rowCount === 0) {
+          deviceId = `ai_node:${host}`;
           await pool.query(
             `INSERT INTO camera_nodes (device_id, name, host, source, last_seen_at, last_motion_at)
              VALUES ($1, $2, $3, 'ia_detector', NOW(), NOW())
              ON CONFLICT (device_id) DO UPDATE SET last_motion_at = NOW()`,
-            [`ai_node:${host}`, `IA Caméra ${req.params.id}`, host]
+            [deviceId, `IA Caméra ${req.params.id}`, host]
           ).catch(err => console.error('[IA MOTION UPDATE ERROR]', err));
+        } else {
+          deviceId = updateRes.rows[0].device_id;
+        }
+
+        // Ajoute l'événement dans le journal d'historique texte
+        if (deviceId) {
+          await pool.query(
+            `INSERT INTO camera_node_motion_events (device_id, motion, detected_at)
+             VALUES ($1, true, NOW())`,
+            [deviceId]
+          ).catch(err => console.error('[IA MOTION EVENT INSERT ERROR]', err));
         }
       }
     }
