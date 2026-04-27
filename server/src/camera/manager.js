@@ -637,8 +637,14 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const mp4File = path.join(recDir, `${ts}.mp4`);
 
+  // Force la création (comme un "touch") pour que le fichier apparaisse dans l'historique quoiqu'il arrive
+  fsPromises.open(mp4File, 'a').then(fh => fh.close()).catch(() => {});
+
   const args = ['-y', '-fflags', '+genpts'];
-  if (/^rtsp:/i.test(s.sourceUrl)) args.push('-rtsp_transport', RTSP_TRANSPORT);
+  if (/^rtsp:/i.test(s.sourceUrl)) {
+    args.push('-rtsp_transport', RTSP_TRANSPORT);
+    args.push('-stimeout', '5000000'); // Tolérance de 5 secondes pour la connexion
+  }
   
   // Encodage rapide pour générer un MP4 valide même en cas de perte de paquets Wi-Fi
   args.push(
@@ -667,11 +673,6 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
       states.get(id).recording = false; // Éteint la pastille "REC"
       broadcast(id);
     }
-    
-    // Nettoie le fichier s'il est vide/corrompu suite à une déconnexion totale
-    stat(mp4File).then(stats => {
-      if (stats.size < 1024) unlink(mp4File).catch(() => {});
-    }).catch(() => {});
 
     console.log(`[CAM ${id}] 🛑 Fin de l'enregistrement de mouvement.`);
   });
