@@ -406,27 +406,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// PATCH /api/cameras/:id — Renommer la caméra
-router.patch('/:id', async (req, res) => {
-  const { name } = req.body;
-  if (!name || typeof name !== 'string' || !name.trim()) {
-    return res.status(400).json({ error: 'Le nouveau nom est requis' });
-  }
-
-  try {
-    const { rows } = await pool.query(
-      'UPDATE cameras SET name = $1 WHERE id = $2 RETURNING *',
-      [name.trim(), req.params.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
-    
-    res.json({ message: 'Caméra renommée', camera: rows[0] });
-  } catch (err) {
-    console.error('[CAM RENAME]', err);
-    res.status(500).json({ error: 'Erreur serveur lors du renommage' });
-  }
-});
-
 // POST /api/cameras/:id/start
 router.post('/:id/start', async (req, res) => {
   try {
