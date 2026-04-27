@@ -451,10 +451,12 @@ router.get('/:id/state', (req, res) => {
 // POST /api/cameras/:id/motion — Webhook pour l'IA
 router.post('/:id/motion', async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
+
     triggerMotionRecording(req.params.id, 30); // Enregistre 30 secondes de vidéo
 
     // NOUVEAU : On allume le badge "MOUVEMENT" en mettant à jour le noeud dans la base
-    const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [req.params.id]);
     if (rows[0]) {
       const host = getHostFromStreamUrl(rows[0].rtsp_url);
       if (host) {
