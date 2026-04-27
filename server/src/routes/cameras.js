@@ -451,6 +451,27 @@ router.get('/:id/state', (req, res) => {
 router.post('/:id/motion', async (req, res) => {
   try {
     triggerMotionRecording(req.params.id, 30); // Enregistre 30 secondes de vidéo
+
+    // NOUVEAU : On allume le badge "MOUVEMENT" en mettant à jour le noeud dans la base
+    const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [req.params.id]);
+    if (rows[0]) {
+      const host = getHostFromStreamUrl(rows[0].rtsp_url);
+      if (host) {
+        // Met à jour la date de mouvement du noeud (s'il a été ajouté via un scan réseau)
+        const updateRes = await pool.query('UPDATE camera_nodes SET last_motion_at = NOW() WHERE host = $1', [host]);
+        
+        // Si aucun noeud n'existe pour cet hôte, on crée un noeud virtuel "IA"
+        if (updateRes.rowCount === 0) {
+          await pool.query(
+            `INSERT INTO camera_nodes (device_id, name, host, source, last_seen_at, last_motion_at)
+             VALUES ($1, $2, $3, 'ia_detector', NOW(), NOW())
+             ON CONFLICT (device_id) DO UPDATE SET last_motion_at = NOW()`,
+            [`ai_node:${host}`, `IA Caméra ${req.params.id}`, host]
+          ).catch(err => console.error('[IA MOTION UPDATE ERROR]', err));
+        }
+      }
+    }
+
     res.json({ message: 'Mouvement détecté, enregistrement en cours' });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
