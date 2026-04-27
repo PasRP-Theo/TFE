@@ -257,7 +257,7 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
 
 export const cameraEvents = new EventEmitter();
 
-// État en mémoire : camId (string) → { proc, status, recording, startedAt, hlsUrl }
+// État en mémoire : camId (string) → { proc, status, recording, startedAt, hlsUrl, aiProc }
 const states = new Map();
 const activeRecordings = new Map();
 
@@ -414,6 +414,11 @@ export async function startCamera(camera) {
   const cur = states.get(id);
   if (cur?.status === 'running') return;
 
+  // Nettoie l'ancien processus IA si on est en reconnexion
+  if (cur?.aiProc) {
+    cur.aiProc.kill('SIGKILL');
+  }
+
   ensureDir(HLS_DIR);
   ensureDir(RECORDINGS_DIR);
 
@@ -522,6 +527,10 @@ export function pauseCamera(cameraId) {
   if (!s || s.status !== 'running') return false;
   // Sur Windows SIGSTOP n'existe pas → on tue et marque paused
   s.proc.kill('SIGKILL');
+  if (s.aiProc) {
+    s.aiProc.kill('SIGKILL');
+    s.aiProc = null;
+  }
   s.status    = 'paused';
   s.recording = false;
   broadcast(id);
@@ -547,6 +556,10 @@ export function stopCamera(cameraId) {
   s.status    = 'stopped';
   s.recording = false;
   s.proc.kill('SIGKILL');
+  if (s.aiProc) {
+    s.aiProc.kill('SIGKILL');
+    console.log(`[CAM ${id}] 🤖 Arrêt de l'IA.`);
+  }
   if (activeRecordings.has(id)) {
     activeRecordings.get(id).kill('SIGKILL');
     activeRecordings.delete(id);
@@ -584,6 +597,7 @@ export async function cleanupOldRecordings({ retentionDays = Number(process.env.
 export function stopAllCameras() {
   states.forEach((s, id) => {
     s.proc?.kill('SIGKILL');
+    s.aiProc?.kill('SIGKILL');
     console.log(`[CAM ${id}] Arrêtée (shutdown)`);
   });
   states.clear();
