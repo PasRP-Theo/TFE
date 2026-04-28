@@ -847,12 +847,12 @@ export default function CameraFeed() {
           <div className={`cam-card cam-card--focus-mode ${focusedCam.recording ? 'cam-card--rec' : ''}`}
             onClick={e => e.stopPropagation()}>
             <div className="cam-card-header">
-              <div className="cam-card-title">
-                <span className="cam-card-id">CAM {String(focusedCam.id).padStart(2, '0')}</span>
-                <span className="cam-card-name">{focusedCam.name}</span>
-                {focusedCam.location && <span className="cam-card-loc">· {focusedCam.location}</span>}
+              <div className="cam-card-title" style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '8px' }}>
+                <span className="cam-card-id" style={{ flexShrink: 0 }}>CAM {String(focusedCam.id).padStart(2, '0')}</span>
+                <span className="cam-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{focusedCam.name}</span>
+                {focusedCam.location && <span className="cam-card-loc" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>· {focusedCam.location}</span>}
               </div>
-              <div className="cam-card-actions cam-card-actions--wide-gap">
+              <div className="cam-card-actions cam-card-actions--wide-gap" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <StatusBadge status={focusedCam.status} />
                 <MotionBadge active={focusedCam.motionActive} />
                 {focusedCam.nodeDeviceId && (
@@ -895,11 +895,11 @@ export default function CameraFeed() {
               onClick={() => setFocused(cam.id)}
             >
               <div className="cam-card-header" onClick={e => e.stopPropagation()}>
-                <div className="cam-card-title">
-                  <span className="cam-card-id">CAM {String(cam.id).padStart(2, '0')}</span>
-                  <span className="cam-card-name">{cam.name}</span>
+                <div className="cam-card-title" style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '8px' }}>
+                  <span className="cam-card-id" style={{ flexShrink: 0 }}>CAM {String(cam.id).padStart(2, '0')}</span>
+                  <span className="cam-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cam.name}</span>
                 </div>
-                <div className="cam-card-actions">
+                <div className="cam-card-actions" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <StatusBadge status={cam.status} />
                   <MotionBadge active={cam.motionActive} />
                   <button className="cam-card-history"

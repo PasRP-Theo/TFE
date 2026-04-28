@@ -448,7 +448,7 @@ export async function startCamera(camera) {
   }
 
   const args = [];
-  args.push('-fflags', '+genpts'); // Force la génération de timestamps corrects pour le web
+  args.push('-fflags', '+genpts+nobuffer', '-flags', 'low_delay'); // Optimisation de la latence
   if (isRtsp) args.push('-rtsp_transport', RTSP_TRANSPORT);
   args.push('-y', '-i', sourceUrl);
 
@@ -465,9 +465,10 @@ export async function startCamera(camera) {
     ...videoCodecArgs,
     ...audioCodecArgs,
     '-f', 'hls',
-    '-hls_time', '2',
-    '-hls_list_size', '8',
-    '-hls_flags', 'delete_segments',
+    '-hls_time', '1',
+    '-hls_list_size', '3',
+    '-hls_flags', 'delete_segments+append_list',
+    '-hls_start_number_source', 'datetime',
     '-hls_segment_type', 'fmp4', // Format ultra-compatible pour les navigateurs web modernes
     '-hls_fmp4_init_filename', `init_${runId}.mp4`, // Fichier d'initialisation contenant les headers
     '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.m4s`), // Segments MP4 fragmentés
