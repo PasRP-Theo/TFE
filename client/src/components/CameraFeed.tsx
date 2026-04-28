@@ -209,7 +209,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
           </button>
         </div>
       )}
-      <video ref={videoRef} autoPlay muted playsInline preload="auto" className="cam-video" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <video ref={videoRef} autoPlay muted playsInline preload="auto" className="cam-video" style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000' }} />
     </div>
   );
 }
