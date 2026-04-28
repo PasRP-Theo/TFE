@@ -861,9 +861,7 @@ export default function CameraFeed() {
                   </button>
                 )}
                 <button className="cam-card-history" onClick={() => loadCameraHistory(focusedCam.id)}>📁 Historique</button>
-              {isAdmin && (
-                <button className="cam-card-delete" onClick={() => setCameraDeleteTarget(focusedCam)}>✕</button>
-              )}
+                <button className="cam-card-delete" title="Retour à la grille" onClick={(e) => { e.stopPropagation(); setFocused(null); }}>✕</button>
               </div>
             </div>
             <div className="cam-screen-shell cam-screen-shell--focus-mode">
@@ -871,9 +869,16 @@ export default function CameraFeed() {
             </div>
             <CameraControls cam={focusedCam} onAction={handleAction} />
           </div>
-          <button type="button" className="cam-focus-exit-btn" onClick={(event) => { event.stopPropagation(); setFocused(null); }}>
-            Retour à la grille
-          </button>
+          {isAdmin && (
+            <button 
+              type="button" 
+              className="cam-focus-exit-btn" 
+              style={{ borderColor: 'var(--accent-red-border)', background: 'rgba(248, 113, 113, 0.1)', color: 'var(--accent-red)' }} 
+              onClick={(event) => { event.stopPropagation(); setCameraDeleteTarget(focusedCam); }}
+            >
+              Supprimer la caméra
+            </button>
+          )}
         </div>
       ) : (
         <div className={`cam-grid cam-grid--${config.cameraCardSize}`} style={{ paddingBottom: '80px' }}>
