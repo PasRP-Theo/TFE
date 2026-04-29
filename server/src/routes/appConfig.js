@@ -227,7 +227,13 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
             });
           } else {
             console.log('[APP CONFIG] Mode surveillance désactivé -> Arrêt de toutes les caméras');
-            cameras.forEach(cam => stopCamera(cam.id));
+            cameras.forEach(cam => {
+              try {
+                stopCamera(cam.id);
+              } catch (err) {
+                console.error(`[APP CONFIG] Erreur à l'arrêt de la caméra ${cam.id}:`, err);
+              }
+            });
           }
         } catch (err) {
           console.error('[APP CONFIG] Erreur lors du changement d\'état des caméras', err);

@@ -548,9 +548,9 @@ export function pauseCamera(cameraId) {
   const s  = states.get(id);
   if (!s || s.status !== 'running') return false;
   // Sur Windows SIGSTOP n'existe pas → on tue et marque paused
-  s.proc.kill('SIGKILL');
+  s.proc?.kill('SIGKILL');
   if (s.aiProc) {
-    s.aiProc.kill('SIGKILL');
+    s.aiProc?.kill('SIGKILL');
     s.aiProc = null;
   }
   s.status    = 'paused';
@@ -577,13 +577,13 @@ export function stopCamera(cameraId) {
   if (!s) return false;
   s.status    = 'stopped';
   s.recording = false;
-  s.proc.kill('SIGKILL');
+  s.proc?.kill('SIGKILL');
   if (s.aiProc) {
-    s.aiProc.kill('SIGKILL');
+    s.aiProc?.kill('SIGKILL');
     console.log(`[CAM ${id}] 🤖 Arrêt de l'IA.`);
   }
   if (activeRecordings.has(id)) {
-    activeRecordings.get(id).kill('SIGKILL');
+    activeRecordings.get(id)?.kill('SIGKILL');
     activeRecordings.delete(id);
   }
   states.delete(id);
