@@ -24,6 +24,15 @@ vi.mock('../../hooks/useAuth', () => ({
   })
 }));
 
+vi.mock('../../hooks/useVirtualKeyboard', () => ({
+  useVirtualKeyboard: () => ({
+    showKeyboard: vi.fn(),
+    hideKeyboard: vi.fn(),
+    isKeyboardVisible: false,
+    isKeyboardEnabled: false,
+  })
+}));
+
 describe('CameraFeed Component', () => {
   beforeEach(() => {
     global.fetch = vi.fn(() =>

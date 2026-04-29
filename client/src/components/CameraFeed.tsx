@@ -107,7 +107,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     if (hlsUrl && hlsUrl.startsWith('http')) {
       pathOnly = new URL(hlsUrl).pathname;
     }
-  } catch {
+  } catch (e) {
     // Ignorer l'erreur si l'URL est mal formatée
   }
   const fullUrl = apiUrl(`${pathOnly}?v=${encodeURIComponent(streamKey)}`);
