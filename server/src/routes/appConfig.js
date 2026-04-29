@@ -216,22 +216,23 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
     );
 
     if (nextSurveillanceMode !== undefined && nextSurveillanceMode !== current.surveillance_mode) {
-      try {
-        const { rows: cameras } = await pool.query('SELECT * FROM cameras');
-        if (nextSurveillanceMode) {
-          console.log('[APP CONFIG] Mode surveillance activé -> Démarrage de toutes les caméras');
-          for (const cam of cameras) {
-            await startCamera(cam).catch(err => console.error(`[START CAM ${cam.id}]`, err));
+      // Exécution en arrière-plan pour ne pas bloquer la réponse HTTP
+      setTimeout(async () => {
+        try {
+          const { rows: cameras } = await pool.query('SELECT * FROM cameras');
+          if (nextSurveillanceMode) {
+            console.log('[APP CONFIG] Mode surveillance activé -> Démarrage en arrière-plan');
+            cameras.forEach(cam => {
+              startCamera(cam).catch(err => console.error(`[START CAM ${cam.id}]`, err));
+            });
+          } else {
+            console.log('[APP CONFIG] Mode surveillance désactivé -> Arrêt de toutes les caméras');
+            cameras.forEach(cam => stopCamera(cam.id));
           }
-        } else {
-          console.log('[APP CONFIG] Mode surveillance désactivé -> Arrêt de toutes les caméras');
-          for (const cam of cameras) {
-            stopCamera(cam.id);
-          }
+        } catch (err) {
+          console.error('[APP CONFIG] Erreur lors du changement d\'état des caméras', err);
         }
-      } catch (err) {
-        console.error('[APP CONFIG] Erreur lors du changement d\'état des caméras', err);
-      }
+      }, 0);
     }
 
     res.json(serializeConfig(rows[0]));
