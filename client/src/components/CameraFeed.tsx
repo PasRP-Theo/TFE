@@ -947,38 +947,12 @@ export default function CameraFeed() {
               className={`cam-card ${cam.recording ? 'cam-card--rec' : ''} ${focused === cam.id ? 'cam-card--focused' : ''}`}
               onClick={() => setFocused(cam.id)}
             >
-              <div className="cam-card-header" onClick={e => e.stopPropagation()}>
+            <div className="cam-card-header">
                 <div className="cam-card-title" style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '8px' }}>
                   <span className="cam-card-id" style={{ flexShrink: 0 }}>CAM {String(cam.id).padStart(2, '0')}</span>
-                  {editingNameId === cam.id ? (
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                      <input
-                        autoFocus
-                        className="sensor-input"
-                        style={{ padding: '2px 8px', fontSize: '14px', height: 'auto', margin: 0, minHeight: '28px', maxWidth: '150px' }}
-                        value={editNameValue}
-                        readOnly={isKeyboardEnabled}
-                        onFocus={() => showKeyboard(editNameValue, setEditNameValue)}
-                        onChange={e => setEditNameValue(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') saveCameraName(cam.id);
-                          if (e.key === 'Escape') setEditingNameId(null);
-                        }}
-                      />
-                      <button type="button" className="sensor-confirm-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => saveCameraName(cam.id)}>✓</button>
-                      <button type="button" className="sensor-delete-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => setEditingNameId(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <span 
-                      className="cam-card-name" 
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: isAdmin ? 'pointer' : 'default' }}
-                      onClick={e => { if (isAdmin) { e.stopPropagation(); setEditingNameId(cam.id); setEditNameValue(cam.name); } }}
-                      title={isAdmin ? "Cliquez pour renommer" : undefined}
-                    >
-                      {cam.name}
-                      {isAdmin && <span style={{ opacity: 0.5, marginLeft: '6px', fontSize: '0.85em' }}>✎</span>}
-                    </span>
-                  )}
+                <span className="cam-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={cam.name}>
+                  {cam.name}
+                </span>
                 </div>
                 <div className="cam-card-actions" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <StatusBadge status={cam.status} />
