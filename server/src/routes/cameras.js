@@ -199,7 +199,12 @@ router.post('/', async (req, res) => {
       [name, rtspUrl, location || '']
     );
     const camera = rows[0];
-    await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
+    const configRow = await pool.query('SELECT surveillance_mode FROM app_settings WHERE id = 1');
+    if (configRow.rows[0]?.surveillance_mode !== false) {
+      await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
+    } else {
+      console.log('[CAM ADD] Mode surveillance désactivé, la caméra ne démarre pas automatiquement.');
+    }
     const host = getHostFromStreamUrl(rtspUrl);
     if (host) {
       await upsertDiscovery({
