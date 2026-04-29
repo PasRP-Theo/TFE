@@ -1082,18 +1082,26 @@ export default function CameraFeed() {
                 {groupedHistoryRecords.map(group => (
                   <section key={group.label} className="cam-history-group">
                     <div className="cam-history-group-title">{group.label}</div>
-                    {group.items.map(entry => (
-                      <div key={entry.filename} className="cam-history-row">
+                    {group.items.map(entry => {
+                      const isOfflineSync = entry.filename.startsWith('offline_sync');
+                      return (
+                      <div key={entry.filename} className={`cam-history-row ${isOfflineSync ? 'cam-history-row--offline' : ''}`}>
                         <div className="cam-history-row-main">
-                          <div className="cam-history-row-icon">REC</div>
+                          <div 
+                            className="cam-history-row-icon"
+                            style={isOfflineSync ? { backgroundColor: 'var(--accent-amber)', color: '#111' } : {}}
+                          >
+                            {isOfflineSync ? 'SYNC' : 'REC'}
+                          </div>
                           <div className="cam-history-row-copy">
-                            <strong>{entry.filename}</strong>
+                            <strong style={isOfflineSync ? { color: 'var(--accent-amber)' } : {}}>{entry.filename}</strong>
                             <div className="cam-history-meta">
                               {formatHistoryDate(entry.createdAt)}
+                              {isOfflineSync && ' · Récupération après coupure Wi-Fi'}
                             </div>
                             <div className="cam-history-tags">
                               <span className="cam-history-tag">{formatStorageSize(entry.size)}</span>
-                              <span className="cam-history-tag">HLS export</span>
+                              <span className="cam-history-tag">{isOfflineSync ? 'Upload différé' : 'HLS export'}</span>
                             </div>
                           </div>
                         </div>
@@ -1129,7 +1137,8 @@ export default function CameraFeed() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </section>
                 ))}
               </div>

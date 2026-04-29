@@ -2,7 +2,9 @@ import { Router } from 'express';
 import path from 'path';
 import { networkInterfaces } from 'os';
 import { Socket } from 'net';
-import { existsSync, promises as fs } from 'fs';
+import { existsSync, promises as fs, createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import { exec } from 'child_process';
 import { pool } from '../db/index.js';
 import {
   startCamera, pauseCamera, resumeCamera,
@@ -530,6 +532,56 @@ router.post('/:id/motion', async (req, res) => {
     res.json({ message: 'Mouvement détecté, enregistrement en cours' });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/cameras/:id/upload-offline — Récupération des vidéos après coupure Wi-Fi (US-09)
+router.post('/:id/upload-offline', async (req, res) => {
+  try {
+    const cameraId = String(req.params.id);
+    const camDir = path.join(RECORDINGS_DIR, cameraId);
+    if (!existsSync(camDir)) {
+      await fs.mkdir(camDir, { recursive: true });
+    }
+
+    // Nom spécifique pour bien les identifier dans le frontend
+    const filename = `offline_sync_${Date.now()}.mp4`;
+    const filePath = path.join(camDir, filename);
+
+    // On récupère le fichier binaire streamé par le nœud caméra (ex: Pi ou ESP32)
+    await pipeline(req, createWriteStream(filePath));
+    
+    res.json({ message: 'Fichier hors-ligne reçu avec succès', filename });
+
+    // Détection de mouvements a posteriori via ffmpeg (analyse du fichier sauvegardé)
+    exec(`ffmpeg -i ${filePath} -vf "select='gt(scene,0.05)'" -f null - 2>&1`, async (error, stdout, stderr) => {
+      const output = stdout + stderr;
+      // Si ffmpeg trouve un changement de scène notable, on génère une alerte
+      if (output.includes('Parsed_select') || output.includes('scene:')) {
+        console.log(`[OFFLINE SYNC] Mouvement détecté a posteriori dans ${filename}`);
+        try {
+          const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [cameraId]);
+          const host = rows[0] ? getHostFromStreamUrl(rows[0].rtsp_url) : 'offline_cam';
+          
+          await createAlert({
+            sourceType: 'camera',
+            sourceId: cameraId,
+            cameraId: cameraId,
+            alertType: 'offline_motion_detected',
+            level: 'warning',
+            title: `Mouvement détecté (Hors-ligne) - Caméra ${cameraId}`,
+            message: `Un mouvement a été détecté dans la vidéo synchronisée après la coupure réseau (${filename}).`,
+            metadata: { host, filename, detectedAt: new Date().toISOString() },
+            dedupeKey: `motion:offline:${cameraId}:${filename}`
+          });
+        } catch (dbErr) {
+          console.error('[OFFLINE SYNC ALERT ERROR]', dbErr);
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[OFFLINE SYNC ERROR]', err);
+    res.status(500).json({ error: 'Erreur lors de la réception du fichier' });
   }
 });
 
