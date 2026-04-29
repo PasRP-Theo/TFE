@@ -163,18 +163,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const POLL_INTERVAL = 5000;
 
 export default function SystemInfo() {
-  const { config } = useAppConfig();
-  const { user } = useAuth();
+  const { config, updateConfig } = useAppConfig();
+  const { user, token } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [data, setData] = useState<SystemInfoData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [pulse, setPulse] = useState(false);
-  const [surveillanceActive, setSurveillanceActive] = useState(true);
   const [showPinPad, setShowPinPad] = useState(false);
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
+
+  // On lit l'état réel depuis la configuration
+  const surveillanceActive = (config as any).surveillanceMode ?? true;
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -210,7 +212,7 @@ export default function SystemInfo() {
     setPinError("");
   };
 
-  const handlePinPress = (digit: string) => {
+  const handlePinPress = async (digit: string) => {
     if (enteredPin.length >= 4) return;
     const nextPin = enteredPin + digit;
     setEnteredPin(nextPin);
@@ -219,8 +221,15 @@ export default function SystemInfo() {
     if (nextPin.length === 4) {
       const savedPin = config.kioskPin || '1234';
       if (nextPin === savedPin) {
-        setSurveillanceActive(!surveillanceActive);
-        setShowPinPad(false);
+        try {
+          if (token && updateConfig) {
+            await updateConfig(token, { surveillanceMode: !surveillanceActive });
+          }
+          setShowPinPad(false);
+        } catch (err) {
+          setPinError("ERREUR SYSTÈME");
+          setTimeout(() => setEnteredPin(""), 1000);
+        }
       } else {
         setPinError("CODE INCORRECT");
         setTimeout(() => setEnteredPin(""), 500);
