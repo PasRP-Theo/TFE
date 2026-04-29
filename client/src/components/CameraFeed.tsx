@@ -4,6 +4,7 @@ import type { ErrorData } from "hls.js";
 import { apiUrl } from "../lib/api";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
+import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface Camera {
   id:        number;
@@ -319,7 +320,10 @@ export default function CameraFeed() {
   const { config } = useAppConfig();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [editingNameId, setEditingNameId] = useState<number | null>(null);
+  const [editNameValue, setEditNameValue] = useState('');
   const [focused, setFocused] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
@@ -650,6 +654,27 @@ export default function CameraFeed() {
     setMotionHistoryError(null);
   }
 
+  async function saveCameraName(id: number) {
+    if (!editNameValue.trim()) {
+      setEditingNameId(null);
+      return;
+    }
+    try {
+      const res = await fetch(apiUrl(`/api/cameras/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editNameValue.trim() }),
+      });
+      if (res.ok) {
+        setCameras(prev => prev.map(c => c.id === id ? { ...c, name: editNameValue.trim() } : c));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditingNameId(null);
+    }
+  }
+
   const onlineCount = cameras.filter(c => c.status === 'running').length;
   const recCount    = cameras.filter(c => c.recording).length;
   const focusedCam  = cameras.find(c => c.id === focused);
@@ -849,7 +874,35 @@ export default function CameraFeed() {
             <div className="cam-card-header">
               <div className="cam-card-title" style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '8px' }}>
                 <span className="cam-card-id" style={{ flexShrink: 0 }}>CAM {String(focusedCam.id).padStart(2, '0')}</span>
-                <span className="cam-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{focusedCam.name}</span>
+                {editingNameId === focusedCam.id ? (
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                    <input
+                      autoFocus
+                      className="sensor-input"
+                      style={{ padding: '2px 8px', fontSize: '14px', height: 'auto', margin: 0, minHeight: '28px', maxWidth: '200px' }}
+                      value={editNameValue}
+                      readOnly={isKeyboardEnabled}
+                      onFocus={() => showKeyboard(editNameValue, setEditNameValue)}
+                      onChange={e => setEditNameValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveCameraName(focusedCam.id);
+                        if (e.key === 'Escape') setEditingNameId(null);
+                      }}
+                    />
+                    <button type="button" className="sensor-confirm-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => saveCameraName(focusedCam.id)}>✓</button>
+                    <button type="button" className="sensor-delete-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => setEditingNameId(null)}>✕</button>
+                  </div>
+                ) : (
+                  <span 
+                    className="cam-card-name" 
+                    style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: isAdmin ? 'pointer' : 'default' }}
+                    onClick={e => { if (isAdmin) { e.stopPropagation(); setEditingNameId(focusedCam.id); setEditNameValue(focusedCam.name); } }}
+                    title={isAdmin ? "Cliquez pour renommer" : undefined}
+                  >
+                    {focusedCam.name}
+                    {isAdmin && <span style={{ opacity: 0.5, marginLeft: '6px', fontSize: '0.85em' }}>✎</span>}
+                  </span>
+                )}
                 {focusedCam.location && <span className="cam-card-loc" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>· {focusedCam.location}</span>}
               </div>
               <div className="cam-card-actions cam-card-actions--wide-gap" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -897,7 +950,35 @@ export default function CameraFeed() {
               <div className="cam-card-header" onClick={e => e.stopPropagation()}>
                 <div className="cam-card-title" style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '8px' }}>
                   <span className="cam-card-id" style={{ flexShrink: 0 }}>CAM {String(cam.id).padStart(2, '0')}</span>
-                  <span className="cam-card-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cam.name}</span>
+                  {editingNameId === cam.id ? (
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        className="sensor-input"
+                        style={{ padding: '2px 8px', fontSize: '14px', height: 'auto', margin: 0, minHeight: '28px', maxWidth: '150px' }}
+                        value={editNameValue}
+                        readOnly={isKeyboardEnabled}
+                        onFocus={() => showKeyboard(editNameValue, setEditNameValue)}
+                        onChange={e => setEditNameValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveCameraName(cam.id);
+                          if (e.key === 'Escape') setEditingNameId(null);
+                        }}
+                      />
+                      <button type="button" className="sensor-confirm-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => saveCameraName(cam.id)}>✓</button>
+                      <button type="button" className="sensor-delete-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => setEditingNameId(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <span 
+                      className="cam-card-name" 
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: isAdmin ? 'pointer' : 'default' }}
+                      onClick={e => { if (isAdmin) { e.stopPropagation(); setEditingNameId(cam.id); setEditNameValue(cam.name); } }}
+                      title={isAdmin ? "Cliquez pour renommer" : undefined}
+                    >
+                      {cam.name}
+                      {isAdmin && <span style={{ opacity: 0.5, marginLeft: '6px', fontSize: '0.85em' }}>✎</span>}
+                    </span>
+                  )}
                 </div>
                 <div className="cam-card-actions" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <StatusBadge status={cam.status} />

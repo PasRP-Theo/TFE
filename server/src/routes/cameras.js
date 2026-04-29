@@ -395,6 +395,25 @@ router.get('/scan', async (req, res) => {
   res.json(foundCameras);
 });
 
+// PATCH /api/cameras/:id — modifier le nom
+router.patch('/:id', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Nom invalide' });
+
+    const { rows } = await pool.query(
+      'UPDATE cameras SET name = $1 WHERE id = $2 RETURNING *',
+      [String(name).trim(), req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
+
+    res.json({ message: 'Caméra renommée', camera: rows[0] });
+  } catch (err) {
+    console.error('[CAM UPDATE]', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // DELETE /api/cameras/:id
 router.delete('/:id', async (req, res) => {
   try {
