@@ -54,7 +54,6 @@ export async function initDB() {
         alerts_daily_summary_enabled BOOLEAN NOT NULL DEFAULT false,
         alerts_sound_enabled    BOOLEAN      NOT NULL DEFAULT true,
         alerts_disconnect_enabled BOOLEAN    NOT NULL DEFAULT true,
-        surveillance_mode       BOOLEAN      NOT NULL DEFAULT true,
         bootstrap_admin_user_id INTEGER,
         default_admin_active    BOOLEAN      NOT NULL DEFAULT false,
         kiosk_pin               VARCHAR(10)  NOT NULL DEFAULT '1234',
@@ -202,7 +201,6 @@ export async function initDB() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_daily_summary_enabled BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_sound_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_disconnect_enabled BOOLEAN NOT NULL DEFAULT true;
-      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS surveillance_mode BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS kiosk_pin VARCHAR(10) NOT NULL DEFAULT '1234';
     `);
 

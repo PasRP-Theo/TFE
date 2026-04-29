@@ -140,9 +140,6 @@ function TabSettings() {
   const [securitySuccess, setSecuritySuccess] = useState('');
   const [securitySaving, setSecuritySaving] = useState(false);
   const [showPin, setShowPin] = useState(false);
-  const [systemError, setSystemError] = useState('');
-  const [systemSuccess, setSystemSuccess] = useState('');
-  const [systemSaving, setSystemSaving] = useState(false);
 
   useEffect(() => {
     setDraftConfig(config);
@@ -327,22 +324,6 @@ function TabSettings() {
       setSecurityError(err instanceof Error ? err.message : 'Erreur serveur');
     } finally {
       setSecuritySaving(false);
-    }
-  }
-
-  async function saveSystemSettings() {
-    if (!token) return;
-    setSystemError('');
-    setSystemSuccess('');
-    setSystemSaving(true);
-    try {
-      const nextConfig = await updateConfig(token, { surveillanceMode: (draftConfig as any).surveillanceMode });
-      setDraftConfig(nextConfig);
-      setSystemSuccess('Mode de surveillance appliqué avec succès.');
-    } catch (err: unknown) {
-      setSystemError(err instanceof Error ? err.message : 'Erreur serveur');
-    } finally {
-      setSystemSaving(false);
     }
   }
 
@@ -700,24 +681,8 @@ function TabSettings() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label settings-section-label--row">
-          <span>SYSTÈME</span>
-          <button className="sensor-confirm-btn" onClick={saveSystemSettings} disabled={systemSaving}>
-            {systemSaving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </div>
-        <div className="settings-toggle-list">
-          <SettingToggle
-            label="Mode de surveillance"
-            description="Active ou désactive la capture de toutes les caméras en un clic. Désactiver le mode stoppe la lecture vidéo et l'enregistrement."
-            checked={(draftConfig as any).surveillanceMode ?? true}
-            onChange={(checked) => updateDraft({ surveillanceMode: checked } as any)}
-          />
-        </div>
-        {systemError && <div className="settings-msg settings-msg--error">⚠ {systemError}</div>}
-        {systemSuccess && <div className="settings-msg settings-msg--success">✓ {systemSuccess}</div>}
-
-        <div className="settings-danger-zone" style={{ marginTop: '24px' }}>
+        <div className="settings-section-label">SYSTÈME</div>
+        <div className="settings-danger-zone">
           <div className="settings-danger-zone-copy">
             <div className="settings-danger-zone-title">RÉINITIALISATION COMPLÈTE</div>
             <div className="settings-danger-zone-text">

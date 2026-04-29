@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { startCamera, stopCamera } from '../camera/manager.js';
 
 const router = Router();
 
@@ -32,7 +31,6 @@ function serializeConfig(row) {
     alertsDailySummaryEnabled: row.alerts_daily_summary_enabled,
     alertsSoundEnabled: row.alerts_sound_enabled,
     alertsDisconnectEnabled: row.alerts_disconnect_enabled,
-    surveillanceMode: row.surveillance_mode,
     defaultAdminUsername: 'root',
     defaultAdminActive: row.default_admin_active,
     kioskPin: row.kiosk_pin,
@@ -47,7 +45,7 @@ async function getConfigRow() {
             camera_autostart_enabled, camera_refresh_seconds, show_offline_cameras,
             default_camera_add_mode, camera_discovery_interval_seconds,
             alerts_realtime_enabled, alerts_daily_summary_enabled,
-            alerts_sound_enabled, alerts_disconnect_enabled, surveillance_mode,
+            alerts_sound_enabled, alerts_disconnect_enabled,
             default_admin_active, kiosk_pin
      FROM app_settings
      WHERE id = 1`
@@ -97,7 +95,6 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
   const nextAlertsDailySummaryEnabled = readBoolean(req.body.alertsDailySummaryEnabled);
   const nextAlertsSoundEnabled = readBoolean(req.body.alertsSoundEnabled);
   const nextAlertsDisconnectEnabled = readBoolean(req.body.alertsDisconnectEnabled);
-  const nextSurveillanceMode = readBoolean(req.body.surveillanceMode);
   const nextKioskPin = readString(req.body.kioskPin);
 
   if (nextAppName !== undefined && !nextAppName) {
@@ -155,7 +152,6 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
       alertsDailySummaryEnabled: nextAlertsDailySummaryEnabled ?? current.alerts_daily_summary_enabled,
       alertsSoundEnabled: nextAlertsSoundEnabled ?? current.alerts_sound_enabled,
       alertsDisconnectEnabled: nextAlertsDisconnectEnabled ?? current.alerts_disconnect_enabled,
-      surveillanceMode: nextSurveillanceMode ?? current.surveillance_mode,
       kioskPin: nextKioskPin ?? current.kiosk_pin,
     };
 
@@ -179,8 +175,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
            alerts_daily_summary_enabled = $16,
            alerts_sound_enabled = $17,
            alerts_disconnect_enabled = $18,
-           surveillance_mode = $19,
-           kiosk_pin = $20,
+           kiosk_pin = $19,
            updated_at = NOW()
        WHERE id = 1
        RETURNING app_name, app_subtitle, system_version,
@@ -189,7 +184,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
                  camera_autostart_enabled, camera_refresh_seconds, show_offline_cameras,
                  default_camera_add_mode, camera_discovery_interval_seconds,
                  alerts_realtime_enabled, alerts_daily_summary_enabled,
-                 alerts_sound_enabled, alerts_disconnect_enabled, surveillance_mode,
+                 alerts_sound_enabled, alerts_disconnect_enabled,
                  default_admin_active, kiosk_pin`,
       [
         values.appName,
@@ -210,36 +205,9 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
         values.alertsDailySummaryEnabled,
         values.alertsSoundEnabled,
         values.alertsDisconnectEnabled,
-        values.surveillanceMode,
         values.kioskPin,
       ]
     );
-
-    if (nextSurveillanceMode !== undefined && nextSurveillanceMode !== current.surveillance_mode) {
-      // Exécution en arrière-plan pour ne pas bloquer la réponse HTTP
-      setTimeout(async () => {
-        try {
-          const { rows: cameras } = await pool.query('SELECT * FROM cameras');
-          if (nextSurveillanceMode) {
-            console.log('[APP CONFIG] Mode surveillance activé -> Démarrage en arrière-plan');
-            cameras.forEach(cam => {
-              startCamera(cam).catch(err => console.error(`[START CAM ${cam.id}]`, err));
-            });
-          } else {
-            console.log('[APP CONFIG] Mode surveillance désactivé -> Arrêt de toutes les caméras');
-            cameras.forEach(cam => {
-              try {
-                stopCamera(cam.id);
-              } catch (err) {
-                console.error(`[APP CONFIG] Erreur à l'arrêt de la caméra ${cam.id}:`, err);
-              }
-            });
-          }
-        } catch (err) {
-          console.error('[APP CONFIG] Erreur lors du changement d\'état des caméras', err);
-        }
-      }, 0);
-    }
 
     res.json(serializeConfig(rows[0]));
   } catch (err) {
