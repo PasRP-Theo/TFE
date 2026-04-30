@@ -3,6 +3,7 @@ import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from '../lib/api';
+import { usePush } from "../hooks/usePush";
 import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -113,7 +114,7 @@ function SettingToggle({ label, description, defaultChecked = false, disabled = 
 function TabSettings() {
   const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const { settings, updateSettings, resetSettings } = useAppearance();
-  const { token, logout } = useAuth();
+  const { token, logout, user } = useAuth();
   const { config, updateConfig } = useAppConfig();
   const [draftConfig, setDraftConfig] = useState(config);
   const [applicationError, setApplicationError] = useState('');
@@ -131,11 +132,7 @@ function TabSettings() {
   const [resetError, setResetError] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [pushSupport, setPushSupport] = useState(true);
   const [isPwa, setIsPwa] = useState(true);
-  const [pushLoading, setPushLoading] = useState(true);
-  const [pushError, setPushError] = useState('');
   const [securityError, setSecurityError] = useState('');
   const [securitySuccess, setSecuritySuccess] = useState('');
   const [securitySaving, setSecuritySaving] = useState(false);
@@ -148,47 +145,35 @@ function TabSettings() {
   useEffect(() => {
     const checkPwa = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true;
     setIsPwa(checkPwa);
-
-    if (!checkPwa) {
-      setPushLoading(false);
-      return;
-    }
-
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      setPushSupport(false);
-      setPushLoading(false);
-      return;
-    }
-
-    setPushSubscribed(Notification.permission === 'granted');
-    setPushLoading(false);
   }, []);
 
+  // --- Push Notifications ---
+  const { isSupported: pushSupported, isSubscribed: pushSubscribed, isSubscribing: pushLoading, permission: pushPermission, error: pushError, subscribe: subscribePush, unsubscribe: unsubscribePush } = usePush();
+  const [testPushMessage, setTestPushMessage] = useState('');
+
   const handlePushToggle = async (checked: boolean) => {
-    setPushLoading(true);
-    setPushError('');
-    try {
-      if (checked) {
-        const perm = await Notification.requestPermission();
-        setPushSubscribed(perm === 'granted');
-        if (perm !== 'granted') throw new Error("Permission refusée par le navigateur. Modifiez vos paramètres locaux.");
-      } else {
-        throw new Error("Pour désactiver, vous devez révoquer la permission directement dans les paramètres du navigateur.");
-      }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      setPushError(message);
-    } finally {
-      setPushLoading(false);
+    setTestPushMessage('');
+    if (checked) {
+      await subscribePush();
+    } else {
+      await unsubscribePush();
     }
   };
 
   const sendTestNotification = async () => {
-    setPushError('');
-    if (Notification.permission === 'granted') {
-        new Notification("Test SENTYS", { body: "Ceci est une notification en temps réel via Socket.IO !", icon: '/favicon.ico' });
-    } else {
-        setPushError("Permission non accordée par le système.");
+    setTestPushMessage('');
+    if (!token) return;
+    try {
+      const res = await fetch(apiUrl('/api/push/test'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      setTestPushMessage('Notification de test envoyée à tous les appareils abonnés.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setTestPushMessage(`Erreur: ${message}`);
     }
   };
 
@@ -616,12 +601,12 @@ function TabSettings() {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label">NOTIFICATIONS PUSH (US-16)</div>
+        <div className="settings-section-label">NOTIFICATIONS PUSH</div>
         {!isPwa ? (
           <div className="settings-msg settings-msg--error">
             ⚠ Les notifications push sont uniquement disponibles lorsque l'application est installée (PWA). Veuillez installer l'application pour activer cette fonctionnalité.
           </div>
-        ) : !pushSupport ? (
+        ) : !pushSupported ? (
           <div className="settings-msg settings-msg--error">
             ⚠ Les notifications push ne sont pas supportées par ce navigateur ou cette connexion (HTTPS est requis).
           </div>
@@ -630,16 +615,23 @@ function TabSettings() {
             <div className="settings-toggle-list">
               <SettingToggle
                 label="Recevoir les alertes critiques sur cet appareil"
-                description="Vous recevrez une notification même si l'application est fermée."
+                description={
+                  pushPermission === 'denied'
+                    ? "Permission bloquée. Vous devez l'autoriser dans les paramètres du navigateur."
+                    : "Vous recevrez une notification même si l'application est fermée."
+                }
                 checked={pushSubscribed}
                 onChange={handlePushToggle}
-                disabled={pushLoading}
+                disabled={pushLoading || pushPermission === 'denied'}
               />
             </div>
             {pushError && <div className="settings-msg settings-msg--error">⚠ {pushError}</div>}
-            {pushSubscribed && (
+            {testPushMessage && <div className={`settings-msg ${testPushMessage.startsWith('Erreur') ? 'settings-msg--error' : 'settings-msg--success'}`}>{testPushMessage}</div>}
+            {pushSubscribed && user?.role === 'admin' && (
               <div style={{ marginTop: '16px' }}>
-                <button className="sensor-link-btn" onClick={sendTestNotification}>Envoyer une notification de test</button>
+                <button className="sensor-link-btn" onClick={sendTestNotification} disabled={pushLoading}>
+                  {pushLoading ? 'Opération en cours...' : 'Envoyer une notification de test'}
+                </button>
               </div>
             )}
           </>

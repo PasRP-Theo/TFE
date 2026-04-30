@@ -18,6 +18,7 @@ import cameraRoutes          from "./src/routes/cameras.js";
 import cameraNodeRoutes      from "./src/routes/cameraNodes.js";
 import appConfigRoutes       from "./src/routes/appConfig.js";
 import alertsRoutes          from "./src/routes/alerts.js";
+import pushRoutes, { configureWebPush } from "./src/routes/push.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
@@ -217,6 +218,7 @@ app.use("/api/camera-nodes", cameraNodeRoutes);
 app.use("/api/cameras", cameraRoutes);
 app.use("/api/app-config", appConfigRoutes);
 app.use("/api/alerts", alertsRoutes);
+app.use("/api/push", pushRoutes);
 
 app.get("/api/audit-logs", async (req, res) => {
   const user = getRequestUser(req);
@@ -249,6 +251,16 @@ async function start() {
   await initDB();
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
       id SERIAL PRIMARY KEY,
       username VARCHAR(255),
@@ -267,6 +279,9 @@ async function start() {
 
   // Force le type TEXT pour la colonne details au cas où elle aurait été créée en JSON précédemment
   await pool.query("ALTER TABLE audit_logs ALTER COLUMN details TYPE TEXT USING details::text").catch(() => {});
+
+  // Configure VAPID details for web-push
+  configureWebPush();
 
 
   const runOfflineAlertsCheck = async () => {
