@@ -1,9 +1,10 @@
 /// <reference lib="webworker" />
+import { precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
 
-// This is a placeholder for the manifest injected by vite-plugin-pwa
-const manifest = self.__WB_MANIFEST;
+// Mise en cache automatique des fichiers (Mode Hors-ligne)
+precacheAndRoute(self.__WB_MANIFEST);
 
 self.addEventListener('push', (event) => {
   if (!event.data) {
