@@ -20,6 +20,11 @@ interface Camera {
   hlsUrl:    string | null;
 }
 
+interface CameraStatusSummary {
+  reconnectingCount: number;
+  stoppedCount: number;
+}
+
 interface RecordingEntry {
   filename:  string;
   url:       string;
@@ -316,7 +321,9 @@ function CameraControls({ cam, onAction }: {
 }
 
 // ── Composant principal ────────────────────────────────────
-export default function CameraFeed() {
+export default function CameraFeed({ onStatusChange }: {
+  onStatusChange?: (summary: CameraStatusSummary) => void;
+}) {
   const { config } = useAppConfig();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -382,6 +389,14 @@ export default function CameraFeed() {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    if (onStatusChange) {
+      const reconnectingCount = cameras.filter(c => c.status === 'reconnecting').length;
+      const stoppedCount = cameras.filter(c => c.status === 'stopped').length;
+      onStatusChange({ reconnectingCount, stoppedCount });
+    }
+  }, [cameras, onStatusChange]);
 
   useEffect(() => {
     if (!showAdd) return;

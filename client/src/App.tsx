@@ -46,10 +46,16 @@ function AdminRoute({
   return <>{children}</>;
 }
 
+interface CameraStatusSummary {
+  reconnectingCount: number;
+  stoppedCount: number;
+}
+
 function getSystemStatus(
   isOnline: boolean,
   isServerReachable: boolean,
   criticalAlertsCount: number,
+  cameraStatus: CameraStatusSummary,
   batteryInfo: { charging: boolean; level: number } | null
 ): { color: string; text: string } {
   if (!isOnline) {
@@ -58,8 +64,20 @@ function getSystemStatus(
   if (!isServerReachable) {
     return { color: 'var(--accent-red)', text: 'PANNE SERVEUR' };
   }
+  if (cameraStatus.stoppedCount > 0) {
+    const text = cameraStatus.stoppedCount > 1
+      ? `${cameraStatus.stoppedCount} CAMÉRAS HORS LIGNE`
+      : '1 CAMÉRA HORS LIGNE';
+    return { color: 'var(--accent-red)', text };
+  }
   if (criticalAlertsCount > 0) {
     return { color: 'var(--accent-red)', text: criticalAlertsCount > 1 ? `${criticalAlertsCount} ALERTES CRITIQUES` : 'ALERTE CRITIQUE' };
+  }
+  if (cameraStatus.reconnectingCount > 0) {
+    const text = cameraStatus.reconnectingCount > 1
+      ? `${cameraStatus.reconnectingCount} CAMÉRAS EN RECONNEXION`
+      : '1 CAMÉRA EN RECONNEXION';
+    return { color: 'var(--accent-amber)', text };
   }
   if (batteryInfo && !batteryInfo.charging) {
     const color = batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)';
@@ -78,6 +96,7 @@ function getSystemStatus(
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isServerReachable, setIsServerReachable] = useState(true);
   const [batteryInfo, setBatteryInfo] = useState<{ charging: boolean, level: number } | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<CameraStatusSummary>({ reconnectingCount: 0, stoppedCount: 0 });
   const location = useLocation();
 
   useEffect(() => {
@@ -261,7 +280,7 @@ function getSystemStatus(
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
-  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, isServerReachable, criticalAlertsCount, batteryInfo);
+  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, isServerReachable, criticalAlertsCount, cameraStatus, batteryInfo);
 
   return (
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
@@ -326,8 +345,8 @@ function getSystemStatus(
 
       <main className="app-main">
         <Routes>
-          <Route path="/"        element={<Navigate to="/videos" replace />} />
-          <Route path="/videos"  element={<CameraFeed />} />
+          <Route path="/" element={<Navigate to="/videos" replace />} />
+          <Route path="/videos"  element={<CameraFeed onStatusChange={setCameraStatus} />} />
           <Route path="/alerts"  element={<AlertsPage />} />
           {/* <Route path="/courses" element={<GroceryList />} />*/}
           <Route path="/system"  element={<SystemInfo />} />
