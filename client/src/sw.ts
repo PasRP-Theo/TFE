@@ -1,40 +1,17 @@
-/// <reference lib="webworker" />
-import { precacheAndRoute } from 'workbox-precaching';
+/// <reference lib="WebWorker" />
 
-declare const self: ServiceWorkerGlobalScope;
+import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 
-// Mise en cache automatique des fichiers (Mode Hors-ligne)
-precacheAndRoute(self.__WB_MANIFEST);
+declare const self: ServiceWorkerGlobalScope
 
-self.addEventListener('push', (event) => {
-  if (!event.data) {
-    console.error('Push event but no data');
-    return;
+// self.__WB_MANIFEST est une variable qui sera injectée par Vite/Workbox
+// et qui contient la liste de tous vos fichiers à mettre en cache.
+precacheAndRoute(self.__WB_MANIFEST)
+
+cleanupOutdatedCaches()
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
   }
-
-  try {
-    const data = event.data.json();
-    event.waitUntil(
-      self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: data.icon || '/pwa-192.png',
-        badge: '/pwa-192.png',
-        vibrate: [200, 100, 200],
-        data: data.data,
-        actions: [
-          { action: 'view', title: 'Voir' },
-          { action: 'dismiss', title: 'Ignorer' }
-        ]
-      })
-    );
-  } catch (e) {
-    console.error('Error parsing push data', e);
-  }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  if (event.action === 'view' || !event.action) {
-    self.clients.openWindow('/');
-  }
-});
+})

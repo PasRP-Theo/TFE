@@ -5,7 +5,6 @@ import path                       from 'path';
 import { fileURLToPath }          from 'url';
 import { EventEmitter }           from 'events';
 import ffmpegPath                 from 'ffmpeg-static';
-import { sendPushToAll } from '../routes/push.js';
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
@@ -415,8 +414,6 @@ export async function startCamera(camera) {
   const cur = states.get(id);
   if (cur?.status === 'running') return;
 
-  const wasReconnecting = cur?.status === 'reconnecting';
-
   // Nettoie l'ancien processus IA si on est en reconnexion
   if (cur?.aiProc) {
     cur.aiProc.kill('SIGKILL');
@@ -524,13 +521,8 @@ export async function startCamera(camera) {
     startedAt: new Date().toISOString(),
     hlsUrl:    `/hls/${id}/index.m3u8`,
     sourceUrl: sourceUrl,
-    lastOfflinePush: cur?.lastOfflinePush || 0,
   });
   broadcast(id);
-
-  if (wasReconnecting) {
-    sendPushToAll('✅ Caméra rétablie', `La caméra ${camera.name} est de nouveau en ligne.`, '/pwa-192.png', { type: 'camera_online', cameraId: id });
-  }
 
   proc.stderr.on('data', data => {
     const txt = data.toString();
@@ -543,12 +535,6 @@ export async function startCamera(camera) {
     if (s && s.status !== 'stopped' && s.status !== 'paused') {
       console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
       s.status = 'reconnecting';
-      const lastOfflinePush = s.lastOfflinePush || 0;
-      if (Date.now() - lastOfflinePush > 300000) { // 5 minutes cooldown
-        s.lastOfflinePush = Date.now();
-        sendPushToAll('📷 Caméra hors ligne', `La caméra ${camera.name} ne répond plus.`, '/pwa-192.png', { type: 'camera_offline', cameraId: id });
-        sendPushToAll(' Reconnexion en cours', `La caméra ${camera.name} a perdu le flux et tente de se reconnecter.`, '/pwa-192.png', { type: 'camera_reconnecting', cameraId: id });
-      }
       broadcast(id);
       setTimeout(() => startCamera(camera), 5000);
     }
