@@ -546,7 +546,8 @@ export async function startCamera(camera) {
       const lastOfflinePush = s.lastOfflinePush || 0;
       if (Date.now() - lastOfflinePush > 300000) { // 5 minutes cooldown
         s.lastOfflinePush = Date.now();
-        sendPushToAll('📷 Caméra hors ligne', `La caméra ${camera.name} est en cours de reconnexion.`, '/pwa-192.png', { type: 'camera_offline', cameraId: id });
+        sendPushToAll('📷 Caméra hors ligne', `La caméra ${camera.name} ne répond plus.`, '/pwa-192.png', { type: 'camera_offline', cameraId: id });
+        sendPushToAll(' Reconnexion en cours', `La caméra ${camera.name} a perdu le flux et tente de se reconnecter.`, '/pwa-192.png', { type: 'camera_reconnecting', cameraId: id });
       }
       broadcast(id);
       setTimeout(() => startCamera(camera), 5000);
