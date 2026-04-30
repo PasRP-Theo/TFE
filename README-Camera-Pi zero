@@ -1,122 +1,296 @@
-Voici le **README.md** final, totalement "nettoyé", unifié et structuré pour être copié-collé. J'ai intégré la partie IA directement dans le flux logique du document.
-
-***
-
-# 📹 Système de Surveillance Multi-Satellites (IP Cam + AI)
-
-Ce projet permet de déployer 3 unités de caméras autonomes basées sur le **Raspberry Pi Zero 2 W**. Chaque unité diffuse un flux vidéo via Wi-Fi vers un **PC Host** central qui gère l'analyse par **Intelligence Artificielle** et l'affichage sur un **Dashboard React**.
+Voici le document adapté :
 
 ---
 
-## 📦 1. Liste du Matériel (Pour 1 unité)
-*Multipliez par 3 pour le projet complet.*
+# Noeud Camera Raspberry Pi Zero 2 W
 
-* **Cerveau :** Raspberry Pi Zero 2 W (Quad-core 1GHz).
-* **Optique :** Caméra InnoMaker 5MP (Capteur OV5647, monture M12).
-* **Énergie :** Module UPS Geekworm X306 V1.3 + Batterie LiPo 3.7V (2000mAh+).
-* **Connectique :** Câble nappe étroit spécifique pour Pi Zero.
-* **Stockage :** Carte MicroSD "High Endurance" (16/32 Go).
-* **Alimentation :** Bloc secteur USB 5V / 3A (connecté au module X306).
+Ce document décrit la configuration du noeud caméra autonome utilisé dans le projet Sentys, basé sur un **Raspberry Pi Zero 2 W** et la **caméra InnoMaker 5MP OV5647**.
 
----
+## Objectif
 
-## 🛠 2. Montage & Configuration Physique
+Construire un petit système embarqué qui :
 
-### Assemblage
-1.  **Refroidissement :** Coller un dissipateur thermique sur le CPU du Pi Zero 2 W.
-2.  **Caméra :** Connecter la nappe étroite sur le port CSI du Pi (contacts vers la carte). Relier l'autre extrémité à la caméra InnoMaker.
-3.  **UPS X306 :** Fixer le Pi Zero sur le module X306 via les entretoises. Les "pogo pins" assurent le contact d'alimentation sous le Pi.
-4.  **Batterie :** Brancher la batterie LiPo sur le port `BAT` du X306.
+- capture la vidéo localement via la caméra CSI InnoMaker
+- détecte un mouvement avec un capteur PIR
+- envoie le flux vidéo au serveur principal via le réseau
+- délègue l'**analyse IA des mouvements** au PC hôte
 
-### Logiciel (OS & Streaming)
-1.  Flasher **Raspberry Pi OS Lite (64-bit)** via *Raspberry Pi Imager*.
-2.  Pré-configurer le **SSH** et le **Wi-Fi** (options avancées d'Imager).
-3.  Assigner un nom d'hôte unique (`cam1`, `cam2`, `cam3`).
-4.  **Diffusion :** Installer **MediaMTX** ou utiliser `libcamera-vid` pour créer un flux RTSP :
-    ```bash
-    libcamera-vid -t 0 --inline -o - | cvlc stream:///stdin --sout '#rtp{sdp=rtsp://:8554/mystream}' :demux=h264
-    ```
+## Architecture recommandée
 
----
+Matériel utilisé :
 
-## 🧠 3. Détection par Intelligence Artificielle (PC Host)
+- Raspberry Pi Zero 2 W
+- Caméra InnoMaker 5MP OV5647 M12 FOV90 IR Filter (connexion CSI)
+- Capteur PIR de mouvement
+- Alimentation par câble
+- Connexion réseau Wi-Fi
 
-Le traitement lourd est déporté sur le PC Host pour garantir la fiabilité et éviter la surchauffe des Pi Zero.
+Architecture logique :
 
-### Configuration Frigate (IA de détection)
-Utilisez **Frigate NVR** (via Docker) pour identifier des objets réels (personnes, chiens, voitures) :
+1. Le Pi Zero 2 W capture la vidéo via la caméra InnoMaker sur le port CSI.
+2. Le Pi Zero 2 W lit le capteur PIR.
+3. Le Pi Zero 2 W expose un flux RTSP local.
+4. Le **PC hôte** récupère ce flux, l'analyse via IA, et transmet les événements au serveur principal.
+5. Le serveur principal affiche le flux et les événements dans l'interface React.
+
+## Tout se branche sur le Pi Zero 2 W
+
+Dans cette architecture, le Pi Zero 2 W est le noeud caméra autonome.
+
+Concrètement :
+
+1. La caméra InnoMaker se branche sur le port CSI du Pi Zero 2 W via la **nappe étroite** spécifique au format Zero.
+2. Le capteur PIR se branche sur les GPIO du Pi Zero 2 W.
+3. L'alimentation alimente le Pi Zero 2 W.
+4. Le Pi Zero 2 W envoie le flux RTSP et les événements mouvement au PC hôte via Wi-Fi.
+
+Le schéma logique est donc :
+
+1. Caméra InnoMaker CSI → Pi Zero 2 W
+2. PIR → GPIO Pi Zero 2 W
+3. Alimentation → Pi Zero 2 W
+4. Pi Zero 2 W → Wi-Fi → PC hôte (analyse IA) → serveur principal
+
+## Montage caméra — Caméra officielle CSI InnoMaker
+
+Montage :
+
+1. Brancher la caméra InnoMaker sur le port CSI du Pi Zero 2 W avec la **nappe étroite format Zero** (les nappes standard Pi ne sont pas compatibles).
+2. S'assurer que la nappe est insérée contacts vers la carte, verrou bien fermé.
+3. Brancher le capteur PIR sur les GPIO.
+4. Alimenter le Pi Zero 2 W.
+5. Connecter le Pi Zero 2 W au réseau Wi-Fi.
+
+Avantages de cette caméra pour le projet :
+
+- Capteur OV5647 déjà utilisé et maîtrisé sur le Pi Zero 2 W existant
+- Résolution 5MP, compatible 1080p
+- Filtre IR intégré, adapté à une surveillance en intérieur
+- Monture M12, angle FOV90 cohérent pour couvrir une pièce
+- Compatible `libcamera` et MediaMTX sans configuration particulière
+
+## Pourquoi le Pi Zero 2 W est suffisant ici
+
+Le Pi Zero 2 W est adapté à ce rôle **à condition de lui déléguer uniquement la capture et la diffusion**, pas l'analyse.
+
+Ce qu'il fait :
+
+- capturer la vidéo depuis la caméra InnoMaker
+- encoder le flux en H.264 via `libcamera-vid`
+- diffuser en RTSP via MediaMTX
+- lire le capteur PIR et envoyer un événement HTTP
+
+Ce qu'il ne fait pas (déporté sur le PC hôte) :
+
+- l'analyse IA des images
+- la détection de présence humaine
+- la corrélation avec d'autres sources
+
+Cette répartition est importante pour éviter la surchauffe et garantir la stabilité du flux.
+
+## Traitement IA sur le PC hôte
+
+L'analyse des mouvements et la détection d'objets sont traitées sur le PC hôte, qui a la puissance nécessaire pour faire tourner un modèle en temps réel.
+
+### Rôle du PC hôte
+
+1. Le PC hôte consomme le flux RTSP émis par le Pi Zero 2 W.
+2. Il analyse les images à la recherche de mouvements ou d'objets spécifiques (personnes, intrusion).
+3. Si un événement est détecté, il envoie une requête au serveur principal.
+4. Le serveur principal met à jour l'interface et déclenche les alertes.
+
+### Avantages de cette approche
+
+- Le Pi Zero 2 W ne fait que diffuser, ce qui le soulage thermiquement.
+- L'IA peut être améliorée ou remplacée sans toucher au noeud caméra.
+- L'analyse est plus fiable qu'un PIR seul car elle distingue les vrais mouvements des faux positifs.
+- Cette architecture est plus défendable dans un TFE car elle montre une vraie séparation des responsabilités.
+
+### Outil recommandé : Frigate NVR
+
+Frigate est un NVR open source conçu pour la détection d'objets via IA. Il tourne via Docker sur le PC hôte et consomme directement les flux RTSP.
 
 ```yaml
-# config.yml (Extrait)
+# config.yml (extrait Frigate)
 cameras:
   cam_salon:
     ffmpeg:
       inputs:
-        - path: rtsp://192.168.1.50:8554/mystream
-          roles: [- detect, - rtmp]
+        - path: rtsp://192.168.0.213:8554/cam1
+          roles:
+            - detect
+            - record
     detect:
       enabled: True
       width: 1280
       height: 720
       fps: 5
     objects:
-      track: [person, dog, car]
+      track:
+        - person
+        - dog
+        - car
 ```
 
----
+Frigate peut exposer les événements via MQTT ou webhook, que le serveur principal peut consommer.
 
-## ⚛️ 4. Dashboard React & Intégration
+### Alternative légère : script Python + OpenCV
 
-### Installation Frontend
+Si Frigate est trop lourd ou trop complexe à intégrer dans le périmètre du TFE, un script Python avec OpenCV sur le PC hôte peut suffire :
+
+```python
+import cv2
+import requests
+
+cap = cv2.VideoCapture("rtsp://192.168.0.213:8554/cam1")
+back_sub = cv2.createBackgroundSubtractorMOG2()
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    fg_mask = back_sub.apply(frame)
+    motion_pixels = cv2.countNonZero(fg_mask)
+    if motion_pixels > 5000:
+        requests.post("http://IP_SERVEUR:4000/api/cameras/motion", json={
+            "deviceId": "pi-zero-cam1",
+            "motion": True
+        })
+```
+
+Ce script est simple, explicable en soutenance, et cohérent avec l'architecture.
+
+## Capteur de mouvement PIR
+
+Le PIR reste utile comme **déclencheur rapide** avant que l'IA confirme ou infirme le mouvement.
+
+Branchement typique sur Pi Zero 2 W :
+
+- VCC → pin 2 (5V) ou pin 1 (3.3V) selon le capteur
+- GND → pin 6
+- OUT → GPIO17, pin physique 11
+
+Le script PIR envoie un pré-événement au serveur ou au PC hôte, qui confirme ensuite via l'analyse IA.
+
+## Commandes utiles sur le Pi Zero 2 W
+
+### Mettre le système à jour
+
 ```bash
-npm install video.js socket.io-client
+sudo apt update
+sudo apt upgrade -y
 ```
 
-### Composant de Visualisation (`CameraView.jsx`)
-```jsx
-import React, { useEffect, useRef } from 'react';
-import videojs from 'video.js';
-import 'video.js/dist/video-js.css';
+### Installer les outils nécessaires
 
-const CameraView = ({ src, title, hasMotion }) => {
-  const videoRef = useRef(null);
-  const playerRef = useRef(null);
-
-  useEffect(() => {
-    if (!playerRef.current && videoRef.current) {
-      playerRef.current = videojs(videoRef.current, {
-        autoplay: true,
-        muted: true,
-        controls: true,
-        sources: [{ src, type: 'application/x-mpegURL' }] // Flux converti en HLS
-      });
-    }
-  }, [src]);
-
-  return (
-    <div style={{ border: hasMotion ? '3px solid red' : '1px solid gray' }}>
-      <h3>{title} {hasMotion && "⚠️ MOUVEMENT"}</h3>
-      <video ref={videoRef} className="video-js vjs-16-9" />
-    </div>
-  );
-};
+```bash
+sudo apt install -y python3 python3-pip python3-gpiozero curl libcamera-apps
 ```
 
----
+### Vérifier que la caméra InnoMaker est détectée
 
-## 🏗️ 5. Schéma de la Chaîne de Données
+```bash
+libcamera-hello --list-cameras
+```
 
-1.  **CAPTURE :** Le Pi Zero 2 W compresse et envoie le flux via RTSP.
-2.  **ANALYSE :** Le PC Host (Frigate/IA) analyse les formes en temps réel.
-3.  **NOTIFICATION :** Si une personne est détectée, le PC envoie un signal via **Socket.io**.
-4.  **AFFICHAGE :** L'app React reçoit le signal et fait clignoter l'interface.
+Tu dois voir le capteur OV5647 listé.
 
----
+### Tester rapidement la caméra
 
-## ⚠️ 6. Maintenance & Fiabilité 24/7
+```bash
+libcamera-still -o test.jpg
+```
 
-* **Gestion Thermique :** Surveiller la température (`vcgencmd measure_temp`). Si > 70°C, améliorer l'aération.
-* **Alimentation :** Le module X306 doit rester branché sur secteur. La batterie sert de secours en cas de coupure (UPS).
-* **IP Statiques :** Fixer les adresses IP des Pi dans votre box internet pour éviter les déconnexions du dashboard.
+### Exposer un flux RTSP via MediaMTX
 
-***
+1. Télécharger MediaMTX pour ARM et le lancer sur le Pi.
+2. Publier le flux avec `libcamera-vid` :
+
+```bash
+libcamera-vid -t 0 --inline --width 1280 --height 720 --framerate 15 -o - | \
+ffmpeg -i - -c:v copy -f rtsp rtsp://127.0.0.1:8554/cam1
+```
+
+L'URL RTSP consommée par le PC hôte est ensuite :
+
+```
+rtsp://192.168.0.213:8554/cam1
+```
+
+Ce qui correspond à l'URL déjà utilisée dans le projet Sentys.
+
+## Schéma d'architecture
+
+```mermaid
+flowchart LR
+    CAM[Caméra InnoMaker OV5647\nCSI M12 FOV90] --> PI[Raspberry Pi Zero 2 W\nNoeud caméra autonome]
+    PIR[Capteur PIR] --> PI
+    PSU[Alimentation filaire] --> PI
+    PI -->|Flux RTSP Wi-Fi| HOST[PC hôte\nAnalyse IA\nFrigate ou OpenCV]
+    HOST -->|Événement détection| SERVER[Serveur principal\nNode.js + ffmpeg + HLS]
+    HOST -->|Flux HLS converti| SERVER
+    SERVER --> UI[Interface web\nReact/Vite]
+    UI --> USER[Utilisateur]
+```
+
+## Stratégie de développement recommandée
+
+1. Faire fonctionner le Pi Zero 2 W avec la caméra InnoMaker seule
+2. Vérifier que le flux RTSP est lisible depuis le PC hôte avec VLC
+3. Lancer le traitement IA sur le PC hôte depuis ce flux
+4. Connecter les événements IA au serveur principal
+5. Brancher le capteur PIR et envoyer un pré-événement
+6. Afficher l'état dans l'interface React
+7. Ajouter les mécanismes de redémarrage automatique via systemd
+
+## Services à automatiser au démarrage
+
+Pour une version propre du TFE, prévoir au minimum trois services au boot du Pi Zero 2 W :
+
+1. Le service MediaMTX (flux RTSP)
+2. Le script d'annonce du noeud au serveur principal (`announce.py`)
+3. Le script de lecture du PIR (`pir_sender.py`)
+
+Si le Pi redémarre après une coupure, il reprend seul son fonctionnement.
+
+## Périmètre TFE recommandé
+
+Version V1 défendable :
+
+1. Un seul noeud caméra : Pi Zero 2 W + caméra InnoMaker OV5647
+2. Flux RTSP diffusé en Wi-Fi
+3. Analyse IA sur le PC hôte (Frigate ou OpenCV)
+4. Événement mouvement transmis au serveur principal
+5. Capteur PIR en complément pour le déclenchement rapide
+6. Affichage dans l'interface React existante
+
+Ce périmètre permet de montrer :
+
+- l'acquisition vidéo matérielle
+- la diffusion réseau embarquée
+- le traitement IA déporté
+- la supervision centralisée
+- une logique de résilience de base
+
+## Liste de matériel minimale
+
+1. 1 Raspberry Pi Zero 2 W
+2. 1 alimentation stable 5V/2.5A micro-USB
+3. 1 carte microSD High Endurance 16 ou 32 Go
+4. 1 caméra InnoMaker 5MP OV5647 M12 FOV90
+5. 1 nappe CSI format Zero (étroite, non fournie avec toutes les caméras)
+6. 1 capteur PIR HC-SR501
+7. 3 fils Dupont femelle-femelle
+8. 1 accès réseau Wi-Fi
+
+## Conclusion
+
+Pour Sentys, la configuration retenue est la suivante :
+
+- Pi Zero 2 W comme noeud embarqué léger
+- Caméra InnoMaker OV5647 CSI pour la capture
+- Diffusion RTSP via MediaMTX, déjà en place dans le projet
+- Analyse IA déportée sur le PC hôte pour ne pas surcharger le Pi
+- PIR en déclencheur rapide, IA en confirmateur
+
+Cette architecture est cohérente, défendable en soutenance, et s'intègre naturellement dans ce qui existe déjà dans Sentys.
