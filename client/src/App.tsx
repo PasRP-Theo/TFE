@@ -48,16 +48,24 @@ function AdminRoute({
 
 function getSystemStatus(
   isOnline: boolean,
+  isServerReachable: boolean,
+  criticalAlertsCount: number,
   batteryInfo: { charging: boolean; level: number } | null
 ): { color: string; text: string } {
   if (!isOnline) {
-    return { color: 'var(--accent-amber)', text: 'INSTABLE' };
+    return { color: 'var(--accent-amber)', text: 'RÉSEAU INSTABLE' };
+  }
+  if (!isServerReachable) {
+    return { color: 'var(--accent-red)', text: 'PANNE SERVEUR' };
+  }
+  if (criticalAlertsCount > 0) {
+    return { color: 'var(--accent-red)', text: criticalAlertsCount > 1 ? `${criticalAlertsCount} ALERTES CRITIQUES` : 'ALERTE CRITIQUE' };
   }
   if (batteryInfo && !batteryInfo.charging) {
     const color = batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)';
     return { color, text: `SUR BATTERIE (${batteryInfo.level}%)` };
   }
-  return { color: '#22c55e', text: 'OK' };
+  return { color: '#22c55e', text: 'SYSTÈME OK' };
 }
 
   function AppShell() {
@@ -66,7 +74,9 @@ function getSystemStatus(
   const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
+  const [criticalAlertsCount, setCriticalAlertsCount] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isServerReachable, setIsServerReachable] = useState(true);
   const [batteryInfo, setBatteryInfo] = useState<{ charging: boolean, level: number } | null>(null);
   const location = useLocation();
 
@@ -174,11 +184,16 @@ function getSystemStatus(
         const response = await fetch(apiUrl('/api/alerts/summary'), {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = await readJsonResponse<{ pending_count?: number } & { error?: string }>(response);
-        if (!response.ok || stopped) return;
+        const data = await readJsonResponse<{ pending_count?: number; critical_pending_count?: number } & { error?: string }>(response);
+        if (!response.ok || stopped) {
+          if (!stopped) setIsServerReachable(false);
+          return;
+        }
+        setIsServerReachable(true);
         setPendingAlertsCount(data.pending_count || 0);
+        setCriticalAlertsCount(data.critical_pending_count || 0);
       } catch {
-        if (!stopped) setPendingAlertsCount(0);
+        if (!stopped) setIsServerReachable(false);
       }
     };
 
@@ -246,7 +261,7 @@ function getSystemStatus(
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
-  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, batteryInfo);
+  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, isServerReachable, criticalAlertsCount, batteryInfo);
 
   return (
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
