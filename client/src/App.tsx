@@ -48,14 +48,10 @@ function AdminRoute({
 
 function getSystemStatus(
   isOnline: boolean,
-  pendingAlertsCount: number,
   batteryInfo: { charging: boolean; level: number } | null
 ): { color: string; text: string } {
   if (!isOnline) {
     return { color: 'var(--accent-amber)', text: 'INSTABLE' };
-  }
-  if (pendingAlertsCount > 0) {
-    return { color: 'var(--accent-red)', text: 'ALERTE / PANNE' };
   }
   if (batteryInfo && !batteryInfo.charging) {
     const color = batteryInfo.level <= 20 ? 'var(--accent-red)' : 'var(--accent-amber)';
@@ -250,7 +246,7 @@ function getSystemStatus(
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
-  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, pendingAlertsCount, batteryInfo);
+  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, batteryInfo);
 
   return (
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
