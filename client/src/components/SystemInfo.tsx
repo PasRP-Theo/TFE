@@ -176,7 +176,7 @@ export default function SystemInfo() {
   const [pinError, setPinError] = useState("");
 
   // On lit l'état réel depuis la configuration
-  const surveillanceActive = (config as any).surveillanceMode ?? true;
+  const surveillanceActive = (config as { surveillanceMode?: boolean }).surveillanceMode ?? true;
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -226,7 +226,7 @@ export default function SystemInfo() {
             await updateConfig(token, { surveillanceMode: !surveillanceActive });
           }
           setShowPinPad(false);
-        } catch (err) {
+        } catch {
           setPinError("ERREUR SYSTÈME");
           setTimeout(() => setEnteredPin(""), 1000);
         }
