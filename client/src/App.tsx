@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { AppConfigProvider, useAppConfig } from './hooks/useAppConfig';
 import { AppearanceProvider, useAppearance } from './hooks/useAppearance';
 import LoginPage   from './components/LoginPage';
-// import SensorList  from './components/SensorList';
 import CameraFeed  from './components/CameraFeed';
 import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
@@ -276,7 +275,6 @@ function getSystemStatus(
     { to: '/videos',   label: 'Caméras',    shortLabel: 'Caméras',  icon: '◉', show: true    },
     { to: '/alerts',   label: 'Alertes',    shortLabel: 'Alertes',  icon: '⚠', show: true, badge: pendingAlertsCount > 0 ? String(pendingAlertsCount) : '' },
     { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: true },
-    //{ to: '/courses',  label: 'Courses',    show: true    },
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
@@ -348,7 +346,6 @@ function getSystemStatus(
           <Route path="/" element={<Navigate to="/videos" replace />} />
           <Route path="/videos"  element={<CameraFeed onStatusChange={setCameraStatus} />} />
           <Route path="/alerts"  element={<AlertsPage />} />
-          {/* <Route path="/courses" element={<GroceryList />} />*/}
           <Route path="/system"  element={<SystemInfo />} />
           <Route path="/settings" element={
             <AdminRoute>
