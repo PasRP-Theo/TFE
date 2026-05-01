@@ -468,6 +468,60 @@ router.post('/:id/stop', (req, res) => {
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });
 });
 
+// GET /api/cameras/archives — dossiers d'enregistrements sans caméra correspondante
+router.get('/archives', async (_req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id FROM cameras');
+    const existingIds = new Set(rows.map(r => String(r.id)));
+
+    let folders = [];
+    try { folders = await fs.readdir(RECORDINGS_DIR); } catch { /* dossier vide */ }
+
+    const orphans = [];
+    for (const folder of folders) {
+      if (existingIds.has(folder)) continue;
+      const folderPath = path.join(RECORDINGS_DIR, folder);
+      const stat = await fs.stat(folderPath).catch(() => null);
+      if (!stat?.isDirectory()) continue;
+
+      const files = await fs.readdir(folderPath).catch(() => []);
+      const recordings = [];
+      for (const filename of files) {
+        const filePath = path.join(folderPath, filename);
+        const fstat = await fs.stat(filePath).catch(() => null);
+        if (!fstat?.isFile()) continue;
+        recordings.push({
+          filename,
+          url: `/recordings/${folder}/${encodeURIComponent(filename)}`,
+          createdAt: fstat.mtime.toISOString(),
+          size: fstat.size,
+        });
+      }
+      recordings.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      orphans.push({ cameraId: folder, recordings });
+    }
+
+    res.json(orphans);
+  } catch (err) {
+    console.error('[ARCHIVES]', err);
+    res.status(500).json({ error: 'Erreur lecture archives' });
+  }
+});
+
+// DELETE /api/cameras/archives/:id — purge un dossier orphelin
+router.delete('/archives/:id', async (req, res) => {
+  const { rows } = await pool.query('SELECT id FROM cameras WHERE id = $1', [req.params.id]);
+  if (rows.length > 0) {
+    return res.status(400).json({ error: 'Cette caméra existe encore, utilisez /history' });
+  }
+  try {
+    const result = await deleteAllRecordings(req.params.id);
+    res.json({ message: 'Archive supprimée', deletedCount: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/cameras/:id/state
 router.get('/:id/state', (req, res) => {
   res.json(getState(req.params.id));

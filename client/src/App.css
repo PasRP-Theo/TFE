@@ -481,7 +481,11 @@ a:focus-visible {
   font-weight: 700;
   letter-spacing: 0.12em;
   color: var(--accent-green);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 0 12px;
   min-height: 38px;
   border-radius: 999px;
@@ -493,8 +497,11 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
 }
+
 
 .app--installed .app-header {
   box-shadow: 0 14px 30px rgba(1, 8, 20, 0.34);

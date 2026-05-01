@@ -5,8 +5,8 @@ const { Pool } = pg;
 export const pool = new Pool({
   host:     process.env.DB_HOST     || 'localhost',
   port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME     || 'sentys',
-  //database: process.env.DB_NAME     || 'aubepines',
+  //database: process.env.DB_NAME     || 'sentys',
+  database: process.env.DB_NAME     || 'aubepines',
   user:     process.env.DB_USER     || 'postgres',
   password: String(process.env.DB_PASSWORD || 'admin'),
 });

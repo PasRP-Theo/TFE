@@ -1163,9 +1163,100 @@ function TabHelp() {
   );
 }
 
+interface ArchiveRecording { filename: string; url: string; createdAt: string; size: number; }
+interface ArchiveEntry { cameraId: string; recordings: ArchiveRecording[]; }
+
+function formatArchiveSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} Go`;
+}
+
+function TabArchives() {
+  const { token } = useAuth();
+  const [archives, setArchives] = useState<ArchiveEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [purging, setPurging] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(apiUrl('/api/cameras/archives'))
+      .then(r => r.json())
+      .then(data => { setArchives(Array.isArray(data) ? data : []); })
+      .catch(() => setError('Impossible de charger les archives'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function purge(cameraId: string) {
+    setPurging(cameraId);
+    try {
+      await fetch(apiUrl(`/api/cameras/archives/${cameraId}`), {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setArchives(prev => prev.filter(a => a.cameraId !== cameraId));
+    } finally {
+      setPurging(null);
+    }
+  }
+
+  if (loading) return <div className="settings-loading">Chargement des archives…</div>;
+  if (error) return <div className="settings-msg settings-msg--error">{error}</div>;
+  if (archives.length === 0) return (
+    <div className="settings-section">
+      <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+        Aucune archive — tous les dossiers d'enregistrements correspondent à des caméras actives.
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="settings-section">
+      <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
+        Ces enregistrements proviennent de caméras supprimées. Vous pouvez les consulter ou les purger.
+      </p>
+      {archives.map(archive => (
+        <div key={archive.cameraId} style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+              CAM {archive.cameraId} — {archive.recordings.length} fichier(s)
+            </strong>
+            <button
+              className="sensor-delete-btn sensor-delete-btn--danger"
+              disabled={purging === archive.cameraId}
+              onClick={() => purge(archive.cameraId)}
+            >
+              {purging === archive.cameraId ? 'Suppression…' : 'Tout supprimer'}
+            </button>
+          </div>
+          <div className="table-scroll-container">
+            <table className="sensor-table">
+              <thead><tr><th>Fichier</th><th>Date</th><th>Taille</th><th></th></tr></thead>
+              <tbody>
+                {archive.recordings.map(rec => (
+                  <tr key={rec.filename}>
+                    <td className="sensor-td">{rec.filename}</td>
+                    <td className="sensor-td">{new Date(rec.createdAt).toLocaleString('fr-FR')}</td>
+                    <td className="sensor-td">{formatArchiveSize(rec.size)}</td>
+                    <td className="sensor-td">
+                      <a href={apiUrl(rec.url)} target="_blank" rel="noreferrer" className="sensor-link-btn" style={{ marginRight: '6px' }}>Ouvrir</a>
+                      <a href={apiUrl(rec.url)} download className="sensor-link-btn">Télécharger</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Settings() {
   const { config } = useAppConfig();
-  const [tab, setTab] = useState<"settings" | "users" | "audit" | "help">("settings");
+  const [tab, setTab] = useState<"settings" | "users" | "audit" | "archives" | "help">("settings");
 
   return (
     <div className="settings-wrapper">
@@ -1178,10 +1269,11 @@ export default function Settings() {
         <button className={`sensor-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
         <button className={`sensor-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
         <button className={`sensor-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
+        <button className={`sensor-tab-btn ${tab === "archives" ? "active" : ""}`} onClick={() => setTab("archives")}>ARCHIVES</button>
         <button className={`sensor-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & À PROPOS</button>
       </div>
 
-      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : <TabHelp />}
+      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
     </div>
   );
 }

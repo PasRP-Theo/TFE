@@ -5,17 +5,21 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
-webpush.setVapidDetails(
-  process.env.VAPID_MAILTO || 'mailto:admin@sentys.local',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+const VAPID_READY = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+if (VAPID_READY) {
+  webpush.setVapidDetails(
+    process.env.VAPID_MAILTO || 'mailto:admin@sentys.local',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+} else {
+  console.warn('[PUSH] Clés VAPID non configurées — notifications push désactivées.');
+}
 
 // GET /api/notifications/vapid-public-key
 router.get('/vapid-public-key', (req, res) => {
-  const key = process.env.VAPID_PUBLIC_KEY;
-  if (!key) return res.status(500).json({ error: 'VAPID not configured' });
-  res.json({ publicKey: key });
+  if (!VAPID_READY) return res.status(503).json({ error: 'Push notifications non configurées' });
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
 // POST /api/notifications/subscribe
@@ -96,6 +100,7 @@ router.post('/test', requireAuth, async (req, res) => {
 });
 
 export async function sendPushNotification(subscription, payload) {
+  if (!VAPID_READY) return;
   return webpush.sendNotification(subscription, payload);
 }
 

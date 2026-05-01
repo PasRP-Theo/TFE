@@ -24,6 +24,7 @@ import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterS
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
+import { startMdnsAdvertisement } from "./src/mdns/advertise.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -360,7 +361,10 @@ async function start() {
   // setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
 
   const PORT = process.env.PORT || 4000;
-  httpServer.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log("Serveur sur http://0.0.0.0:" + PORT);
+    startMdnsAdvertisement();
+  });
 }
 
 start().catch(err => { console.error(err); process.exit(1); });

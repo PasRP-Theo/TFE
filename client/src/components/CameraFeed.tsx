@@ -414,7 +414,7 @@ export default function CameraFeed({ onStatusChange }: {
     if (!showAdd) return;
 
     let stopped = false;
-    setAddMode(config.defaultCameraAddMode);
+    setAddMode(config.defaultCameraAddMode === 'manual' ? 'manual' : 'discover');
 
     fetchDiscoveries();
     const interval = setInterval(() => {
@@ -759,7 +759,6 @@ export default function CameraFeed({ onStatusChange }: {
         <div className="cam-header-right">
           <span className="cam-clock">{time.toLocaleTimeString('fr-FR')}</span>
           {isAdmin && (
-            <>
             <button
               type="button"
               className={`panel-action-btn ${showAdd ? 'panel-action-btn--active' : ''}`}
@@ -768,7 +767,6 @@ export default function CameraFeed({ onStatusChange }: {
               <span className="panel-action-btn__icon" aria-hidden="true">{showAdd ? '×' : '+'}</span>
               <span>{showAdd ? 'Fermer' : 'Ajouter une camera'}</span>
             </button>
-            </>
           )}
         </div>
       </div>
@@ -1272,6 +1270,7 @@ export default function CameraFeed({ onStatusChange }: {
           </div>
         </div>
       )}
+
     </div>
   );
 }
