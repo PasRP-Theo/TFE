@@ -28,8 +28,9 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
 
       // Quand une piste vidéo arrive, on l'affiche
       pc.ontrack = ({ streams }) => {
-        if (videoRef.current && !disposed) {
+        if (videoRef.current && !disposed && streams[0]) {
           videoRef.current.srcObject = streams[0];
+          videoRef.current.play().catch(() => {});
           setConnecting(false);
         }
       };

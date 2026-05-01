@@ -85,7 +85,7 @@ export async function registerStream(cameraId, rtspUrl) {
   const name = streamName(cameraId);
   try {
     const res = await fetch(
-      `${GO2RTC_URL}/api/streams?name=${encodeURIComponent(name)}&url=${encodeURIComponent(rtspUrl)}`,
+      `${GO2RTC_URL}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`,
       { method: 'PUT' }
     );
     if (res.ok) console.log(`[go2rtc] Stream enregistré : ${name} → ${rtspUrl}`);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { apiUrl } from "../lib/api";
@@ -224,11 +224,12 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 // ── Lecteur avec bascule WebRTC → HLS ────────────────────────
 function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
   const [useHls, setUseHls] = useState(false);
+  const handleError = useCallback(() => setUseHls(true), []);
 
   if (useHls || !cam.hlsUrl) {
     return <HlsPlayer hlsUrl={cam.hlsUrl!} streamKey={streamKey} />;
   }
-  return <WebRTCPlayer cameraId={cam.id} onError={() => setUseHls(true)} />;
+  return <WebRTCPlayer cameraId={cam.id} onError={handleError} />;
 }
 
 // ── Écran offline ─────────────────────────────────────────
