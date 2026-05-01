@@ -19,6 +19,8 @@ import cameraNodeRoutes      from "./src/routes/cameraNodes.js";
 import appConfigRoutes       from "./src/routes/appConfig.js";
 import alertsRoutes          from "./src/routes/alerts.js";
 import pushRoutes            from "./src/routes/push.js";
+import webrtcRoutes          from "./src/routes/webrtc.js";
+import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
@@ -219,6 +221,7 @@ app.use("/api/cameras", cameraRoutes);
 app.use("/api/app-config", appConfigRoutes);
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/notifications", pushRoutes);
+app.use("/api/webrtc", webrtcRoutes);
 
 app.get("/api/audit-logs", async (req, res) => {
   const user = getRequestUser(req);
@@ -249,6 +252,15 @@ app.get("/*", (_, res) => {
 // ── Démarrage ──────────────────────────────────────────────
 async function start() {
   await initDB();
+
+  // ── go2rtc (WebRTC sub-second latency) ──────────────────────
+  startGo2rtc().then(ok => {
+    if (ok) syncCamerasFromDB(pool);
+  });
+
+  // Rendre les helpers go2rtc accessibles dans les routes cameras
+  app.set('go2rtc:register',   registerStream);
+  app.set('go2rtc:unregister', unregisterStream);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -352,5 +364,5 @@ async function start() {
 }
 
 start().catch(err => { console.error(err); process.exit(1); });
-process.on("SIGINT",  () => { stopAllCameras(); process.exit(0); });
-process.on("SIGTERM", () => { stopAllCameras(); process.exit(0); });
+process.on("SIGINT",  () => { stopAllCameras(); stopGo2rtc(); process.exit(0); });
+process.on("SIGTERM", () => { stopAllCameras(); stopGo2rtc(); process.exit(0); });

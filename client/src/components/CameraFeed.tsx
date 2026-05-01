@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { apiUrl } from "../lib/api";
+import { WebRTCPlayer } from "./WebRTCPlayer";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
@@ -220,6 +221,16 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
   );
 }
 
+// ── Lecteur avec bascule WebRTC → HLS ────────────────────────
+function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
+  const [useHls, setUseHls] = useState(false);
+
+  if (useHls || !cam.hlsUrl) {
+    return <HlsPlayer hlsUrl={cam.hlsUrl!} streamKey={streamKey} />;
+  }
+  return <WebRTCPlayer cameraId={cam.id} onError={() => setUseHls(true)} />;
+}
+
 // ── Écran offline ─────────────────────────────────────────
 function OfflineScreen({ status }: { status: Camera["status"] }) {
   const text = status === 'paused' ? 'EN PAUSE'
@@ -245,7 +256,7 @@ function CameraScreen({ cam, time }: { cam: Camera; time: Date }) {
   return (
     <div className="cam-screen">
       {cam.status === 'running' && cam.hlsUrl
-        ? <HlsPlayer hlsUrl={cam.hlsUrl} streamKey={`${cam.id}:${cam.startedAt || 'pending'}:${cam.status}`} />
+        ? <CameraPlayer cam={cam} streamKey={`${cam.id}:${cam.startedAt || 'pending'}:${cam.status}`} />
         : <OfflineScreen status={cam.status} />
       }
       {cam.recording && (

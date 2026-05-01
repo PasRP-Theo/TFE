@@ -200,6 +200,8 @@ router.post('/', async (req, res) => {
     );
     const camera = rows[0];
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
+    req.app.get('go2rtc:register')?.(camera.id, rtspUrl)
+      .catch(err => console.error('[go2rtc ADD]', err));
     const host = getHostFromStreamUrl(rtspUrl);
     if (host) {
       await upsertDiscovery({
@@ -420,6 +422,8 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     stopCamera(req.params.id);
+    req.app.get('go2rtc:unregister')?.(req.params.id)
+      .catch(err => console.error('[go2rtc DEL]', err));
     await pool.query('DELETE FROM cameras WHERE id=$1', [req.params.id]);
     res.json({ message: 'Supprimée' });
   } catch {

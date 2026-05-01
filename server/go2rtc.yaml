@@ -1,0 +1,8 @@
+api:
+  listen: :1984
+
+log:
+  level: warn
+
+# Les streams sont enregistrés dynamiquement au démarrage
+# via l'API REST go2rtc par le manager Node.js
