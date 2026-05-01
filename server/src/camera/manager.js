@@ -5,6 +5,8 @@ import path                       from 'path';
 import { fileURLToPath }          from 'url';
 import { EventEmitter }           from 'events';
 import ffmpegPath                 from 'ffmpeg-static';
+import { pool }                   from '../db/index.js';
+import { sendPushNotification }   from '../routes/push.js';
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
@@ -662,7 +664,7 @@ export async function deleteAllRecordings(cameraId) {
   return { deletedCount };
 }
 
-export function triggerMotionRecording(cameraId, durationSeconds = 30) {
+export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null) {
   const id = String(cameraId);
   const s = states.get(id);
   if (!s || !s.sourceUrl) return; // Permet de lancer l'enregistrement même si HLS est en "reconnecting"
@@ -701,6 +703,27 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30) {
   s.recording = true; // Allume la pastille "REC" sur l'interface
   broadcast(id);
   console.log(`[CAM ${id}] 🎥 Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
+
+  const pushTitle = detectionLabel || 'Mouvement détecté';
+  const pushPayload = JSON.stringify({
+    title: `${pushTitle} — CAM ${id}`,
+    body: detectionLabel ? `${detectionLabel} capté par la caméra.` : 'Un mouvement a été détecté par la caméra.',
+    icon: '/pwa-192.png',
+    data: { url: '/videos' },
+  });
+  pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
+    subs.forEach(sub =>
+      sendPushNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        pushPayload
+      ).catch(async err => {
+        console.error(`[PUSH CAM ${id}]`, err.message);
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+        }
+      })
+    );
+  }).catch(err => console.error(`[PUSH CAM ${id}] DB error:`, err.message));
 
   proc.on('close', () => {
     activeRecordings.delete(id);

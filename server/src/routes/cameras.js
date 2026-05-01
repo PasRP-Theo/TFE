@@ -479,7 +479,9 @@ router.post('/:id/motion', async (req, res) => {
     const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
 
-    triggerMotionRecording(req.params.id, 30); // Enregistre 30 secondes de vidéo
+    const detectionLabel = req.body?.label || null;
+    const detectionType  = req.body?.type  || null;
+    triggerMotionRecording(req.params.id, 30, detectionLabel);
 
     // NOUVEAU : On allume le badge "MOUVEMENT" en mettant à jour le noeud dans la base
     if (rows[0]) {
@@ -517,8 +519,8 @@ router.post('/:id/motion', async (req, res) => {
             cameraId: req.params.id,
             alertType: 'motion_detected',
             level: 'warning',
-            title: `Mouvement détecté - Caméra ${req.params.id}`,
-            message: `L'IA a détecté un mouvement sur le flux de la caméra (Hôte: ${host}).`,
+            title: `${detectionLabel || 'Mouvement détecté'} - Caméra ${req.params.id}`,
+            message: `${detectionLabel || 'Mouvement'} détecté sur le flux de la caméra (Hôte: ${host}).`,
             metadata: { deviceId, host, detectedAt: new Date().toISOString() },
             dedupeKey: `motion:ai:${req.params.id}`,
             cooldownSeconds: 60, // Limite à 1 alerte par minute
@@ -527,7 +529,7 @@ router.post('/:id/motion', async (req, res) => {
           // Déclenche une notification en temps réel (WebSocket)
           try {
             const io = req.app.get('io');
-            if (io) io.emit('new_alert', { level: 'warning', title: `Mouvement détecté - Caméra ${req.params.id}` });
+            if (io) io.emit('new_alert', { level: 'warning', title: `${detectionLabel || 'Mouvement détecté'} - Caméra ${req.params.id}` });
           } catch (e) {}
         }
       }
