@@ -1,10 +1,10 @@
 import { apiUrl } from '../lib/api';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
+  const outputArray = new Uint8Array(rawData.length) as Uint8Array<ArrayBuffer>;
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
@@ -13,9 +13,15 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 async function getVapidPublicKey(): Promise<string> {
   const response = await fetch(apiUrl('/api/notifications/vapid-public-key'));
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to get VAPID public key');
+  const text = await response.text();
+  let data: { publicKey?: string; error?: string };
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Réponse invalide du serveur (${response.status})`);
+  }
+  if (!response.ok || !data.publicKey) {
+    throw new Error(data.error || 'Clé VAPID introuvable');
   }
   return data.publicKey;
 }
