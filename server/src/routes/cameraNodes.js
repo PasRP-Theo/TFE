@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { startCamera, getState, triggerMotionRecording } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
+import { sendPushNotification } from './push.js';
 
 const router = Router();
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
@@ -195,6 +196,25 @@ router.post('/motion', async (req, res) => {
         dedupeKey: `motion:${deviceId}`,
         cooldownSeconds: 300,
       }).catch((err) => console.error('[ALERT MOTION]', err));
+
+      const payload = JSON.stringify({
+        title: `Mouvement détecté — ${rows[0].name}`,
+        body: rows[0].location ? `Zone : ${rows[0].location}` : 'Un mouvement a été détecté.',
+        icon: '/pwa-192.png',
+        data: { url: '/alerts' },
+      });
+      pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
+        subs.forEach(sub =>
+          sendPushNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload
+          ).catch(async err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+            }
+          })
+        );
+      }).catch(err => console.error('[PUSH MOTION]', err));
 
       // Déclenche l'enregistrement vidéo si une caméra est associée à ce noeud
       const { rows: camRows } = await pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url]);

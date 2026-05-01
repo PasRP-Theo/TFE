@@ -4,6 +4,7 @@ import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, readJsonResponse } from '../lib/api';
 import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
+import { subscribeUserToPush, unsubscribeUserFromPush, isPushSubscribed } from "./push";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -160,8 +161,7 @@ function TabSettings() {
       return;
     }
 
-    setPushSubscribed(Notification.permission === 'granted');
-    setPushLoading(false);
+    isPushSubscribed().then(setPushSubscribed).finally(() => setPushLoading(false));
   }, []);
 
   const handlePushToggle = async (checked: boolean) => {
@@ -169,15 +169,14 @@ function TabSettings() {
     setPushError('');
     try {
       if (checked) {
-        const perm = await Notification.requestPermission();
-        setPushSubscribed(perm === 'granted');
-        if (perm !== 'granted') throw new Error("Permission refusée par le navigateur. Modifiez vos paramètres locaux.");
+        await subscribeUserToPush();
+        setPushSubscribed(true);
       } else {
-        throw new Error("Pour désactiver, vous devez révoquer la permission directement dans les paramètres du navigateur.");
+        await unsubscribeUserFromPush();
+        setPushSubscribed(false);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      setPushError(message);
+      setPushError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setPushLoading(false);
     }
@@ -185,10 +184,15 @@ function TabSettings() {
 
   const sendTestNotification = async () => {
     setPushError('');
-    if (Notification.permission === 'granted') {
-        new Notification("Test SENTYS", { body: "Ceci est une notification en temps réel via Socket.IO !", icon: '/favicon.ico' });
-    } else {
-        setPushError("Permission non accordée par le système.");
+    try {
+      const res = await fetch(apiUrl('/api/notifications/test'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await readJsonResponse<{ error?: string; message?: string }>(res);
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+    } catch (err: unknown) {
+      setPushError(err instanceof Error ? err.message : 'Erreur envoi test');
     }
   };
 
