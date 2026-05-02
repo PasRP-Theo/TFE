@@ -57,6 +57,8 @@ interface MotionEventEntry {
   motion: boolean;
   detected_at: string;
   created_at: string;
+  offline_recording?: boolean;
+  recording_path?: string | null;
 }
 
 type AddMode = 'discover' | 'manual';
@@ -1173,11 +1175,14 @@ export default function CameraFeed({ onStatusChange }: {
             {!motionHistoryLoading && motionHistoryRecords.length > 0 && (
               <div className="cam-history-list">
                 {motionHistoryRecords.map(entry => (
-                  <div key={entry.id} className="cam-history-row">
+                  <div key={entry.id} className={`cam-history-row${entry.offline_recording ? ' cam-history-row--offline' : ''}`}>
                     <div className="cam-history-row-main">
                       <div className={`cam-history-row-icon ${entry.motion ? '' : 'cam-history-row-icon--muted'}`}>{entry.motion ? 'ON' : 'OFF'}</div>
                       <div className="cam-history-row-copy">
                         <strong>{entry.motion ? 'Mouvement détecté' : 'État inactif'}</strong>
+                        {entry.offline_recording && (
+                          <span className="cam-history-offline-badge">HORS LIGNE</span>
+                        )}
                         <div className="cam-history-meta">
                           {formatHistoryDate(entry.detected_at)}
                         </div>

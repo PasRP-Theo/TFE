@@ -3412,6 +3412,25 @@ a:focus-visible {
   border-color: rgba(122, 160, 204, 0.18);
 }
 
+.cam-history-row--offline {
+  border-left: 3px solid var(--accent-orange, #f59e0b);
+  padding-left: 8px;
+}
+
+.cam-history-offline-badge {
+  display: inline-block;
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--accent-orange, #f59e0b);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .cam-history-tags {
   display: flex;
   flex-wrap: wrap;

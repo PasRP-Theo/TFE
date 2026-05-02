@@ -240,16 +240,33 @@ router.post('/announce', async (req, res) => {
   }
 });
 
-// GET /api/cameras/discoveries — liste des ESP32-CAM vues récemment
+// GET /api/cameras/discoveries — liste des ESP32-CAM + noeuds Pi vus récemment
 router.get('/discoveries', async (_req, res) => {
   try {
     await deleteExpiredDiscoveries();
-    const { rows } = await pool.query(
-      `SELECT id, device_id, name, host, stream_url, location, model, source, last_seen_at, created_at
-       FROM camera_discoveries
-       ORDER BY last_seen_at DESC, created_at DESC`
-    );
-    res.json({ ttlMinutes: DISCOVERY_TTL_MINUTES, devices: rows });
+    const [discResult, nodesResult] = await Promise.all([
+      pool.query(
+        `SELECT id, device_id, name, host, stream_url, location, model, source, last_seen_at, created_at
+         FROM camera_discoveries
+         ORDER BY last_seen_at DESC, created_at DESC`
+      ),
+      pool.query(
+        `SELECT id, device_id, name, host, stream_url, location, model, source, last_seen_at, created_at
+         FROM camera_nodes
+         WHERE last_seen_at > NOW() - INTERVAL '${DISCOVERY_TTL_MINUTES} minutes'
+         ORDER BY last_seen_at DESC`
+      ),
+    ]);
+
+    const seen = new Set(discResult.rows.map(r => r.host));
+    const piNodes = nodesResult.rows
+      .filter(r => !seen.has(r.host))
+      .map(r => ({ ...r, source: r.source || 'pi-node' }));
+
+    const devices = [...discResult.rows, ...piNodes]
+      .sort((a, b) => new Date(b.last_seen_at) - new Date(a.last_seen_at));
+
+    res.json({ ttlMinutes: DISCOVERY_TTL_MINUTES, devices });
   } catch (err) {
     console.error('[CAM DISCOVERIES]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la lecture des appareils détectés' });

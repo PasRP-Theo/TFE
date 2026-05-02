@@ -500,7 +500,8 @@ export async function startCamera(camera) {
   let aiProc = null;
   if (existsSync(aiScript)) {
     console.log(`[CAM ${id}] 🤖 Lancement dynamique de l'IA Python...`);
-    const pythonBin = os.platform() === 'win32' ? 'python' : 'python3';
+    const venvPython = path.join(PROJECT_ROOT, 'venv', 'bin', 'python');
+    const pythonBin = os.platform() === 'win32' ? 'python' : (existsSync(venvPython) ? venvPython : 'python3');
     aiProc = spawn(pythonBin, [aiScript], {
       env: { ...process.env, CAMERA_ID: id, RTSP_URL: sourceUrl }
     });

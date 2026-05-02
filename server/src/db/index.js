@@ -201,6 +201,8 @@ export async function initDB() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_disconnect_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS kiosk_pin VARCHAR(10) NOT NULL DEFAULT '1234';
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS surveillance_mode BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE camera_node_motion_events ADD COLUMN IF NOT EXISTS offline_recording BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE camera_node_motion_events ADD COLUMN IF NOT EXISTS recording_path VARCHAR(255);
     `);
 
     await client.query(

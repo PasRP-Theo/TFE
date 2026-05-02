@@ -4,29 +4,45 @@ import { startCamera, getState, triggerMotionRecording } from '../camera/manager
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
 import { spawn } from 'child_process';
+import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import multer from 'multer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const AI_SCRIPT = path.resolve(__dirname, '..', '..', '..', 'server', 'motion_detector.py');
+const PROJECT_ROOT_CN = path.resolve(__dirname, '..', '..', '..');
+const AI_SCRIPT = path.join(PROJECT_ROOT_CN, 'server', 'motion_detector.py');
+const VENV_PYTHON = path.join(PROJECT_ROOT_CN, 'venv', 'bin', 'python');
+const OFFLINE_RECORDINGS_DIR = path.join(PROJECT_ROOT_CN, 'recordings', 'offline');
+mkdirSync(OFFLINE_RECORDINGS_DIR, { recursive: true });
+
+const offlineStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, OFFLINE_RECORDINGS_DIR),
+  filename: (_req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`),
+});
+const uploadOffline = multer({ storage: offlineStorage, limits: { fileSize: 500 * 1024 * 1024 } });
 
 function classifyNodeMotion(rtspUrl) {
   return new Promise((resolve) => {
-    const pythonBin = os.platform() === 'win32' ? 'python' : 'python3';
+    const pythonBin = os.platform() === 'win32' ? 'python' : (existsSync(VENV_PYTHON) ? VENV_PYTHON : 'python3');
     const child = spawn(pythonBin, [AI_SCRIPT, '--analyze'], {
       env: { ...process.env, RTSP_URL: rtspUrl },
     });
 
     let stdout = '';
+    let stderr = '';
     const timeout = setTimeout(() => {
       child.kill();
+      console.warn('[CLASSIFY] Timeout YOLO après 20s — fallback motion');
       resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
-    }, 6000);
+    }, 20000);
 
     child.stdout.on('data', d => { stdout += d.toString(); });
+    child.stderr.on('data', d => { stderr += d.toString(); });
     child.on('close', () => {
       clearTimeout(timeout);
+      if (stderr) console.warn('[CLASSIFY] stderr:', stderr.slice(0, 300));
       try {
         const lastLine = stdout.trim().split('\n').findLast(l => l.startsWith('{'));
         resolve(lastLine ? JSON.parse(lastLine) : { type: 'motion', label: 'Mouvement détecté', confidence: 0 });
@@ -34,8 +50,9 @@ function classifyNodeMotion(rtspUrl) {
         resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
       }
     });
-    child.on('error', () => {
+    child.on('error', (err) => {
       clearTimeout(timeout);
+      console.error('[CLASSIFY] Erreur spawn Python:', err.message);
       resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
     });
   });
@@ -217,68 +234,73 @@ router.post('/motion', async (req, res) => {
         [deviceId, true, detectedAt.toISOString()]
       );
 
-      // Tente une classification YOLO sur le flux de la caméra
-      let classification = { type: 'motion', label: 'Mouvement détecté', confidence: 0 };
-      try {
-        classification = await classifyNodeMotion(rows[0].stream_url);
-      } catch { /* fallback déjà défini */ }
-
-      const confSuffix = classification.confidence > 0 ? ` (${Math.round(classification.confidence * 100)}%)` : '';
-      const alertTitle = `${classification.label}${confSuffix} — ${rows[0].name}`;
-      const alertMessage = rows[0].location
-        ? `${classification.label} sur le flux de la caméra (Hôte: ${rows[0].host}). Zone : ${rows[0].location}.`
-        : `${classification.label} sur le flux de la caméra (Hôte: ${rows[0].host}).`;
-
-      await createAlert({
-        sourceType: 'camera-node',
-        sourceId: deviceId,
-        alertType: 'motion_detected',
-        level: classification.type === 'person' ? 'critical' : 'warning',
-        title: alertTitle,
-        message: alertMessage,
-        metadata: {
-          deviceId,
-          host: rows[0].host,
-          location: rows[0].location,
-          detectedAt: detectedAt.toISOString(),
-          detectionType: classification.type,
-          confidence: classification.confidence,
-        },
-        dedupeKey: `motion:${deviceId}`,
-        cooldownSeconds: 300,
-      }).catch((err) => console.error('[ALERT MOTION]', err));
-
-      const payload = JSON.stringify({
-        title: alertTitle,
-        body: rows[0].location ? `Zone : ${rows[0].location}` : classification.label,
-        icon: '/pwa-192.png',
-        data: { url: '/alerts' },
-      });
-      pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
-        subs.forEach(sub =>
-          sendPushNotification(
-            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            payload
-          ).catch(async err => {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
-            }
-          })
-        );
-      }).catch(err => console.error('[PUSH MOTION]', err));
-
-      // Déclenche l'enregistrement vidéo si une caméra est associée à ce noeud
-      const { rows: camRows } = await pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url]);
-      if (camRows[0]) {
-        triggerMotionRecording(camRows[0].id, 30);
-      }
+      // Déclenche l'enregistrement vidéo immédiatement
+      pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
+        .then(({ rows: camRows }) => { if (camRows[0]) triggerMotionRecording(camRows[0].id, 30); })
+        .catch(() => {});
     }
 
+    // Répond au Pi immédiatement — la classification se fait en tâche de fond
     const connectedHosts = await getConnectedHosts();
     res.json({
       message: motion ? 'Mouvement enregistre' : 'Mouvement acquitte',
       node: serializeNode(rows[0], connectedHosts),
     });
+
+    // ── Tâche de fond : classification YOLO + alerte ──────────────
+    if (motion) {
+      const node = rows[0];
+      setImmediate(async () => {
+        let classification = { type: 'motion', label: 'Mouvement détecté', confidence: 0 };
+        try {
+          classification = await classifyNodeMotion(node.stream_url);
+        } catch { /* fallback */ }
+
+        const confSuffix = classification.confidence > 0 ? ` (${Math.round(classification.confidence * 100)}%)` : '';
+        const alertTitle   = `${classification.label}${confSuffix} — ${node.name}`;
+        const alertMessage = node.location
+          ? `${classification.label} sur le flux de la caméra (Hôte: ${node.host}). Zone : ${node.location}.`
+          : `${classification.label} sur le flux de la caméra (Hôte: ${node.host}).`;
+
+        await createAlert({
+          sourceType: 'camera-node',
+          sourceId: deviceId,
+          alertType: 'motion_detected',
+          level: classification.type === 'person' ? 'critical' : 'warning',
+          title: alertTitle,
+          message: alertMessage,
+          metadata: {
+            deviceId,
+            host: node.host,
+            location: node.location,
+            detectedAt: detectedAt.toISOString(),
+            detectionType: classification.type,
+            confidence: classification.confidence,
+          },
+          dedupeKey: `motion:${deviceId}`,
+          cooldownSeconds: 300,
+        }).catch((err) => console.error('[ALERT MOTION]', err));
+
+        const payload = JSON.stringify({
+          title: alertTitle,
+          body: node.location ? `Zone : ${node.location}` : classification.label,
+          icon: '/pwa-192.png',
+          data: { url: '/alerts' },
+        });
+        pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
+          subs.forEach(sub =>
+            sendPushNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              payload
+            ).catch(async err => {
+              if (err.statusCode === 410 || err.statusCode === 404) {
+                await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+              }
+            })
+          );
+        }).catch(err => console.error('[PUSH MOTION]', err));
+      });
+    }
   } catch (err) {
     console.error('[CAM NODE MOTION]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la mise a jour du mouvement' });
@@ -330,6 +352,55 @@ router.post('/:deviceId/connect', async (req, res) => {
   } catch (err) {
     console.error('[CAM NODE CONNECT]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la connexion du noeud camera' });
+  }
+});
+
+router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), async (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId || !req.file) return res.status(400).json({ error: 'deviceId et fichier requis' });
+
+  const detectedAtInput = String(req.body.detectedAt || '').trim();
+  let detectedAt = new Date();
+  if (detectedAtInput) {
+    const parsed = new Date(detectedAtInput);
+    if (!Number.isNaN(parsed.getTime())) detectedAt = parsed;
+  }
+
+  try {
+    const { rows: nodeRows } = await pool.query('SELECT * FROM camera_nodes WHERE device_id = $1', [deviceId]);
+    const node = nodeRows[0];
+    if (!node) return res.status(404).json({ error: 'Noeud introuvable' });
+
+    await pool.query(
+      `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
+       VALUES ($1, true, $2, true, $3)`,
+      [deviceId, detectedAt.toISOString(), req.file.filename]
+    );
+
+    await createAlert({
+      sourceType: 'camera-node',
+      sourceId: deviceId,
+      alertType: 'offline_recording',
+      level: 'warning',
+      title: `Enregistrement hors ligne — ${node.name}`,
+      message: node.location
+        ? `Enregistrement local effectué pendant une déconnexion. Zone : ${node.location}. (${detectedAt.toLocaleString('fr-FR')})`
+        : `Enregistrement local effectué pendant une déconnexion (${detectedAt.toLocaleString('fr-FR')}).`,
+      metadata: {
+        deviceId,
+        host: node.host,
+        location: node.location,
+        detectedAt: detectedAt.toISOString(),
+        recordingFile: req.file.filename,
+      },
+      dedupeKey: `offline:${deviceId}:${detectedAt.toISOString()}`,
+      cooldownSeconds: 0,
+    }).catch(err => console.error('[ALERT OFFLINE RECORDING]', err));
+
+    res.json({ message: 'Enregistrement reçu', filename: req.file.filename });
+  } catch (err) {
+    console.error('[UPLOAD RECORDING]', err);
+    res.status(500).json({ error: 'Erreur serveur lors de la reception de l\'enregistrement' });
   }
 });
 

@@ -288,7 +288,8 @@ async function start() {
 
       await Promise.all(cameraResult.rows.map(async (camera) => {
         const state = states[String(camera.id)] || { status: 'stopped' };
-        if (state.status === 'running') return;
+        // N'alerte que si la caméra tente de se reconnecter (panne réelle, pas arrêt manuel)
+        if (state.status !== 'reconnecting') return;
         await createAlert({
           sourceType: 'camera',
           sourceId: String(camera.id),
@@ -351,8 +352,8 @@ async function start() {
 
   cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err));
   setInterval(() => cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err)), 24 * 60 * 60 * 1000);
-  // runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err));
-  // setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
+  runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err));
+  setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
 
   const PORT = process.env.PORT || 4000;
   httpServer.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
