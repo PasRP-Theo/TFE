@@ -10,8 +10,6 @@ import jwt             from "jsonwebtoken";
 import rateLimit       from "express-rate-limit";
 import { existsSync, mkdirSync } from "fs";
 import { initDB, pool }      from "./src/db/index.js";
-// import sensorRoutes          from "./src/routes/sensors.js";
-import groceryRoutes         from "./src/routes/grocery.js";
 import userRoutes            from "./src/routes/users.js";
 import systemRoutes          from "./src/routes/system.js";
 import cameraRoutes          from "./src/routes/cameras.js";
@@ -211,9 +209,6 @@ if (!existsSync(recordingsDir)) mkdirSync(recordingsDir, { recursive: true });
 app.use('/recordings', express.static(recordingsDir));
 
 // ── Routes API ─────────────────────────────────────────────
-// Intégration capteurs désactivée à la demande.
-// app.use("/api/sensors", sensorRoutes);
-app.use("/api/grocery", groceryRoutes);
 app.use("/api/users",   userRoutes);
 app.use("/api/system",  systemRoutes);
 app.use("/api/camera-nodes", cameraNodeRoutes);

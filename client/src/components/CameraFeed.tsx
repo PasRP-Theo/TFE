@@ -211,7 +211,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       {error && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff', zIndex: 10, fontSize: '14px' }}>
           <div style={{ marginBottom: '12px' }}>Flux indisponible</div>
-          <button type="button" className="sensor-confirm-btn" onClick={() => setRetryCount(c => c + 1)}>
+          <button type="button" className="ui-confirm-btn" onClick={() => setRetryCount(c => c + 1)}>
             Réessayer
           </button>
         </div>
@@ -812,7 +812,7 @@ export default function CameraFeed({ onStatusChange }: {
                 </div>
                 <button
                   type="button"
-                  className="sensor-link-btn"
+                  className="ui-link-btn"
                   onClick={searchNetworkCameras}
                   disabled={searchingNetwork}
                 >
@@ -820,7 +820,7 @@ export default function CameraFeed({ onStatusChange }: {
                 </button>
               </div>
               {discoverMessage && (
-                <div className="sensor-note">
+                <div className="ui-note">
                   <p>{discoverMessage}</p>
                 </div>
               )}
@@ -842,14 +842,14 @@ export default function CameraFeed({ onStatusChange }: {
                       <div className="cam-inline-actions">
                         <button
                           type="button"
-                          className="sensor-link-btn"
+                          className="ui-link-btn"
                           onClick={() => selectDiscoveredDevice(device)}
                         >
                           Préremplir
                         </button>
                         <button
                           type="button"
-                          className="sensor-confirm-btn"
+                          className="ui-confirm-btn"
                           onClick={() => addDiscoveredDevice(device)}
                         >
                           Ajouter directement
@@ -868,22 +868,22 @@ export default function CameraFeed({ onStatusChange }: {
                 <h3 className="cam-discovery-title">Ajout manuel</h3>
                 <p className="cam-discovery-subtitle">Saisissez un flux RTSP ou HTTP valide.</p>
               </div>
-              <input className="sensor-input" placeholder="Nom de la caméra"
+              <input className="ui-input" placeholder="Nom de la caméra"
                 value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
-      <input className="sensor-input" placeholder="Ex: http://192.168.0.213:8889/cam1/ ou rtsp://..."
+      <input className="ui-input" placeholder="Ex: http://192.168.0.213:8889/cam1/ ou rtsp://..."
                 value={newRtsp} onChange={e => setNewRtsp(e.target.value)} />
-              <input className="sensor-input" placeholder="Emplacement (optionnel)"
+              <input className="ui-input" placeholder="Emplacement (optionnel)"
                 value={newLoc} onChange={e => setNewLoc(e.target.value)} />
               {discoverMessage && (
-                <div className="sensor-note">
+                <div className="ui-note">
                   <p>{discoverMessage}</p>
                 </div>
               )}
               <div className="cam-add-actions">
-                <button type="button" className="sensor-link-btn" onClick={() => setAddMode('discover')}>
+                <button type="button" className="ui-link-btn" onClick={() => setAddMode('discover')}>
                   Retour aux annonces
                 </button>
-                <button className="sensor-confirm-btn" onClick={addCamera} disabled={!canAddManually}>Ajouter</button>
+                <button className="ui-confirm-btn" onClick={addCamera} disabled={!canAddManually}>Ajouter</button>
               </div>
               </section>
             )}
@@ -903,7 +903,7 @@ export default function CameraFeed({ onStatusChange }: {
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                     <input
                       autoFocus
-                      className="sensor-input"
+                      className="ui-input"
                       style={{ padding: '2px 8px', fontSize: '14px', height: 'auto', margin: 0, minHeight: '28px', maxWidth: '200px' }}
                       value={editNameValue}
                       readOnly={isKeyboardEnabled}
@@ -914,8 +914,8 @@ export default function CameraFeed({ onStatusChange }: {
                         if (e.key === 'Escape') setEditingNameId(null);
                       }}
                     />
-                    <button type="button" className="sensor-confirm-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => saveCameraName(focusedCam.id)}>✓</button>
-                    <button type="button" className="sensor-delete-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => setEditingNameId(null)}>✕</button>
+                    <button type="button" className="ui-confirm-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => saveCameraName(focusedCam.id)}>✓</button>
+                    <button type="button" className="ui-delete-btn" style={{ padding: '2px 8px', minHeight: '28px', fontSize: '12px' }} onClick={() => setEditingNameId(null)}>✕</button>
                   </div>
                 ) : (
                   <span 
@@ -934,7 +934,7 @@ export default function CameraFeed({ onStatusChange }: {
                 <StatusBadge status={focusedCam.status} />
                 <MotionBadge active={focusedCam.motionActive} />
                 {focusedCam.nodeDeviceId && (
-                  <button className="sensor-link-btn" onClick={() => loadMotionHistory(focusedCam.nodeDeviceId!, focusedCam.name)}>
+                  <button className="ui-link-btn" onClick={() => loadMotionHistory(focusedCam.nodeDeviceId!, focusedCam.name)}>
                     Mouvements
                   </button>
                 )}
@@ -1061,7 +1061,7 @@ export default function CameraFeed({ onStatusChange }: {
                 {isAdmin && (
                   <button
                     type="button"
-                    className="sensor-delete-btn sensor-delete-btn--danger"
+                    className="ui-delete-btn ui-delete-btn--danger"
                     onClick={() => {
                       setHistoryDeleteError(null);
                       setPurgeHistoryConfirm(true);
@@ -1202,8 +1202,8 @@ export default function CameraFeed({ onStatusChange }: {
               Les enregistrements déjà présents restent disponibles tant qu’ils ne sont pas supprimés ou purgés automatiquement après {historyRetentionDays} jours.
             </div>
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => setCameraDeleteTarget(null)}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteCamera}>Supprimer</button>
+              <button className="ui-link-btn" onClick={() => setCameraDeleteTarget(null)}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={confirmDeleteCamera}>Supprimer</button>
             </div>
           </div>
         </div>
@@ -1221,8 +1221,8 @@ export default function CameraFeed({ onStatusChange }: {
             </div>
             {historyDeleteError && <div className="settings-msg settings-msg--error">⚠ {historyDeleteError}</div>}
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => setRecordDeleteTarget(null)} disabled={historyDeleteLoading}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteRecording} disabled={historyDeleteLoading}>
+              <button className="ui-link-btn" onClick={() => setRecordDeleteTarget(null)} disabled={historyDeleteLoading}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={confirmDeleteRecording} disabled={historyDeleteLoading}>
                 {historyDeleteLoading ? 'Suppression...' : 'Supprimer ce rendu'}
               </button>
             </div>
@@ -1242,8 +1242,8 @@ export default function CameraFeed({ onStatusChange }: {
             </div>
             {historyDeleteError && <div className="settings-msg settings-msg--error">⚠ {historyDeleteError}</div>}
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => setPurgeHistoryConfirm(false)} disabled={historyDeleteLoading}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={confirmDeleteAllHistory} disabled={historyDeleteLoading}>
+              <button className="ui-link-btn" onClick={() => setPurgeHistoryConfirm(false)} disabled={historyDeleteLoading}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={confirmDeleteAllHistory} disabled={historyDeleteLoading}>
                 {historyDeleteLoading ? 'Suppression...' : 'Tout supprimer'}
               </button>
             </div>

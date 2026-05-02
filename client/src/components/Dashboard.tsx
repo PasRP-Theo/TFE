@@ -37,7 +37,7 @@ export default function Dashboard() {
     <div className="dashboard-container" style={{ padding: '20px' }}>
       <h2 style={{ marginBottom: '20px' }}>Recherche de caméras Pi Zero 2W</h2>
       
-      <button onClick={handleScan} disabled={scanning} className="sensor-confirm-btn">
+      <button onClick={handleScan} disabled={scanning} className="ui-confirm-btn">
         {scanning ? 'Scan en cours...' : 'Scanner le réseau'}
       </button>
 
@@ -50,7 +50,7 @@ export default function Dashboard() {
               <strong style={{ fontSize: '1.1rem', color: 'var(--accent-blue)' }}>{cam.name}</strong> — {cam.ip} <br />
               <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)' }}>HLS : {cam.hlsUrl}</small>
               <small style={{ display: 'block', color: 'var(--text-muted)' }}>RTSP : {cam.rtspUrl}</small>
-              <button className="sensor-link-btn" style={{ marginTop: '12px' }}>Ajouter cette caméra</button>
+              <button className="ui-link-btn" style={{ marginTop: '12px' }}>Ajouter cette caméra</button>
             </li>
           ))}
         </ul>

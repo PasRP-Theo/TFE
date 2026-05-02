@@ -336,22 +336,22 @@ function TabSettings() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>APPLICATION</span>
-          <button className="sensor-confirm-btn" onClick={saveApplicationSettings} disabled={applicationSaving || !draftConfig.appName.trim() || !draftConfig.appSubtitle.trim() || !draftConfig.loginMessage.trim()}>
+          <button className="ui-confirm-btn" onClick={saveApplicationSettings} disabled={applicationSaving || !draftConfig.appName.trim() || !draftConfig.appSubtitle.trim() || !draftConfig.loginMessage.trim()}>
             {applicationSaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Titre principal</span>
-            <input className="sensor-input" type="text" value={draftConfig.appName} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appName, (value) => updateDraft({ appName: value }))} onChange={event => updateDraft({ appName: event.target.value })} />
+            <input className="ui-input" type="text" value={draftConfig.appName} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appName, (value) => updateDraft({ appName: value }))} onChange={event => updateDraft({ appName: event.target.value })} />
           </label>
           <label className="settings-field">
             <span className="settings-field-label">Sous-titre</span>
-            <input className="sensor-input" type="text" value={draftConfig.appSubtitle} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appSubtitle, (value) => updateDraft({ appSubtitle: value }))} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
+            <input className="ui-input" type="text" value={draftConfig.appSubtitle} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appSubtitle, (value) => updateDraft({ appSubtitle: value }))} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
           </label>
           <label className="settings-field settings-field--wide">
             <span className="settings-field-label">Message d’accueil login</span>
-            <input className="sensor-input" type="text" value={draftConfig.loginMessage} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.loginMessage, (value) => updateDraft({ loginMessage: value }))} onChange={event => updateDraft({ loginMessage: event.target.value })} />
+            <input className="ui-input" type="text" value={draftConfig.loginMessage} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.loginMessage, (value) => updateDraft({ loginMessage: value }))} onChange={event => updateDraft({ loginMessage: event.target.value })} />
           </label>
           <div className="settings-field">
             <span className="settings-field-label">Langue</span>
@@ -476,7 +476,7 @@ function TabSettings() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>AFFICHAGE</span>
-          <button className="sensor-confirm-btn" onClick={saveDisplaySettings} disabled={displaySaving}>
+          <button className="ui-confirm-btn" onClick={saveDisplaySettings} disabled={displaySaving}>
             {displaySaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
@@ -536,19 +536,19 @@ function TabSettings() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>CAMÉRAS</span>
-          <button className="sensor-confirm-btn" onClick={saveCameraSettings} disabled={cameraSaving}>
+          <button className="ui-confirm-btn" onClick={saveCameraSettings} disabled={cameraSaving}>
             {cameraSaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Rafraîchissement de la grille</span>
-            <input className="sensor-input" type="number" min="2" max="15" value={draftConfig.cameraRefreshSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraRefreshSeconds), (value) => updateDraft({ cameraRefreshSeconds: Number(value) || 2 }))} onChange={event => updateDraft({ cameraRefreshSeconds: Number(event.target.value) || 2 })} />
+            <input className="ui-input" type="number" min="2" max="15" value={draftConfig.cameraRefreshSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraRefreshSeconds), (value) => updateDraft({ cameraRefreshSeconds: Number(value) || 2 }))} onChange={event => updateDraft({ cameraRefreshSeconds: Number(event.target.value) || 2 })} />
             <span className="settings-field-hint">Secondes entre deux synchronisations de la liste des caméras.</span>
           </label>
           <label className="settings-field">
     <span className="settings-field-label">Intervalle découverte (Nœuds / Scan)</span>
-            <input className="sensor-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraDiscoveryIntervalSeconds), (value) => updateDraft({ cameraDiscoveryIntervalSeconds: Number(value) || 3 }))} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
+            <input className="ui-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraDiscoveryIntervalSeconds), (value) => updateDraft({ cameraDiscoveryIntervalSeconds: Number(value) || 3 }))} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
             <span className="settings-field-hint">Secondes entre deux rafraîchissements dans le panneau d’ajout caméra.</span>
           </label>
           <div className="settings-field">
@@ -585,7 +585,7 @@ function TabSettings() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>ALERTES</span>
-          <button className="sensor-confirm-btn" onClick={saveAlertsSettings} disabled={alertsSaving}>
+          <button className="ui-confirm-btn" onClick={saveAlertsSettings} disabled={alertsSaving}>
             {alertsSaving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
@@ -643,7 +643,7 @@ function TabSettings() {
             {pushError && <div className="settings-msg settings-msg--error">⚠ {pushError}</div>}
             {pushSubscribed && (
               <div style={{ marginTop: '16px' }}>
-                <button className="sensor-link-btn" onClick={sendTestNotification}>Envoyer une notification de test</button>
+                <button className="ui-link-btn" onClick={sendTestNotification}>Envoyer une notification de test</button>
               </div>
             )}
           </>
@@ -653,7 +653,7 @@ function TabSettings() {
       <div className="settings-section">
         <div className="settings-section-label settings-section-label--row">
           <span>SÉCURITÉ LOCALE</span>
-          <button className="sensor-confirm-btn" onClick={saveSecuritySettings} disabled={securitySaving}>
+          <button className="ui-confirm-btn" onClick={saveSecuritySettings} disabled={securitySaving}>
             {securitySaving ? 'Enregistrement...' : 'Enregistrer le PIN'}
           </button>
         </div>
@@ -662,7 +662,7 @@ function TabSettings() {
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input 
-                className="sensor-input" 
+                className="ui-input" 
                 type={showPin ? "text" : "password"} 
                 maxLength={4} 
                 placeholder="Ex: 1234" 
@@ -673,7 +673,7 @@ function TabSettings() {
                 style={{ maxWidth: '200px' }} 
                 autoComplete="new-password" 
               />
-              <button type="button" className="sensor-link-btn" onClick={() => setShowPin(!showPin)}>
+              <button type="button" className="ui-link-btn" onClick={() => setShowPin(!showPin)}>
                 {showPin ? 'Cacher' : 'Voir'}
               </button>
             </div>
@@ -694,7 +694,7 @@ function TabSettings() {
             </div>
           </div>
           <div className="settings-system-actions">
-            <button type="button" className="sensor-delete-btn sensor-delete-btn--danger sensor-delete-btn--xl" onClick={() => setShowResetConfirm(true)}>
+            <button type="button" className="ui-delete-btn ui-delete-btn--danger ui-delete-btn--xl" onClick={() => setShowResetConfirm(true)}>
               Réinitialiser la configuration
             </button>
           </div>
@@ -713,8 +713,8 @@ function TabSettings() {
               Les enregistrements vidéo existants restent inchangés.
             </div>
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => setShowResetConfirm(false)} disabled={resetLoading}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={resetSystem} disabled={resetLoading}>
+              <button className="ui-link-btn" onClick={() => setShowResetConfirm(false)} disabled={resetLoading}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={resetSystem} disabled={resetLoading}>
                 {resetLoading ? 'Réinitialisation...' : 'Réinitialiser'}
               </button>
             </div>
@@ -873,9 +873,9 @@ function TabUsers() {
         </div>
 
         {showAdd && (
-          <div className="sensor-add-form settings-add-form">
-            <input className="sensor-input" type="text" placeholder="Identifiant" value={newUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newUsername, setNewUsername)} onChange={event => setNewUsername(event.target.value)} autoFocus />
-            <input className="sensor-input" type="text" placeholder="Mot de passe" value={newPass} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newPass, setNewPass)} onChange={event => setNewPass(event.target.value)} />
+          <div className="ui-add-form settings-add-form">
+            <input className="ui-input" type="text" placeholder="Identifiant" value={newUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newUsername, setNewUsername)} onChange={event => setNewUsername(event.target.value)} autoFocus />
+            <input className="ui-input" type="text" placeholder="Mot de passe" value={newPass} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newPass, setNewPass)} onChange={event => setNewPass(event.target.value)} />
             <div style={{ flex: 1 }}>
               <SettingsDropdown
                 value={newRole}
@@ -887,7 +887,7 @@ function TabUsers() {
                 ariaLabel="Rôle du nouvel utilisateur"
               />
             </div>
-            <button className="sensor-confirm-btn" onClick={createUser}>Créer</button>
+            <button className="ui-confirm-btn" onClick={createUser}>Créer</button>
           </div>
         )}
 
@@ -898,36 +898,36 @@ function TabUsers() {
           <div className="settings-loading">Chargement...</div>
         ) : (
           <div className="table-scroll-container">
-            <table className="sensor-table settings-users-table">
+            <table className="ui-table settings-users-table">
               <thead>
                 <tr>
-                  <th className="sensor-th">IDENTIFIANT</th>
-                  <th className="sensor-th">RÔLE</th>
-                  <th className="sensor-th">CRÉÉ LE</th>
-                  <th className="sensor-th">COMPTE</th>
-                  <th className="sensor-th sensor-th--right">ACTIONS</th>
+                  <th className="ui-th">IDENTIFIANT</th>
+                  <th className="ui-th">RÔLE</th>
+                  <th className="ui-th">CRÉÉ LE</th>
+                  <th className="ui-th">COMPTE</th>
+                  <th className="ui-th ui-th--right">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 && (
-                  <tr><td colSpan={5} className="sensor-td settings-users-empty">Aucun utilisateur</td></tr>
+                  <tr><td colSpan={5} className="ui-td settings-users-empty">Aucun utilisateur</td></tr>
                 )}
                 {users.map((entry, index) => (
-                  <tr key={entry.id} className={index % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
-                    <td className="sensor-td"><span className="sensor-name">{entry.username}</span></td>
-                    <td className="sensor-td">
-                      <button className="sensor-status-btn" onClick={() => setConfirmUser(entry)} title="Changer le rôle">
-                        <span className={`sensor-badge ${entry.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}>
-                          <span className="sensor-badge-dot" />
+                  <tr key={entry.id} className={index % 2 === 0 ? "ui-tr--odd" : "ui-tr--even"}>
+                    <td className="ui-td"><span className="ui-name">{entry.username}</span></td>
+                    <td className="ui-td">
+                      <button className="ui-status-btn" onClick={() => setConfirmUser(entry)} title="Changer le rôle">
+                        <span className={`ui-badge ${entry.role === "admin" ? "ui-badge--alert" : "ui-badge--ok"}`}>
+                          <span className="ui-badge-dot" />
                           {entry.role === "admin" ? "ADMIN" : "USER"}
                         </span>
                       </button>
                     </td>
-                    <td className="sensor-td"><span className="sensor-type">{new Date(entry.created_at).toLocaleDateString("fr-FR")}</span></td>
-                    <td className="sensor-td"><span className="sensor-type">{currentUser?.id === entry.id ? 'Connecté' : 'Utilisateur'}</span></td>
-                    <td className="sensor-td sensor-td--right">
-                      <button className="sensor-link-btn" style={{ marginRight: '8px' }} onClick={() => startEditUser(entry)} title="Modifier">Éditer</button>
-                      <button className="sensor-delete-btn" onClick={() => { setDeleteUserTarget(entry); setDeleteError(''); }} title="Supprimer">✕</button>
+                    <td className="ui-td"><span className="ui-type">{new Date(entry.created_at).toLocaleDateString("fr-FR")}</span></td>
+                    <td className="ui-td"><span className="ui-type">{currentUser?.id === entry.id ? 'Connecté' : 'Utilisateur'}</span></td>
+                    <td className="ui-td ui-td--right">
+                      <button className="ui-link-btn" style={{ marginRight: '8px' }} onClick={() => startEditUser(entry)} title="Modifier">Éditer</button>
+                      <button className="ui-delete-btn" onClick={() => { setDeleteUserTarget(entry); setDeleteError(''); }} title="Supprimer">✕</button>
                     </td>
                   </tr>
                 ))}
@@ -943,14 +943,14 @@ function TabUsers() {
             <div className="settings-modal-title">MODIFIER LE RÔLE</div>
             <div className="settings-modal-user">Utilisateur : <strong>{confirmUser.username}</strong></div>
             <div className="settings-modal-roles">
-              <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--alert" : "sensor-badge--ok"}`}><span className="sensor-badge-dot" />{confirmUser.role.toUpperCase()}</span>
+              <span className={`ui-badge ${confirmUser.role === "admin" ? "ui-badge--alert" : "ui-badge--ok"}`}><span className="ui-badge-dot" />{confirmUser.role.toUpperCase()}</span>
               <span className="settings-role-arrow">→</span>
-              <span className={`sensor-badge ${confirmUser.role === "admin" ? "sensor-badge--ok" : "sensor-badge--alert"}`}><span className="sensor-badge-dot" />{confirmUser.role === "admin" ? "USER" : "ADMIN"}</span>
+              <span className={`ui-badge ${confirmUser.role === "admin" ? "ui-badge--ok" : "ui-badge--alert"}`}><span className="ui-badge-dot" />{confirmUser.role === "admin" ? "USER" : "ADMIN"}</span>
             </div>
             <div className="settings-modal-warning">Cette action modifie les permissions de l'utilisateur immédiatement.</div>
             <div className="settings-modal-actions">
-              <button className="sensor-delete-btn" onClick={() => setConfirmUser(null)}>Annuler</button>
-              <button className="sensor-confirm-btn" onClick={confirmToggleRole}>Confirmer</button>
+              <button className="ui-delete-btn" onClick={() => setConfirmUser(null)}>Annuler</button>
+              <button className="ui-confirm-btn" onClick={confirmToggleRole}>Confirmer</button>
             </div>
           </div>
         </div>
@@ -966,8 +966,8 @@ function TabUsers() {
             </div>
             {deleteError && <div className="settings-modal-inline-error">⚠ {deleteError}</div>}
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => { setDeleteUserTarget(null); setDeleteError(''); }}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={() => deleteUser(deleteUserTarget.id)}>Supprimer</button>
+              <button className="ui-link-btn" onClick={() => { setDeleteUserTarget(null); setDeleteError(''); }}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={() => deleteUser(deleteUserTarget.id)}>Supprimer</button>
             </div>
           </div>
         </div>
@@ -978,13 +978,13 @@ function TabUsers() {
           <div className="settings-modal-card settings-modal-card--form" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title">MODIFIER LE COMPTE</div>
             <div className="settings-modal-form">
-              <input className="sensor-input" type="text" value={editUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editUsername, setEditUsername)} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
-              <input className="sensor-input" type="password" value={editPassword} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editPassword, setEditPassword)} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
+              <input className="ui-input" type="text" value={editUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editUsername, setEditUsername)} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
+              <input className="ui-input" type="password" value={editPassword} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editPassword, setEditPassword)} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
             </div>
             <div className="settings-modal-warning">Le mot de passe initial root/root devient inactif dès que tu modifies ce compte bootstrap.</div>
             <div className="settings-modal-actions">
-              <button className="sensor-delete-btn" onClick={() => setEditingUser(null)}>Annuler</button>
-              <button className="sensor-confirm-btn" onClick={saveUserEdits}>Enregistrer</button>
+              <button className="ui-delete-btn" onClick={() => setEditingUser(null)}>Annuler</button>
+              <button className="ui-confirm-btn" onClick={saveUserEdits}>Enregistrer</button>
             </div>
           </div>
         </div>
@@ -1036,27 +1036,27 @@ function TabAudit() {
         <div className="settings-loading">Chargement...</div>
       ) : (
         <div className="table-scroll-container">
-          <table className="sensor-table settings-users-table">
+          <table className="ui-table settings-users-table">
             <thead>
               <tr>
-                <th className="sensor-th">DATE</th>
-                <th className="sensor-th">UTILISATEUR</th>
-                <th className="sensor-th">ACTION</th>
-                <th className="sensor-th">DÉTAILS</th>
-                <th className="sensor-th">IP</th>
+                <th className="ui-th">DATE</th>
+                <th className="ui-th">UTILISATEUR</th>
+                <th className="ui-th">ACTION</th>
+                <th className="ui-th">DÉTAILS</th>
+                <th className="ui-th">IP</th>
               </tr>
             </thead>
             <tbody>
               {logs.length === 0 && (
-                <tr><td colSpan={5} className="sensor-td settings-users-empty">Aucun journal disponible</td></tr>
+                <tr><td colSpan={5} className="ui-td settings-users-empty">Aucun journal disponible</td></tr>
               )}
               {logs.map((log, i) => (
-                <tr key={log.id} className={i % 2 === 0 ? "sensor-tr--odd" : "sensor-tr--even"}>
-                  <td className="sensor-td"><span className="sensor-type">{new Date(log.created_at).toLocaleString("fr-FR")}</span></td>
-                  <td className="sensor-td"><span className="sensor-name">{log.username || 'Système'}</span></td>
-                  <td className="sensor-td"><span className={`sensor-badge ${log.action.includes('FAIL') || log.action.includes('DELETE') ? 'sensor-badge--alert' : 'sensor-badge--ok'}`}><span className="sensor-badge-dot"/>{log.action}</span></td>
-                  <td className="sensor-td"><span className="sensor-type">{log.details}</span></td>
-                  <td className="sensor-td"><span className="sensor-type">{log.ip_address}</span></td>
+                <tr key={log.id} className={i % 2 === 0 ? "ui-tr--odd" : "ui-tr--even"}>
+                  <td className="ui-td"><span className="ui-type">{new Date(log.created_at).toLocaleString("fr-FR")}</span></td>
+                  <td className="ui-td"><span className="ui-name">{log.username || 'Système'}</span></td>
+                  <td className="ui-td"><span className={`ui-badge ${log.action.includes('FAIL') || log.action.includes('DELETE') ? 'ui-badge--alert' : 'ui-badge--ok'}`}><span className="ui-badge-dot"/>{log.action}</span></td>
+                  <td className="ui-td"><span className="ui-type">{log.details}</span></td>
+                  <td className="ui-td"><span className="ui-type">{log.ip_address}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -1088,7 +1088,7 @@ function TabHelp() {
         <div className="settings-danger-zone-text" style={{ marginBottom: '16px' }}>
           Installez SENTYS sur votre appareil pour y accéder rapidement comme une application native.
         </div>
-        <button type="button" className="sensor-confirm-btn" onClick={handleInstallClick}>
+        <button type="button" className="ui-confirm-btn" onClick={handleInstallClick}>
           Installer l'application
         </button>
       </div>
@@ -1097,7 +1097,7 @@ function TabHelp() {
         <div className="settings-danger-zone-text" style={{ marginBottom: '16px' }}>
           Ce système est conçu pour fonctionner localement. Pour y accéder depuis l'extérieur (4G/5G, autre réseau WiFi) en toute sécurité, il ne faut <strong>pas</strong> ouvrir les ports de votre routeur.
         </div>
-        <div className="sensor-add-form settings-add-form" style={{ display: 'block', padding: '16px', background: 'var(--bg-glass)', borderRadius: '8px' }}>
+        <div className="ui-add-form settings-add-form" style={{ display: 'block', padding: '16px', background: 'var(--bg-glass)', borderRadius: '8px' }}>
           <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>1. Installation de Tailscale</h4>
           <p style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.4' }}>
             Tailscale crée un réseau privé virtuel (VPN) "mesh" (Peer-to-Peer) basé sur WireGuard. Installez Tailscale sur l'appareil hôte (Raspberry Pi / Serveur) et sur vos appareils clients (Smartphone, PC portable).
@@ -1154,7 +1154,7 @@ function TabHelp() {
               2. Choisis <strong>Ajouter à l'écran d'accueil</strong> 📱
             </div>
             <div className="settings-modal-actions">
-              <button className="sensor-confirm-btn" style={{ width: '100%' }} onClick={() => setShowInstallHint(false)}>J'ai compris</button>
+              <button className="ui-confirm-btn" style={{ width: '100%' }} onClick={() => setShowInstallHint(false)}>J'ai compris</button>
             </div>
           </div>
         </div>
@@ -1223,7 +1223,7 @@ function TabArchives() {
               CAM {archive.cameraId} — {archive.recordings.length} fichier(s)
             </strong>
             <button
-              className="sensor-delete-btn sensor-delete-btn--danger"
+              className="ui-delete-btn ui-delete-btn--danger"
               disabled={purging === archive.cameraId}
               onClick={() => purge(archive.cameraId)}
             >
@@ -1231,17 +1231,17 @@ function TabArchives() {
             </button>
           </div>
           <div className="table-scroll-container">
-            <table className="sensor-table">
+            <table className="ui-table">
               <thead><tr><th>Fichier</th><th>Date</th><th>Taille</th><th></th></tr></thead>
               <tbody>
                 {archive.recordings.map(rec => (
                   <tr key={rec.filename}>
-                    <td className="sensor-td">{rec.filename}</td>
-                    <td className="sensor-td">{new Date(rec.createdAt).toLocaleString('fr-FR')}</td>
-                    <td className="sensor-td">{formatArchiveSize(rec.size)}</td>
-                    <td className="sensor-td">
-                      <a href={apiUrl(rec.url)} target="_blank" rel="noreferrer" className="sensor-link-btn" style={{ marginRight: '6px' }}>Ouvrir</a>
-                      <a href={apiUrl(rec.url)} download className="sensor-link-btn">Télécharger</a>
+                    <td className="ui-td">{rec.filename}</td>
+                    <td className="ui-td">{new Date(rec.createdAt).toLocaleString('fr-FR')}</td>
+                    <td className="ui-td">{formatArchiveSize(rec.size)}</td>
+                    <td className="ui-td">
+                      <a href={apiUrl(rec.url)} target="_blank" rel="noreferrer" className="ui-link-btn" style={{ marginRight: '6px' }}>Ouvrir</a>
+                      <a href={apiUrl(rec.url)} download className="ui-link-btn">Télécharger</a>
                     </td>
                   </tr>
                 ))}
@@ -1266,11 +1266,11 @@ export default function Settings() {
       </div>
 
       <div className="settings-tabs">
-        <button className={`sensor-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
-        <button className={`sensor-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
-        <button className={`sensor-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
-        <button className={`sensor-tab-btn ${tab === "archives" ? "active" : ""}`} onClick={() => setTab("archives")}>ARCHIVES</button>
-        <button className={`sensor-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & À PROPOS</button>
+        <button className={`ui-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
+        <button className={`ui-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
+        <button className={`ui-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
+        <button className={`ui-tab-btn ${tab === "archives" ? "active" : ""}`} onClick={() => setTab("archives")}>ARCHIVES</button>
+        <button className={`ui-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & À PROPOS</button>
       </div>
 
       {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}

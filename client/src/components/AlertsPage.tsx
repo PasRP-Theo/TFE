@@ -356,7 +356,7 @@ export default function AlertsPage() {
           <h2 className="alerts-title">Incidents et activite du systeme</h2>
           <p className="alerts-subtitle">Suivi unifie des alertes, acquittement et statistiques d'activite.</p>
         </div>
-        <button type="button" className="sensor-link-btn" onClick={exportAlerts}>Exporter CSV</button>
+        <button type="button" className="ui-link-btn" onClick={exportAlerts}>Exporter CSV</button>
       </div>
 
       {summary && (
@@ -449,10 +449,10 @@ export default function AlertsPage() {
                 setStatus(nextValue);
               }}
             />
-            <button type="button" className="sensor-link-btn" onClick={() => { setPage(1); void fetchAlerts().catch(() => {}); }}>Filtrer</button>
+            <button type="button" className="ui-link-btn" onClick={() => { setPage(1); void fetchAlerts().catch(() => {}); }}>Filtrer</button>
             <button
               type="button"
-              className="sensor-delete-btn sensor-delete-btn--danger"
+              className="ui-delete-btn ui-delete-btn--danger"
               style={{ minWidth: 0, padding: '6px 12px', fontSize: 13 }}
               onClick={() => setShowDeleteAllConfirm(true)}
               disabled={loading || alerts.length === 0}
@@ -493,7 +493,7 @@ export default function AlertsPage() {
                   {entry.status !== 'acknowledged' && (
                     <button
                       type="button"
-                      className="sensor-confirm-btn"
+                      className="ui-confirm-btn"
                       onClick={() => acknowledgeAlert(entry.id)}
                       disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
                     >
@@ -502,7 +502,7 @@ export default function AlertsPage() {
                   )}
                   <button
                     type="button"
-                    className="sensor-delete-btn"
+                    className="ui-delete-btn"
                     onClick={() => setAlertDeleteTarget(entry)}
                     disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
                     title="Supprimer l’alerte"
@@ -516,9 +516,9 @@ export default function AlertsPage() {
         )}
 
         <div className="alerts-pagination">
-          <button type="button" className="sensor-link-btn" disabled={page <= 1} onClick={() => setPage((current) => Math.max(current - 1, 1))}>Precedent</button>
+          <button type="button" className="ui-link-btn" disabled={page <= 1} onClick={() => setPage((current) => Math.max(current - 1, 1))}>Precedent</button>
           <span>Page {page} / {totalPages}</span>
-          <button type="button" className="sensor-link-btn" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(current + 1, totalPages))}>Suivant</button>
+          <button type="button" className="ui-link-btn" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(current + 1, totalPages))}>Suivant</button>
         </div>
       </div>
 
@@ -530,8 +530,8 @@ export default function AlertsPage() {
               Voulez-vous vraiment vider tout le journal des alertes ? Cette action est irréversible.
             </div>
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => setShowDeleteAllConfirm(false)} disabled={actionLoadingKey === 'delete-all'}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={deleteAllAlerts} disabled={actionLoadingKey === 'delete-all'}>
+              <button className="ui-link-btn" onClick={() => setShowDeleteAllConfirm(false)} disabled={actionLoadingKey === 'delete-all'}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={deleteAllAlerts} disabled={actionLoadingKey === 'delete-all'}>
                 {actionLoadingKey === 'delete-all' ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
@@ -547,8 +547,8 @@ export default function AlertsPage() {
               Voulez-vous vraiment supprimer l'alerte "{alertDeleteTarget.title}" ? Cette action est irréversible.
             </div>
             <div className="settings-modal-actions">
-              <button className="sensor-link-btn" onClick={() => setAlertDeleteTarget(null)} disabled={actionLoadingKey === `delete-${alertDeleteTarget.id}`}>Annuler</button>
-              <button className="sensor-delete-btn sensor-delete-btn--danger" onClick={() => deleteAlert(alertDeleteTarget.id)} disabled={actionLoadingKey === `delete-${alertDeleteTarget.id}`}>
+              <button className="ui-link-btn" onClick={() => setAlertDeleteTarget(null)} disabled={actionLoadingKey === `delete-${alertDeleteTarget.id}`}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={() => deleteAlert(alertDeleteTarget.id)} disabled={actionLoadingKey === `delete-${alertDeleteTarget.id}`}>
                 {actionLoadingKey === `delete-${alertDeleteTarget.id}` ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
