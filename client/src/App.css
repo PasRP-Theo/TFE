@@ -4335,6 +4335,16 @@ a:focus-visible {
 .cam-offline-icon { font-size: 26px; color: var(--camera-offline-icon); margin-bottom: 8px; }
 .cam-offline-text { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.18em; }
 
+.cf-server-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: var(--bg-surface); border-top: 1px solid var(--border);
+  padding: 10px 20px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-size: 13px; color: var(--text-secondary); box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+}
+.cf-server-bar__label { color: var(--text-muted); font-weight: 700; }
+.cf-server-bar__value { font-weight: 700; }
+.cf-server-bar__value--battery { color: var(--accent-amber); }
+
 .cam-footer {
   display: flex; align-items: center; gap: 8px; padding: 8px 14px;
   background: var(--bg-elevated); border-top: 1px solid var(--border);

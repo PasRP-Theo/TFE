@@ -999,35 +999,15 @@ export default function CameraFeed({ onStatusChange }: {
         </div>
       )}
 
-      {/* Barre de diagnostic LED (Dynamique & Fixe) */}
-      {(() => {
-        const hasOffline = cameras.some(c => c.status === 'stopped');
-        const hasInstable = !navigator.onLine || cameras.some(c => c.status === 'reconnecting' || c.status === 'paused');
-        const ledColor = hasOffline ? 'var(--accent-red)' : hasInstable ? 'var(--accent-amber)' : '#22c55e';
-        const ledStatus = hasOffline ? 'ROUGE : PANNE' : hasInstable ? 'ORANGE : INSTABLE' : 'VERT : OK';
-        const ledDesc = hasOffline ? 'Une ou plusieurs caméras sont injoignables.' : hasInstable ? 'Réseau instable ou reconnexion en cours.' : 'Toutes les caméras fonctionnent normalement.';
-        
-        return (
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: 'var(--bg-surface)', borderTop: '1px solid var(--border)', padding: '14px 20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '14px', color: 'var(--text-secondary)', boxShadow: '0 -4px 20px rgba(0,0,0,0.3)' }}>
-            <span style={{ color: 'var(--text-muted)' }}><strong>DIAGNOSTIC CAMÉRAS :</strong></span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: ledColor }}>
-              <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: ledColor, boxShadow: `0 0 10px ${ledColor}` }} /> 
-              {ledStatus}
-            </span>
-            <span>— {ledDesc}</span>
-
-            {sysInfo && (
-              <>
-                <span style={{ color: 'var(--border)', margin: '0 4px' }}>|</span>
-                <span style={{ color: 'var(--text-muted)' }}><strong>SERVEUR :</strong></span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: (!sysInfo.hasBattery || sysInfo.isCharging) ? 'inherit' : 'var(--accent-amber)' }}>
-                  {(!sysInfo.hasBattery || sysInfo.isCharging) ? '⚡ SUR SECTEUR' : `🔋 SUR BATTERIE ${sysInfo.percent != null ? `(${sysInfo.percent.toFixed(0)}%)` : ''}`}
-                </span>
-              </>
-            )}
-          </div>
-        );
-      })()}
+      {/* Barre de statut serveur */}
+      {sysInfo && (
+        <div className="cf-server-bar">
+          <span className="cf-server-bar__label">SERVEUR :</span>
+          <span className={`cf-server-bar__value ${(!sysInfo.hasBattery || sysInfo.isCharging) ? '' : 'cf-server-bar__value--battery'}`}>
+            {(!sysInfo.hasBattery || sysInfo.isCharging) ? '⚡ SUR SECTEUR' : `🔋 SUR BATTERIE ${sysInfo.percent != null ? `(${sysInfo.percent.toFixed(0)}%)` : ''}`}
+          </span>
+        </div>
+      )}
 
       {historyCameraId !== null && (
         <div className="cam-history-overlay" onClick={closeHistory}>
