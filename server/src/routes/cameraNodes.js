@@ -3,6 +3,43 @@ import { pool } from '../db/index.js';
 import { startCamera, getState, triggerMotionRecording } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import os from 'os';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const AI_SCRIPT = path.resolve(__dirname, '..', '..', '..', 'server', 'motion_detector.py');
+
+function classifyNodeMotion(rtspUrl) {
+  return new Promise((resolve) => {
+    const pythonBin = os.platform() === 'win32' ? 'python' : 'python3';
+    const child = spawn(pythonBin, [AI_SCRIPT, '--analyze'], {
+      env: { ...process.env, RTSP_URL: rtspUrl },
+    });
+
+    let stdout = '';
+    const timeout = setTimeout(() => {
+      child.kill();
+      resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
+    }, 6000);
+
+    child.stdout.on('data', d => { stdout += d.toString(); });
+    child.on('close', () => {
+      clearTimeout(timeout);
+      try {
+        const lastLine = stdout.trim().split('\n').findLast(l => l.startsWith('{'));
+        resolve(lastLine ? JSON.parse(lastLine) : { type: 'motion', label: 'Mouvement détecté', confidence: 0 });
+      } catch {
+        resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
+      }
+    });
+    child.on('error', () => {
+      clearTimeout(timeout);
+      resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
+    });
+  });
+}
 
 const router = Router();
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
@@ -180,26 +217,40 @@ router.post('/motion', async (req, res) => {
         [deviceId, true, detectedAt.toISOString()]
       );
 
+      // Tente une classification YOLO sur le flux de la caméra
+      let classification = { type: 'motion', label: 'Mouvement détecté', confidence: 0 };
+      try {
+        classification = await classifyNodeMotion(rows[0].stream_url);
+      } catch { /* fallback déjà défini */ }
+
+      const confSuffix = classification.confidence > 0 ? ` (${Math.round(classification.confidence * 100)}%)` : '';
+      const alertTitle = `${classification.label}${confSuffix} — ${rows[0].name}`;
+      const alertMessage = rows[0].location
+        ? `${classification.label} sur le flux de la caméra (Hôte: ${rows[0].host}). Zone : ${rows[0].location}.`
+        : `${classification.label} sur le flux de la caméra (Hôte: ${rows[0].host}).`;
+
       await createAlert({
         sourceType: 'camera-node',
         sourceId: deviceId,
         alertType: 'motion_detected',
-        level: 'warning',
-        title: `Mouvement detecte - ${rows[0].name}`,
-        message: `Un mouvement a ete detecte sur le noeud camera ${rows[0].name}.`,
+        level: classification.type === 'person' ? 'critical' : 'warning',
+        title: alertTitle,
+        message: alertMessage,
         metadata: {
           deviceId,
           host: rows[0].host,
           location: rows[0].location,
           detectedAt: detectedAt.toISOString(),
+          detectionType: classification.type,
+          confidence: classification.confidence,
         },
         dedupeKey: `motion:${deviceId}`,
         cooldownSeconds: 300,
       }).catch((err) => console.error('[ALERT MOTION]', err));
 
       const payload = JSON.stringify({
-        title: `Mouvement détecté — ${rows[0].name}`,
-        body: rows[0].location ? `Zone : ${rows[0].location}` : 'Un mouvement a été détecté.',
+        title: alertTitle,
+        body: rows[0].location ? `Zone : ${rows[0].location}` : classification.label,
         icon: '/pwa-192.png',
         data: { url: '/alerts' },
       });

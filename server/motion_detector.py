@@ -2,6 +2,8 @@ import cv2
 import requests
 import time
 import os
+import sys
+import json
 import threading
 
 # ── PARAMÈTRES GLOBAUX ──────────────────────────────────────────────────────
@@ -209,10 +211,42 @@ def get_cameras_from_db():
         return []
 
 
+def analyze_snapshot(rtsp_url: str, max_attempts: int = 10) -> dict:
+    """
+    Mode one-shot : ouvre le flux, prend la première frame utilisable,
+    exécute YOLO dessus et retourne un dict JSON.
+    Utilisé par cameraNodes.js quand un Pi node signale un mouvement.
+    """
+    cap = cv2.VideoCapture(rtsp_url)
+    result = {"type": "motion", "label": "Mouvement détecté", "confidence": 0.0}
+
+    for _ in range(max_attempts):
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.3)
+            continue
+        small = cv2.resize(frame, (640, 360))
+        type_en, label_fr, conf = classify_frame(small)
+        if type_en != "unknown" and label_fr:
+            result = {"type": type_en, "label": label_fr, "confidence": round(conf, 2)}
+        break
+
+    cap.release()
+    return result
+
+
 camera_id_env = os.getenv("CAMERA_ID", "").strip()
 rtsp_url_env  = os.getenv("RTSP_URL",  "").strip()
 
-if camera_id_env and rtsp_url_env:
+if "--analyze" in sys.argv:
+    # Mode snapshot one-shot — lancé par cameraNodes.js pour classifier un événement PIR
+    if not rtsp_url_env:
+        print(json.dumps({"error": "RTSP_URL manquant"}))
+        sys.exit(1)
+    output = analyze_snapshot(rtsp_url_env)
+    print(json.dumps(output))
+    sys.exit(0)
+elif camera_id_env and rtsp_url_env:
     # Mode caméra unique — lancé par le manager Node.js
     run_detector(camera_id_env, rtsp_url_env)
 else:
