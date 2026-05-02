@@ -210,6 +210,7 @@ export async function initDB() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_sound_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_disconnect_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS kiosk_pin VARCHAR(10) NOT NULL DEFAULT '1234';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS surveillance_mode BOOLEAN NOT NULL DEFAULT true;
     `);
 
     await client.query(
