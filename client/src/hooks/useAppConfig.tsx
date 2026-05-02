@@ -27,6 +27,7 @@ export interface AppConfig {
   defaultAdminUsername: string;
   defaultAdminActive: boolean;
   kioskPin: string;
+  surveillanceMode: boolean;
 }
 
 interface AppConfigContextType {
@@ -59,6 +60,7 @@ const DEFAULT_CONFIG: AppConfig = {
   defaultAdminUsername: 'root',
   defaultAdminActive: false,
   kioskPin: '1234',
+  surveillanceMode: true,
 };
 
 const AppConfigContext = createContext<AppConfigContextType | null>(null);
@@ -90,6 +92,7 @@ function sanitizeConfig(value: unknown): AppConfig {
     defaultAdminUsername: typeof candidate.defaultAdminUsername === 'string' && candidate.defaultAdminUsername.trim() ? candidate.defaultAdminUsername.trim() : DEFAULT_CONFIG.defaultAdminUsername,
     defaultAdminActive: Boolean(candidate.defaultAdminActive),
     kioskPin: typeof candidate.kioskPin === 'string' && candidate.kioskPin.trim().length === 4 ? candidate.kioskPin.trim() : DEFAULT_CONFIG.kioskPin,
+    surveillanceMode: typeof candidate.surveillanceMode === 'boolean' ? candidate.surveillanceMode : DEFAULT_CONFIG.surveillanceMode,
   };
 }
 

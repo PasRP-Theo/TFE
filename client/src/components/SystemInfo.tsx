@@ -175,8 +175,7 @@ export default function SystemInfo() {
   const [enteredPin, setEnteredPin] = useState("");
   const [pinError, setPinError] = useState("");
 
-  // On lit l'état réel depuis la configuration
-  const surveillanceActive = (config as { surveillanceMode?: boolean }).surveillanceMode ?? true;
+  const surveillanceActive = config.surveillanceMode;
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -280,22 +279,31 @@ export default function SystemInfo() {
 
       <div className="si-grid">
         <Card title="Mode Surveillance" icon="🛡️" accent={surveillanceActive ? 'var(--accent-green)' : 'var(--accent-red)'}>
-          <div style={{ textAlign: 'center', padding: '15px 0' }}>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: surveillanceActive ? 'var(--accent-green)' : 'var(--accent-red)', marginBottom: '20px' }}>
-              {surveillanceActive ? 'ARMÉ (ACTIF)' : 'DÉSARMÉ (INACTIF)'}
+          <div className="si-arm-body">
+            <div className="si-arm-status">
+              <div className={`si-arm-badge ${surveillanceActive ? 'si-arm-badge--active' : 'si-arm-badge--inactive'}`}>
+                <span className={`si-arm-dot ${surveillanceActive ? 'si-arm-dot--active' : 'si-arm-dot--inactive'}`} />
+                {surveillanceActive ? 'ARMÉ' : 'DÉSARMÉ'}
+              </div>
+              <span className="si-arm-cameras-label">
+                {surveillanceActive ? 'Caméras actives' : 'Caméras hors ligne'}
+              </span>
+            </div>
+            <div className="si-arm-desc">
+              {surveillanceActive
+                ? 'Toutes les caméras sont actives. La surveillance est opérationnelle.'
+                : 'Surveillance désactivée. Toutes les caméras ont été mises hors ligne.'}
             </div>
             {isAdmin ? (
-              <button 
-                className={surveillanceActive ? "sensor-delete-btn sensor-delete-btn--danger sensor-delete-btn--xl" : "sensor-confirm-btn sensor-confirm-btn--xl"} 
-                style={{ width: '100%', padding: '15px', fontSize: '16px', fontWeight: 'bold' }}
+              <button
+                type="button"
+                className={`si-arm-btn ${surveillanceActive ? 'si-arm-btn--disarm' : 'si-arm-btn--arm'}`}
                 onClick={handleArmClick}
               >
-                {surveillanceActive ? "DÉSACTIVER LES ALARMES" : "ARMER LE SYSTÈME"}
+                {surveillanceActive ? '⏹ DÉSACTIVER LA SURVEILLANCE' : '▶ ACTIVER LA SURVEILLANCE'}
               </button>
             ) : (
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '10px' }}>
-                Action réservée aux administrateurs
-              </div>
+              <div className="si-arm-admin-note">Action réservée aux administrateurs</div>
             )}
           </div>
         </Card>
@@ -410,18 +418,22 @@ export default function SystemInfo() {
       <div className="si-footer">{config.appName}{config.showSystemVersion ? ` · ${config.systemVersion}` : ''} — Propulsé par SENTYS Surveillance</div>
 
       {showPinPad && (
-        <div className="settings-modal-overlay" onClick={() => setShowPinPad(false)} style={{ zIndex: 9999 }}>
-          <div className="settings-modal-card" onClick={e => e.stopPropagation()} style={{ textAlign: 'center', width: '320px', fontFamily: 'monospace' }}>
-            <h3 style={{ marginTop: 0, color: 'var(--accent-blue)', letterSpacing: '2px' }}>AUTORISATION REQUISE</h3>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', margin: '20px 0' }}>
-              {[0, 1, 2, 3].map(i => <div key={i} style={{ width: '16px', height: '16px', borderRadius: '50%', background: enteredPin.length > i ? 'var(--accent-blue)' : 'transparent', border: '2px solid var(--accent-blue)', transition: 'all 0.2s' }} />)}
+        <div className="si-pin-overlay" onClick={() => setShowPinPad(false)}>
+          <div className="si-pin-card" onClick={e => e.stopPropagation()}>
+            <h3 className="si-pin-title">AUTORISATION REQUISE</h3>
+            <div className="si-pin-dots">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className={`si-pin-dot ${enteredPin.length > i ? 'si-pin-dot--filled' : ''}`} />
+              ))}
             </div>
-            {pinError && <div style={{ color: 'var(--accent-red)', marginBottom: '15px', fontSize: '12px', fontWeight: 'bold' }}>{pinError}</div>}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => <button key={num} onClick={() => handlePinPress(num.toString())} style={{ background: 'var(--accent-blue-bg)', border: '1px solid var(--accent-blue-border)', color: 'var(--text-primary)', fontSize: '20px', padding: '15px 0', borderRadius: '6px', cursor: 'pointer' }}>{num}</button>)}
-              <button onClick={() => { setEnteredPin(""); setPinError(""); }} style={{ background: 'var(--accent-red-bg)', border: '1px solid var(--accent-red-border)', color: 'var(--accent-red)', fontSize: '18px', borderRadius: '6px', cursor: 'pointer' }}>C</button>
-              <button onClick={() => handlePinPress('0')} style={{ background: 'var(--accent-blue-bg)', border: '1px solid var(--accent-blue-border)', color: 'var(--text-primary)', fontSize: '20px', padding: '15px 0', borderRadius: '6px', cursor: 'pointer' }}>0</button>
-              <button onClick={() => setEnteredPin(p => p.slice(0, -1))} style={{ background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', color: 'var(--accent-amber)', fontSize: '18px', borderRadius: '6px', cursor: 'pointer' }}>⌫</button>
+            {pinError && <div className="si-pin-error">{pinError}</div>}
+            <div className="si-pin-grid">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                <button type="button" key={num} className="si-pin-key si-pin-key--blue" onClick={() => handlePinPress(num.toString())}>{num}</button>
+              ))}
+              <button type="button" className="si-pin-key si-pin-key--red" onClick={() => { setEnteredPin(""); setPinError(""); }}>C</button>
+              <button type="button" className="si-pin-key si-pin-key--blue" onClick={() => handlePinPress('0')}>0</button>
+              <button type="button" className="si-pin-key si-pin-key--amber" onClick={() => setEnteredPin(p => p.slice(0, -1))}>⌫</button>
             </div>
           </div>
         </div>

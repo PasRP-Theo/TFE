@@ -55,13 +55,17 @@ function getSystemStatus(
   isServerReachable: boolean,
   criticalAlertsCount: number,
   cameraStatus: CameraStatusSummary,
-  batteryInfo: { charging: boolean; level: number } | null
+  batteryInfo: { charging: boolean; level: number } | null,
+  surveillanceMode: boolean
 ): { color: string; text: string } {
   if (!isOnline) {
     return { color: 'var(--accent-amber)', text: 'RÉSEAU INSTABLE' };
   }
   if (!isServerReachable) {
     return { color: 'var(--accent-red)', text: 'PANNE SERVEUR' };
+  }
+  if (!surveillanceMode) {
+    return { color: 'var(--accent-red)', text: 'SYSTÈME DÉSARMÉ' };
   }
   if (cameraStatus.stoppedCount > 0) {
     const text = cameraStatus.stoppedCount > 1
@@ -278,7 +282,7 @@ function getSystemStatus(
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
-  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, isServerReachable, criticalAlertsCount, cameraStatus, batteryInfo);
+  const { color: systemLedColor, text: systemLedText } = getSystemStatus(isOnline, isServerReachable, criticalAlertsCount, cameraStatus, batteryInfo, config.surveillanceMode);
 
   return (
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
