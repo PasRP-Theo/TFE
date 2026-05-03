@@ -4,7 +4,7 @@ import { startCamera, getState, triggerMotionRecording } from '../camera/manager
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, renameSync } from 'fs';
+import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
@@ -359,6 +359,10 @@ router.post('/:deviceId/connect', async (req, res) => {
 router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || !req.file) return res.status(400).json({ error: 'deviceId et fichier requis' });
+  if (req.file.size < 50 * 1024) {
+    try { unlinkSync(req.file.path); } catch { /* ignore */ }
+    return res.status(400).json({ error: 'Fichier trop petit — clip invalide' });
+  }
 
   const detectedAtInput = String(req.body.detectedAt || '').trim();
   let detectedAt = new Date();

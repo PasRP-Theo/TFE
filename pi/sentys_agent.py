@@ -113,8 +113,23 @@ def record_clip():
     return out
 
 
+MIN_CLIP_SIZE = 50 * 1024   # 50 Ko — en dessous = clip invalide/vide
+
 def upload_pending():
     files = sorted(RECORD_DIR.glob("*.mp4"))
+    if not files:
+        return
+    # Supprimer les fichiers vides ou trop petits avant upload
+    valid = []
+    for f in files:
+        size = f.stat().st_size
+        if size < MIN_CLIP_SIZE:
+            print(f"[SYNC] ⚠ {f.name} trop petit ({size} octets) — supprimé")
+            try: f.unlink()
+            except: pass
+        else:
+            valid.append(f)
+    files = valid
     if not files:
         return
     print(f"[SYNC] {len(files)} fichier(s) à envoyer")
