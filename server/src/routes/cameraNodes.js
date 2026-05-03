@@ -4,11 +4,12 @@ import { startCamera, getState, triggerMotionRecording } from '../camera/manager
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, renameSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import multer from 'multer';
+import { RECORDINGS_DIR } from '../camera/manager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT_CN = path.resolve(__dirname, '..', '..', '..');
@@ -371,10 +372,24 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
     const node = nodeRows[0];
     if (!node) return res.status(404).json({ error: 'Noeud introuvable' });
 
+    // Déplacer le fichier dans le dossier de la caméra associée si elle existe
+    let finalFilename = req.file.filename;
+    const { rows: camRows } = await pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [node.stream_url]);
+    if (camRows[0]) {
+      const cameraId = camRows[0].id;
+      const camDir = path.join(RECORDINGS_DIR, String(cameraId));
+      mkdirSync(camDir, { recursive: true });
+      const newPath = path.join(camDir, req.file.filename);
+      try {
+        renameSync(req.file.path, newPath);
+        finalFilename = req.file.filename;
+      } catch { /* garde le fichier dans offline si échec */ }
+    }
+
     await pool.query(
       `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
        VALUES ($1, true, $2, true, $3)`,
-      [deviceId, detectedAt.toISOString(), req.file.filename]
+      [deviceId, detectedAt.toISOString(), finalFilename]
     );
 
     await createAlert({
