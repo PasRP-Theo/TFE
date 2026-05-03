@@ -77,6 +77,14 @@ jobs:
         working-directory: ${{ vars.DEPLOY_PATH }}/server
         run: npm ci --omit=dev
 
+      - name: Setup Python venv & AI dependencies
+        run: |
+          if [ ! -f "$DEPLOY_PATH/venv/bin/python" ]; then
+            python3 -m venv "$DEPLOY_PATH/venv"
+          fi
+          "$DEPLOY_PATH/venv/bin/pip" install --quiet --upgrade pip
+          "$DEPLOY_PATH/venv/bin/pip" install --quiet ultralytics opencv-python psycopg2-binary requests
+
       - name: Restart
         working-directory: ${{ vars.DEPLOY_PATH }}/server
         run: |
