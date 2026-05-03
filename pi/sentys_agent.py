@@ -133,7 +133,8 @@ def upload_pending():
                 )
             if r.status_code in (200, 201):
                 print(f"[SYNC] ✅ {f.name}")
-                f.unlink()
+                try: f.unlink()
+                except: pass
             else:
                 print(f"[SYNC] ❌ {f.name} — HTTP {r.status_code}")
                 break

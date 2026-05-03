@@ -313,7 +313,7 @@ router.get('/:deviceId/motion-history', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, device_id, motion, detected_at, created_at
+      `SELECT id, device_id, motion, detected_at, created_at, offline_recording, recording_path
        FROM camera_node_motion_events
        WHERE device_id = $1
        ORDER BY detected_at DESC
