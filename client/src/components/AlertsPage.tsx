@@ -485,7 +485,6 @@ export default function AlertsPage() {
                   </div>
                   <div className="alerts-item-meta">
                     <span>{new Date(entry.created_at).toLocaleString('fr-FR')}</span>
-                    <span>{entry.alert_type}</span>
                     {entry.source_id && <span>{entry.source_id}</span>}
                   </div>
                 </div>
