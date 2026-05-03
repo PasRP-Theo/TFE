@@ -229,7 +229,7 @@ def analyze_snapshot(rtsp_url: str, max_attempts: int = 10) -> dict:
         type_en, label_fr, conf = classify_frame(small)
         if type_en != "unknown" and label_fr:
             result = {"type": type_en, "label": label_fr, "confidence": round(conf, 2)}
-        break
+            break
 
     cap.release()
     return result
