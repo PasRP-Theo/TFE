@@ -289,6 +289,13 @@ async function start() {
   await pool.query("ALTER TABLE audit_logs ALTER COLUMN details TYPE TEXT USING details::text").catch(() => {});
 
 
+  // device_id → timestamp de la première suspicion de déconnexion
+  const suspectedOfflineNodes = new Map();
+  // camera id (string) → timestamp de la première suspicion
+  const suspectedOfflineCameras = new Map();
+  // Délai de confirmation avant alerte critique (ms)
+  const OFFLINE_CONFIRM_DELAY_MS = 60_000; // 60s de silence supplémentaires après suspicion
+
   const runOfflineAlertsCheck = async () => {
     try {
       const [cameraResult, nodeResult] = await Promise.all([
@@ -297,49 +304,80 @@ async function start() {
       ]);
       const states = getAllStates();
 
+      // ── Caméras ────────────────────────────────────────────────────────
+      const activeCameraIds = new Set(cameraResult.rows.map(c => String(c.id)));
+      for (const id of suspectedOfflineCameras.keys()) {
+        if (!activeCameraIds.has(id)) suspectedOfflineCameras.delete(id);
+      }
+
       await Promise.all(cameraResult.rows.map(async (camera) => {
-        const state = states[String(camera.id)] || { status: 'stopped' };
-        // N'alerte que si la caméra tente de se reconnecter (panne réelle, pas arrêt manuel)
-        if (state.status !== 'reconnecting') return;
+        const id    = String(camera.id);
+        const state = states[id] || { status: 'stopped' };
+        if (state.status !== 'reconnecting') {
+          suspectedOfflineCameras.delete(id);
+          return;
+        }
+        const suspectedAt = suspectedOfflineCameras.get(id);
+        if (!suspectedAt) {
+          suspectedOfflineCameras.set(id, Date.now());
+          console.log(`[OFFLINE] Caméra ${id} (${camera.name}) suspecte hors ligne — vérification dans ${OFFLINE_CONFIRM_DELAY_MS / 1000}s`);
+          return;
+        }
+        if (Date.now() - suspectedAt < OFFLINE_CONFIRM_DELAY_MS) return;
+
         await createAlert({
           sourceType: 'camera',
-          sourceId: String(camera.id),
+          sourceId: id,
           cameraId: camera.id,
           alertType: 'camera_offline',
           level: 'critical',
-          title: `Camera hors ligne - ${camera.name}`,
-          message: `La camera ${camera.name} n'est actuellement pas en cours d'execution (${state.status}).`,
-          metadata: {
-            cameraId: camera.id,
-            location: camera.location,
-            status: state.status,
-          },
-          dedupeKey: `camera-offline:${camera.id}`,
+          title: `CAM ${id} — ${camera.name} hors ligne`,
+          message: `La caméra ${camera.name} (CAM ${id}) est hors ligne depuis plus de ${Math.round((Date.now() - suspectedAt) / 1000)}s.`,
+          metadata: { cameraId: camera.id, location: camera.location, status: state.status },
+          dedupeKey: `camera-offline:${id}`,
           cooldownSeconds: 1800,
         });
-      io.emit("new_alert", { level: "critical", title: `Caméra hors ligne - ${camera.name}` });
+        io.emit("new_alert", { level: "critical", title: `CAM ${id} — ${camera.name} hors ligne` });
       }));
+
+      // ── Noeuds Pi ─────────────────────────────────────────────────────
+      const activeNodeIds = new Set(nodeResult.rows.map(n => n.device_id));
+      for (const id of suspectedOfflineNodes.keys()) {
+        if (!activeNodeIds.has(id)) suspectedOfflineNodes.delete(id);
+      }
 
       await Promise.all(nodeResult.rows.map(async (node) => {
         const lastSeen = node.last_seen_at ? new Date(node.last_seen_at).getTime() : 0;
-        if (!lastSeen || Date.now() - lastSeen <= 90_000) return;
+        const silentMs = lastSeen ? Date.now() - lastSeen : Infinity;
+
+        if (silentMs <= 90_000) {
+          if (suspectedOfflineNodes.has(node.device_id)) {
+            console.log(`[OFFLINE] Noeud ${node.device_id} (${node.name}) de retour — suspicion annulée`);
+            suspectedOfflineNodes.delete(node.device_id);
+          }
+          return;
+        }
+
+        const suspectedAt = suspectedOfflineNodes.get(node.device_id);
+        if (!suspectedAt) {
+          suspectedOfflineNodes.set(node.device_id, Date.now());
+          console.log(`[OFFLINE] Noeud ${node.device_id} (${node.name}) suspect hors ligne — vérification dans ${OFFLINE_CONFIRM_DELAY_MS / 1000}s`);
+          return;
+        }
+        if (Date.now() - suspectedAt < OFFLINE_CONFIRM_DELAY_MS) return;
+
         await createAlert({
           sourceType: 'camera-node',
           sourceId: node.device_id,
           alertType: 'node_offline',
           level: 'critical',
           title: `Noeud hors ligne - ${node.name}`,
-          message: `Le noeud camera ${node.name} n'a pas donne de nouvelles depuis plus de 90 secondes.`,
-          metadata: {
-            deviceId: node.device_id,
-            host: node.host,
-            location: node.location,
-            lastSeenAt: node.last_seen_at,
-          },
+          message: `Le noeud ${node.name} n'a pas donné de nouvelles depuis ${Math.round(silentMs / 1000)}s (dernière vue : ${new Date(lastSeen).toLocaleString('fr-FR')}).`,
+          metadata: { deviceId: node.device_id, host: node.host, location: node.location, lastSeenAt: node.last_seen_at },
           dedupeKey: `node-offline:${node.device_id}`,
           cooldownSeconds: 1800,
         });
-      io.emit("new_alert", { level: "critical", title: `Nœud hors ligne - ${node.name}` });
+        io.emit("new_alert", { level: "critical", title: `Nœud hors ligne - ${node.name}` });
       }));
     } catch (error) {
       console.error('[ALERT OFFLINE MONITOR]', error);
