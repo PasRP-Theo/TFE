@@ -108,21 +108,23 @@ function getHistoryGroupLabel(value: string) {
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  
-  // Extraction du chemin pur pour ignorer l'IP locale potentiellement sauvegardée en base
+
   let pathOnly = hlsUrl;
   try {
     if (hlsUrl && hlsUrl.startsWith('http')) {
       pathOnly = new URL(hlsUrl).pathname;
     }
   } catch {
-    // Ignorer l'erreur si l'URL est mal formatée
+    // ignore
   }
   const fullUrl = apiUrl(`${pathOnly}?v=${encodeURIComponent(streamKey)}`);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [stalled, setStalled] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const lastTimeRef = useRef<number>(-1);
+  const stalledTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -196,24 +198,46 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
     void loadStream();
 
+    // Détection de gel : si currentTime n'avance plus depuis 5s → caméra non alimentée
+    stalledTimerRef.current = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.paused || video.ended) return;
+      if (video.currentTime === lastTimeRef.current && video.currentTime > 0) {
+        setStalled(true);
+      } else {
+        setStalled(false);
+        lastTimeRef.current = video.currentTime;
+      }
+    }, 5000);
+
     return () => {
       disposed = true;
       if (retryTimer) clearTimeout(retryTimer);
+      if (stalledTimerRef.current) clearInterval(stalledTimerRef.current);
       if (hls) hls.destroy();
     };
   }, [fullUrl, retryCount]);
 
+  function retry() {
+    setStalled(false);
+    setError(false);
+    lastTimeRef.current = -1;
+    setRetryCount(c => c + 1);
+  }
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
-      {loading && !error && (
+      {loading && !error && !stalled && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', color: '#fff', zIndex: 10, fontSize: '14px' }}>
           <span className="cam-rec-dot-anim" style={{ marginRight: '10px', backgroundColor: '#fff' }} /> Connexion au flux...
         </div>
       )}
-      {error && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', color: '#fff', zIndex: 10, fontSize: '14px' }}>
-          <div style={{ marginBottom: '12px' }}>Flux indisponible</div>
-          <button type="button" className="ui-confirm-btn" onClick={() => setRetryCount(c => c + 1)}>
+      {(error || stalled) && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', color: '#fff', zIndex: 10, fontSize: '14px', gap: '10px' }}>
+          <div style={{ fontSize: '28px', opacity: 0.6 }}>⊘</div>
+          <div style={{ fontWeight: 600 }}>{stalled ? 'Caméra non alimentée' : 'Flux indisponible'}</div>
+          <div style={{ opacity: 0.5, fontSize: '12px' }}>{stalled ? 'Signal perdu — vérifiez l\'alimentation' : 'Le flux ne répond plus'}</div>
+          <button type="button" className="ui-confirm-btn" onClick={retry}>
             Réessayer
           </button>
         </div>

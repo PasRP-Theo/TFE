@@ -6,10 +6,6 @@ import { apiUrl, readJsonResponse } from '../lib/api';
 import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 import { subscribeUserToPush, unsubscribeUserFromPush, isPushSubscribed } from "./push";
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-}
 
 function SettingsDropdown({
   value,
@@ -1068,97 +1064,46 @@ function TabAudit() {
 }
 
 function TabHelp() {
-  const [showInstallHint, setShowInstallHint] = useState(false);
-
-  const handleInstallClick = async () => {
-    const promptEvent = (window as { deferredInstallPrompt?: BeforeInstallPromptEvent }).deferredInstallPrompt;
-    if (promptEvent) {
-      await promptEvent.prompt();
-      await promptEvent.userChoice;
-      (window as { deferredInstallPrompt?: BeforeInstallPromptEvent | null }).deferredInstallPrompt = null;
-    } else {
-      setShowInstallHint(true);
-    }
-  };
-
   return (
     <div>
       <div className="settings-section">
-        <div className="settings-section-label">INSTALLATION DE L'APPLICATION</div>
-        <div className="settings-danger-zone-text" style={{ marginBottom: '16px' }}>
-          Installez SENTYS sur votre appareil pour y accéder rapidement comme une application native.
-        </div>
-        <button type="button" className="ui-confirm-btn" onClick={handleInstallClick}>
-          Installer l'application
-        </button>
-      </div>
-      <div className="settings-section">
-        <div className="settings-section-label">ACCÈS EXTERNE & VPN (TAILSCALE)</div>
-        <div className="settings-danger-zone-text" style={{ marginBottom: '16px' }}>
-          Ce système est conçu pour fonctionner localement. Pour y accéder depuis l'extérieur (4G/5G, autre réseau WiFi) en toute sécurité, il ne faut <strong>pas</strong> ouvrir les ports de votre routeur.
-        </div>
-        <div className="ui-add-form settings-add-form" style={{ display: 'block', padding: '16px', background: 'var(--bg-glass)', borderRadius: '8px' }}>
-          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>1. Installation de Tailscale</h4>
-          <p style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.4' }}>
-            Tailscale crée un réseau privé virtuel (VPN) "mesh" (Peer-to-Peer) basé sur WireGuard. Installez Tailscale sur l'appareil hôte (Raspberry Pi / Serveur) et sur vos appareils clients (Smartphone, PC portable).
-          </p>
-          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>2. Configuration</h4>
-          <ul style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px' }}>
-            <li style={{ marginBottom: '6px' }}>Connectez tous vos appareils au même compte Tailscale (Tailnet).</li>
-            <li style={{ marginBottom: '6px' }}>Assurez-vous que l'appareil client est connecté au VPN Tailscale.</li>
-            <li style={{ marginBottom: '6px' }}>
-              <strong>Lien d'accès direct (MagicDNS) : </strong>
-              <a href="https://sentys.tail83d439.ts.net/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)', textDecoration: 'underline', fontWeight: 'bold' }}>https://sentys.tail83d439.ts.net/</a>
-            </li>
-          </ul>
-          <h4 style={{ margin: '0 0 8px 0', color: 'var(--accent-blue)' }}>3. Avantages (Architecture SENTYS)</h4>
-          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4' }}>
-            Le flux vidéo des caméras locales (Pi ou ESP32) reste strictement sur votre réseau. En vous connectant via Tailscale, le serveur SENTYS proxifie les flux (HLS) en toute sécurité vers votre téléphone sans passer par le Cloud d'un constructeur.
-          </p>
-        </div>
-      </div>
-      <div className="settings-section">
-        <div className="settings-section-label">CAMÉRAS AUTONOMES (RASPBERRY PI)</div>
-        <ul style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.4', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
-          <li style={{ marginBottom: '8px' }}><strong>Scan Réseau :</strong> Utilisez l'onglet Caméras puis "Ajouter {'->'} Scan Réseau" pour détecter automatiquement les Raspberry Pi Zero (port 8889).</li>
-          <li style={{ marginBottom: '8px' }}><strong>Raspberry Pi Node :</strong> Le Pi doit exécuter les scripts <code>announce_node.py</code> et <code>pir_sender.py</code>. Il apparaîtra automatiquement dans la section "Nœud Pi".</li>
-          <li style={{ marginBottom: '8px' }}><strong>Résilience (Coupure WiFi) :</strong> Si prévu dans le firmware, les nœuds autonomes sauvegardent sur leur carte MicroSD locale et synchroniseront les fichiers au retour du réseau.</li>
-        </ul>
-      </div>
-      
-      <div className="settings-section">
-        <div className="settings-section-label">À PROPOS & CRÉDITS</div>
-        <div className="settings-danger-zone-text" style={{ marginBottom: '16px', lineHeight: '1.6' }}>
-          <strong>SENTYS Surveillance</strong> est un système de monitoring et de vidéosurveillance auto-hébergé, développé dans le cadre d'un Travail de Fin d'Études.<br /><br />
+        <div className="settings-section-label">À PROPOS</div>
+        <div className="settings-danger-zone-text" style={{ marginBottom: '16px', lineHeight: '1.8' }}>
+          <strong>SENTYS Surveillance</strong> est un système de vidéosurveillance auto-hébergé, développé dans le cadre d'un Travail de Fin d'Études.<br /><br />
           <span style={{ color: 'var(--text-secondary)' }}>
-            © {new Date().getFullYear()} SENTYS Project<br />
-            Architecture : React, Node.js, FFmpeg, SQLite, HLS.js<br />
-            Matériel : Nœuds Raspberry Pi autonomes
+            © {new Date().getFullYear()} SENTYS — Théo Mertens<br />
+            Frontend : React + TypeScript, Vite, HLS.js, Socket.IO<br />
+            Backend : Node.js, Express, PostgreSQL, FFmpeg<br />
+            IA : YOLOv8n (ultralytics), OpenCV<br />
+            Matériel : Raspberry Pi Zero 2W, MediaMTX
           </span>
         </div>
       </div>
 
-      {showInstallHint && (
-        <div className="settings-modal-overlay" onClick={() => setShowInstallHint(false)}>
-          <div className="settings-modal-card" onClick={e => e.stopPropagation()} style={{ width: '360px' }}>
-            <div className="settings-modal-title">INSTALLATION MANUELLE</div>
-            <div className="settings-modal-warning" style={{ marginTop: '0', paddingTop: '0', borderTop: 'none', color: 'var(--text-secondary)' }}>
-              Ton navigateur bloque le pop-up automatique (souvent car tu n'es pas en HTTPS ou que tu es sur iOS).
-            </div>
-            <div style={{ background: 'var(--bg-hover)', padding: '15px', borderRadius: '12px', marginBottom: '20px', fontSize: '13px', lineHeight: '1.6' }}>
-              <strong style={{ color: 'var(--accent-blue)' }}>🍎 Sur iPhone / iPad (Safari) :</strong><br/>
-              1. Appuie sur le bouton <strong>Partager</strong> ⍐ en bas.<br/>
-              2. Choisis <strong>Sur l'écran d'accueil</strong> ➕<br/><br/>
-              <strong style={{ color: 'var(--accent-green)' }}>🤖 Sur Android (Chrome) :</strong><br/>
-              1. Ouvre le menu (3 petits points) ⠇ en haut.<br/>
-              2. Choisis <strong>Ajouter à l'écran d'accueil</strong> 📱
-            </div>
-            <div className="settings-modal-actions">
-              <button className="ui-confirm-btn" style={{ width: '100%' }} onClick={() => setShowInstallHint(false)}>J'ai compris</button>
-            </div>
-          </div>
+      <div className="settings-section">
+        <div className="settings-section-label">RGPD — DONNÉES COLLECTÉES</div>
+        <div className="settings-danger-zone-text" style={{ lineHeight: '1.7' }}>
+          <p style={{ marginTop: 0 }}>
+            SENTYS est un système <strong>entièrement auto-hébergé</strong>. Aucune donnée n'est transmise à un serveur externe ou à un cloud tiers.
+          </p>
+          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>DONNÉES STOCKÉES LOCALEMENT :</p>
+          <ul style={{ margin: '0 0 16px 0', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
+            <li style={{ marginBottom: '6px' }}><strong>Comptes utilisateurs</strong> — nom d'utilisateur et mot de passe (hashé bcrypt), rôle</li>
+            <li style={{ marginBottom: '6px' }}><strong>Flux vidéo</strong> — segments HLS temporaires, supprimés en continu</li>
+            <li style={{ marginBottom: '6px' }}><strong>Enregistrements vidéo</strong> — clips MP4 déclenchés par détection de mouvement, conservés {30} jours puis supprimés automatiquement</li>
+            <li style={{ marginBottom: '6px' }}><strong>Alertes & événements</strong> — horodatage, type de détection (humain, animal, véhicule), niveau de confiance IA</li>
+            <li style={{ marginBottom: '6px' }}><strong>Journal d'audit</strong> — actions administratives (connexion, modification config), adresse IP locale, horodatage</li>
+            <li style={{ marginBottom: '6px' }}><strong>Noeuds caméras</strong> — adresse IP locale, nom et identifiant de l'appareil (Raspberry Pi)</li>
+            <li style={{ marginBottom: '6px' }}><strong>Abonnements notifications push</strong> — endpoint du navigateur pour les alertes (stocké localement, révocable)</li>
+          </ul>
+          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>CE QUI N'EST PAS COLLECTÉ :</p>
+          <ul style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
+            <li style={{ marginBottom: '6px' }}>Aucune donnée biométrique (pas de reconnaissance faciale)</li>
+            <li style={{ marginBottom: '6px' }}>Aucune transmission vers Internet ou service cloud</li>
+            <li style={{ marginBottom: '6px' }}>Aucun cookie de tracking ou analytique</li>
+          </ul>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -1270,7 +1215,7 @@ export default function Settings() {
         <button className={`ui-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
         <button className={`ui-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
         <button className={`ui-tab-btn ${tab === "archives" ? "active" : ""}`} onClick={() => setTab("archives")}>ARCHIVES</button>
-        <button className={`ui-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>AIDE & À PROPOS</button>
+        <button className={`ui-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>À PROPOS</button>
       </div>
 
       {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
