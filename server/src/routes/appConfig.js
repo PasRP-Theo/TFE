@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../config/auth.js';
 import { stopAllCameras, startCamera } from '../camera/manager.js';
 
 const router = Router();
@@ -68,10 +70,21 @@ function readInteger(value) {
   return Number.isInteger(value) ? value : undefined;
 }
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     const row = await getConfigRow();
-    res.json(serializeConfig(row));
+    const config = serializeConfig(row);
+    // Ne pas exposer le PIN kiosque aux utilisateurs non authentifiés
+    let isAdmin = false;
+    try {
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        const decoded = jwt.verify(header.slice(7), JWT_SECRET);
+        isAdmin = decoded?.role === 'admin';
+      }
+    } catch { /* non authentifié */ }
+    if (!isAdmin) delete config.kioskPin;
+    res.json(config);
   } catch (err) {
     console.error('[APP CONFIG GET]', err);
     res.status(500).json({ error: 'Erreur serveur' });

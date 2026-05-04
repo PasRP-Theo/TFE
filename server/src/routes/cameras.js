@@ -4,7 +4,7 @@ import { networkInterfaces } from 'os';
 import { Socket } from 'net';
 import { existsSync, promises as fs, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import { pool } from '../db/index.js';
 import {
   startCamera, pauseCamera, resumeCamera,
@@ -631,9 +631,12 @@ router.post('/:id/upload-offline', async (req, res) => {
     res.json({ message: 'Fichier hors-ligne reçu avec succès', filename });
 
     // Détection de mouvements a posteriori via ffmpeg (analyse du fichier sauvegardé)
-    exec(`ffmpeg -i ${filePath} -vf "select='gt(scene,0.05)'" -f null - 2>&1`, async (error, stdout, stderr) => {
-      const output = stdout + stderr;
-      // Si ffmpeg trouve un changement de scène notable, on génère une alerte
+    const ffmpegProc = spawn('ffmpeg', ['-i', filePath, '-vf', "select='gt(scene,0.05)'", '-f', 'null', '-']);
+    let ffmpegOut = '';
+    ffmpegProc.stdout.on('data', d => { ffmpegOut += d.toString(); });
+    ffmpegProc.stderr.on('data', d => { ffmpegOut += d.toString(); });
+    ffmpegProc.on('close', async () => {
+      const output = ffmpegOut;
       if (output.includes('Parsed_select') || output.includes('scene:')) {
         console.log(`[OFFLINE SYNC] Mouvement détecté a posteriori dans ${filename}`);
         try {

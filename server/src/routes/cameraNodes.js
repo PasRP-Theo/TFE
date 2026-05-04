@@ -22,7 +22,17 @@ const offlineStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, OFFLINE_RECORDINGS_DIR),
   filename: (_req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`),
 });
-const uploadOffline = multer({ storage: offlineStorage, limits: { fileSize: 500 * 1024 * 1024 } });
+const uploadOffline = multer({
+  storage: offlineStorage,
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (['video/mp4', 'video/quicktime', 'application/octet-stream'].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Seuls les fichiers MP4 sont acceptés'));
+    }
+  },
+});
 
 function classifyNodeMotion(rtspUrl) {
   return new Promise((resolve) => {

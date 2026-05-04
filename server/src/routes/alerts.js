@@ -16,7 +16,7 @@ router.get('/', requireAuth, async (req, res) => {
   const level = String(req.query.level || '').trim().toLowerCase();
   const status = String(req.query.status || '').trim().toLowerCase();
   const type = String(req.query.type || '').trim().toLowerCase();
-  const search = String(req.query.search || '').trim();
+  const search = String(req.query.search || '').trim().slice(0, 100);
   const offset = (page - 1) * pageSize;
 
   const conditions = [];

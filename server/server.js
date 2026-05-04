@@ -232,6 +232,17 @@ app.get("/api/audit-logs", async (req, res) => {
 
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
+// Sert le script Pi pour auto-update
+app.get("/api/agent/sentys_agent.py", (_, res) => {
+  const agentPath = path.join(__dirname, "../pi/sentys_agent.py");
+  if (existsSync(agentPath)) {
+    res.setHeader("Content-Type", "text/x-python");
+    res.sendFile(agentPath);
+  } else {
+    res.status(404).send("Agent introuvable");
+  }
+});
+
 // ── Frontend React (build) ────────────────────────────────
 const distPath = path.join(__dirname, "../client/dist");
 app.use(express.static(distPath));
