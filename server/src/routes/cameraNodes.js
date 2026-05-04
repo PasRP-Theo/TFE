@@ -262,33 +262,50 @@ router.post('/motion', async (req, res) => {
     if (motion) {
       const node = rows[0];
       setImmediate(async () => {
+        // Résoudre la caméra DB associée à ce nœud (via stream_url)
+        let linkedCamera = null;
+        try {
+          const { rows: camRows } = await pool.query(
+            'SELECT id, name FROM cameras WHERE rtsp_url = $1 LIMIT 1',
+            [node.stream_url]
+          );
+          linkedCamera = camRows[0] || null;
+        } catch { /* fallback sans caméra liée */ }
+
+        const camId    = linkedCamera ? String(linkedCamera.id) : null;
+        const camLabel = linkedCamera ? `CAM ${linkedCamera.id} — ${linkedCamera.name}` : node.name;
+        const dedupeId = camId ? `cam:${camId}` : `node:${deviceId}`;
+
         let classification = { type: 'motion', label: 'Mouvement détecté', confidence: 0 };
         try {
           classification = await classifyNodeMotion(node.stream_url);
         } catch { /* fallback */ }
 
         const confSuffix = classification.confidence > 0 ? ` (${Math.round(classification.confidence * 100)}%)` : '';
-        const alertTitle   = `${classification.label}${confSuffix} — ${node.name}`;
+        const alertTitle   = `${classification.label}${confSuffix} — ${camLabel}`;
         const alertMessage = node.location
           ? `${classification.label} sur le flux de la caméra (Hôte: ${node.host}). Zone : ${node.location}.`
           : `${classification.label} sur le flux de la caméra (Hôte: ${node.host}).`;
 
         await createAlert({
           sourceType: 'camera-node',
-          sourceId: deviceId,
+          sourceId: camId || deviceId,
+          cameraId: camId ? Number(camId) : null,
           alertType: 'motion_detected',
           level: classification.type === 'person' ? 'critical' : 'warning',
           title: alertTitle,
           message: alertMessage,
           metadata: {
             deviceId,
+            cameraId: camId,
+            cameraName: linkedCamera?.name || null,
             host: node.host,
             location: node.location,
             detectedAt: detectedAt.toISOString(),
             detectionType: classification.type,
             confidence: classification.confidence,
           },
-          dedupeKey: `motion:${deviceId}`,
+          dedupeKey: `motion:${dedupeId}`,
           cooldownSeconds: 300,
         }).catch((err) => console.error('[ALERT MOTION]', err));
 
@@ -388,9 +405,10 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
 
     // Déplacer le fichier dans le dossier de la caméra associée si elle existe
     let finalFilename = req.file.filename;
-    const { rows: camRows } = await pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [node.stream_url]);
-    if (camRows[0]) {
-      const cameraId = camRows[0].id;
+    const { rows: camRows } = await pool.query('SELECT id, name FROM cameras WHERE rtsp_url = $1 LIMIT 1', [node.stream_url]);
+    const linkedCam = camRows[0] || null;
+    if (linkedCam) {
+      const cameraId = linkedCam.id;
       const camDir = path.join(RECORDINGS_DIR, String(cameraId));
       mkdirSync(camDir, { recursive: true });
       const newPath = path.join(camDir, req.file.filename);
@@ -400,6 +418,9 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
       } catch { /* garde le fichier dans offline si échec */ }
     }
 
+    const offlineCamId    = linkedCam ? String(linkedCam.id) : null;
+    const offlineCamLabel = linkedCam ? `CAM ${linkedCam.id} — ${linkedCam.name}` : node.name;
+
     await pool.query(
       `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
        VALUES ($1, true, $2, true, $3)`,
@@ -408,21 +429,24 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
 
     await createAlert({
       sourceType: 'camera-node',
-      sourceId: deviceId,
+      sourceId: offlineCamId || deviceId,
+      cameraId: linkedCam ? Number(linkedCam.id) : null,
       alertType: 'offline_recording',
       level: 'warning',
-      title: `Enregistrement hors ligne — ${node.name}`,
+      title: `Enregistrement hors ligne — ${offlineCamLabel}`,
       message: node.location
         ? `Enregistrement local effectué pendant une déconnexion. Zone : ${node.location}. (${detectedAt.toLocaleString('fr-FR')})`
         : `Enregistrement local effectué pendant une déconnexion (${detectedAt.toLocaleString('fr-FR')}).`,
       metadata: {
         deviceId,
+        cameraId: offlineCamId,
+        cameraName: linkedCam?.name || null,
         host: node.host,
         location: node.location,
         detectedAt: detectedAt.toISOString(),
         recordingFile: req.file.filename,
       },
-      dedupeKey: `offline:${deviceId}:${detectedAt.toISOString()}`,
+      dedupeKey: `offline:${offlineCamId || deviceId}:${detectedAt.toISOString()}`,
       cooldownSeconds: 0,
     }).catch(err => console.error('[ALERT OFFLINE RECORDING]', err));
 
