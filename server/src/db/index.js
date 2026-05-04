@@ -8,7 +8,7 @@ export const pool = new Pool({
   database: process.env.DB_NAME     || 'sentys',
   //database: process.env.DB_NAME     || 'aubepines',
   user:     process.env.DB_USER     || 'postgres',
-  password: String(process.env.DB_PASSWORD || 'admin'),
+  password: String(process.env.DB_PASSWORD ?? 'admin'),
 });
 
 pool.on('error', err => console.error('❌ PostgreSQL:', err.message));

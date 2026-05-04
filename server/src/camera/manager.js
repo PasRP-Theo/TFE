@@ -419,6 +419,10 @@ export async function startCamera(camera) {
   // Nettoie l'ancien processus IA si on est en reconnexion
   if (cur?.aiProc) {
     cur.aiProc.kill('SIGKILL');
+    await new Promise(resolve => {
+      const t = setTimeout(resolve, 2000);
+      cur.aiProc.once('exit', () => { clearTimeout(t); resolve(); });
+    });
   }
 
   ensureDir(HLS_DIR);

@@ -331,7 +331,7 @@ router.get('/discover', async (req, res) => {
 router.get('/scan', async (req, res) => {
   const foundCameras = [];
   const port = 9997;
-  const auth = Buffer.from('admin:admin').toString('base64');
+  const auth = Buffer.from(`${process.env.MEDIAMTX_USER || 'admin'}:${process.env.MEDIAMTX_PASSWORD || 'admin'}`).toString('base64');
 
   // Détection dynamique des sous-réseaux (inclut ton réseau, localhost, et d'éventuels réseaux VPN/Docker)
   const interfaces = networkInterfaces();

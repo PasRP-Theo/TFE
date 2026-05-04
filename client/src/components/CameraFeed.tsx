@@ -133,6 +133,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     let hls: Hls | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let disposed = false;
+    let nativeCleanup: (() => void) | null = null;
 
     // N'affiche l'écran noir de chargement qu'au tout premier lancement
     if (retryCount === 0) {
@@ -179,12 +180,12 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = fullUrl;
-        video.addEventListener('loadedmetadata', () => {
+        const onMeta = () => {
           if (disposed) return;
           setLoading(false);
           video.play().catch(() => {});
-        });
-        video.addEventListener('error', () => {
+        };
+        const onErr = () => {
           if (!disposed) {
             setError(true);
             setLoading(false);
@@ -192,7 +193,13 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
               if (!disposed) setRetryCount(c => c + 1);
             }, 3000);
           }
-        });
+        };
+        video.addEventListener('loadedmetadata', onMeta);
+        video.addEventListener('error', onErr);
+        nativeCleanup = () => {
+          video.removeEventListener('loadedmetadata', onMeta);
+          video.removeEventListener('error', onErr);
+        };
       }
     };
 
@@ -215,6 +222,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       if (retryTimer) clearTimeout(retryTimer);
       if (stalledTimerRef.current) clearInterval(stalledTimerRef.current);
       if (hls) hls.destroy();
+      nativeCleanup?.();
     };
   }, [fullUrl, retryCount]);
 

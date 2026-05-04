@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getAlertsSummary } from '../alerts/service.js';
 
 const router = Router();
@@ -234,7 +234,7 @@ router.patch('/:id/view', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/all', requireAuth, async (req, res) => {
+router.delete('/all', requireAuth, requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM alerts');
     res.json({ deleted: true });

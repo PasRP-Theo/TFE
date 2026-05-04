@@ -7,7 +7,7 @@ import { stopAllCameras } from '../camera/manager.js';
 
 const router = Router();
 
-router.get('/info', async (req, res) => {
+router.get('/info', requireAuth, async (req, res) => {
   try {
     const [cpuData, loadData, tempData, memData, osData, fsData, netIfaces, batteryData] = await Promise.all([
       si.cpu(),

@@ -31,12 +31,19 @@ _CONF_PATH = Path("/home/picam/device.conf")
 
 def _load_device_conf():
     conf = {}
-    if _CONF_PATH.exists():
+    if not _CONF_PATH.exists():
+        return conf
+    try:
         for line in _CONF_PATH.read_text().splitlines():
             line = line.strip()
-            if "=" in line and not line.startswith("#"):
-                k, _, v = line.partition("=")
-                conf[k.strip()] = v.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k, v = k.strip(), v.strip()
+            if k:
+                conf[k] = v
+    except Exception as e:
+        print(f"[CONFIG] ⚠ Impossible de lire {_CONF_PATH} : {e} — utilisation des valeurs par défaut")
     return conf
 
 _conf          = _load_device_conf()
