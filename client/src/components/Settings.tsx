@@ -630,23 +630,24 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <form style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onSubmit={e => e.preventDefault()}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input
                 className="ui-input"
-                type={showPin ? "text" : "password"}
+                type="text"
+                inputMode="numeric"
                 maxLength={4}
                 placeholder="Ex: 1234"
-                value={draftConfig.kioskPin}
-                readOnly={isKeyboardEnabled}
-                onFocus={() => showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))}
-                onChange={e => updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })}
-                style={{ maxWidth: '200px' }}
-                autoComplete="new-password"
+                value={showPin ? draftConfig.kioskPin : '●'.repeat(draftConfig.kioskPin.length)}
+                readOnly={isKeyboardEnabled || !showPin}
+                onFocus={() => showPin && showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))}
+                onChange={e => showPin && updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })}
+                style={{ maxWidth: '200px', letterSpacing: showPin ? 'normal' : '4px' }}
+                autoComplete="off"
               />
               <button type="button" className="ui-link-btn" onClick={() => setShowPin(!showPin)}>
                 {showPin ? 'Cacher' : 'Voir'}
               </button>
-            </form>
+            </div>
             <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et l'accès Admin.</span>
           </label>
         </div>
