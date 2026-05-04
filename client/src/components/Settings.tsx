@@ -206,8 +206,6 @@ function TabSettings() {
         appName: draftConfig.appName,
         appSubtitle: draftConfig.appSubtitle,
         loginMessage: draftConfig.loginMessage,
-        interfaceLanguage: draftConfig.interfaceLanguage,
-        timeFormat: draftConfig.timeFormat,
         showSystemVersion: draftConfig.showSystemVersion,
       });
       setDraftConfig(nextConfig);
@@ -349,30 +347,6 @@ function TabSettings() {
             <span className="settings-field-label">Message d’accueil login</span>
             <input className="ui-input" type="text" value={draftConfig.loginMessage} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.loginMessage, (value) => updateDraft({ loginMessage: value }))} onChange={event => updateDraft({ loginMessage: event.target.value })} />
           </label>
-          <div className="settings-field">
-            <span className="settings-field-label">Langue</span>
-            <SettingsDropdown
-              value={draftConfig.interfaceLanguage}
-              options={[
-                { value: 'fr-FR', label: 'Français' },
-                { value: 'en-GB', label: 'English' }
-              ]}
-              onChange={val => updateDraft({ interfaceLanguage: val as typeof draftConfig.interfaceLanguage })}
-              ariaLabel="Langue"
-            />
-          </div>
-          <div className="settings-field">
-            <span className="settings-field-label">Format horaire</span>
-            <SettingsDropdown
-              value={draftConfig.timeFormat}
-              options={[
-                { value: '24h', label: '24 heures' },
-                { value: '12h', label: '12 heures' }
-              ]}
-              onChange={val => updateDraft({ timeFormat: val as typeof draftConfig.timeFormat })}
-              ariaLabel="Format horaire"
-            />
-          </div>
         </div>
         <div className="settings-toggle-list">
           <SettingToggle
@@ -656,23 +630,23 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Code PIN (4 chiffres)</span>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input 
-                className="ui-input" 
-                type={showPin ? "text" : "password"} 
-                maxLength={4} 
-                placeholder="Ex: 1234" 
-                value={draftConfig.kioskPin} 
-                readOnly={isKeyboardEnabled} 
-                onFocus={() => showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))} 
-                onChange={e => updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })} 
-                style={{ maxWidth: '200px' }} 
-                autoComplete="new-password" 
+            <form style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onSubmit={e => e.preventDefault()}>
+              <input
+                className="ui-input"
+                type={showPin ? "text" : "password"}
+                maxLength={4}
+                placeholder="Ex: 1234"
+                value={draftConfig.kioskPin}
+                readOnly={isKeyboardEnabled}
+                onFocus={() => showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))}
+                onChange={e => updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })}
+                style={{ maxWidth: '200px' }}
+                autoComplete="new-password"
               />
               <button type="button" className="ui-link-btn" onClick={() => setShowPin(!showPin)}>
                 {showPin ? 'Cacher' : 'Voir'}
               </button>
-            </div>
+            </form>
             <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et l'accès Admin.</span>
           </label>
         </div>
@@ -869,9 +843,9 @@ function TabUsers() {
         </div>
 
         {showAdd && (
-          <div className="ui-add-form settings-add-form">
-            <input className="ui-input" type="text" placeholder="Identifiant" value={newUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newUsername, setNewUsername)} onChange={event => setNewUsername(event.target.value)} autoFocus />
-            <input className="ui-input" type="text" placeholder="Mot de passe" value={newPass} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newPass, setNewPass)} onChange={event => setNewPass(event.target.value)} />
+          <form className="ui-add-form settings-add-form" onSubmit={e => { e.preventDefault(); createUser(); }}>
+            <input className="ui-input" type="text" placeholder="Identifiant" value={newUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newUsername, setNewUsername)} onChange={event => setNewUsername(event.target.value)} autoFocus autoComplete="off" />
+            <input className="ui-input" type="password" placeholder="Mot de passe" value={newPass} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(newPass, setNewPass)} onChange={event => setNewPass(event.target.value)} autoComplete="new-password" />
             <div style={{ flex: 1 }}>
               <SettingsDropdown
                 value={newRole}
@@ -883,8 +857,8 @@ function TabUsers() {
                 ariaLabel="Rôle du nouvel utilisateur"
               />
             </div>
-            <button className="ui-confirm-btn" onClick={createUser}>Créer</button>
-          </div>
+            <button className="ui-confirm-btn" type="submit">Créer</button>
+          </form>
         )}
 
         {error && <div className="settings-msg settings-msg--error">⚠ {error}</div>}
@@ -973,10 +947,10 @@ function TabUsers() {
         <div className="settings-modal-overlay" onClick={() => setEditingUser(null)}>
           <div className="settings-modal-card settings-modal-card--form" onClick={event => event.stopPropagation()}>
             <div className="settings-modal-title">MODIFIER LE COMPTE</div>
-            <div className="settings-modal-form">
+            <form className="settings-modal-form" onSubmit={e => { e.preventDefault(); saveUserEdits(); }}>
               <input className="ui-input" type="text" value={editUsername} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editUsername, setEditUsername)} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
               <input className="ui-input" type="password" value={editPassword} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(editPassword, setEditPassword)} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
-            </div>
+            </form>
             <div className="settings-modal-warning">Le mot de passe initial root/root devient inactif dès que tu modifies ce compte bootstrap.</div>
             <div className="settings-modal-actions">
               <button className="ui-delete-btn" onClick={() => setEditingUser(null)}>Annuler</button>
