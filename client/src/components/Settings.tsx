@@ -637,7 +637,7 @@ function TabSettings() {
                 inputMode="numeric"
                 maxLength={4}
                 placeholder="Ex: 1234"
-                value={showPin ? draftConfig.kioskPin : '●'.repeat(draftConfig.kioskPin.length)}
+                value={showPin ? (draftConfig.kioskPin ?? '') : '●'.repeat((draftConfig.kioskPin ?? '').length)}
                 readOnly={isKeyboardEnabled || !showPin}
                 onFocus={() => showPin && showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))}
                 onChange={e => showPin && updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })}
