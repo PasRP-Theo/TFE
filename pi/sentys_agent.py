@@ -15,17 +15,34 @@ import requests
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 SERVER_URL        = "http://192.168.0.47:4000"
-DEVICE_ID         = "pi-zero-01"
-DEVICE_NAME       = "Pi Zero 2W"
 DEVICE_MODEL      = "Raspberry Pi Zero"
-DEVICE_LOCATION   = ""                          # ex: "Entrée" (optionnel)
-RTSP_PORT         = 8554
-RTSP_PATH         = "cam1"
 RECORD_DIR        = Path("/home/picam/offline_recordings")
 CLIP_DURATION_SEC = 30    # durée d'un clip hors ligne
 ANNOUNCE_INTERVAL = 30    # secondes entre chaque annonce au serveur
 CHECK_INTERVAL    = 10    # secondes entre chaque vérif de connexion
 MAX_STORAGE_MB    = 500   # stockage max pour les clips hors ligne
+
+# ─── Identité unique par Pi (lue depuis /home/picam/device.conf) ───────────────
+# Ce fichier n'est jamais écrasé par l'auto-update.
+# Créer avec : echo "DEVICE_ID=pi-zero-01" > /home/picam/device.conf
+#              echo "DEVICE_NAME=Pi Zero 2W" >> /home/picam/device.conf
+#              echo "DEVICE_LOCATION=" >> /home/picam/device.conf  # optionnel
+_CONF_PATH = Path("/home/picam/device.conf")
+
+def _load_device_conf():
+    conf = {}
+    if _CONF_PATH.exists():
+        for line in _CONF_PATH.read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, _, v = line.partition("=")
+                conf[k.strip()] = v.strip()
+    return conf
+
+_conf          = _load_device_conf()
+DEVICE_ID      = _conf.get("DEVICE_ID") or f"pi-{socket.gethostname()}"
+DEVICE_NAME    = _conf.get("DEVICE_NAME") or socket.gethostname()
+DEVICE_LOCATION = _conf.get("DEVICE_LOCATION", "")
 # ──────────────────────────────────────────────────────────────────────────────
 
 RECORD_DIR.mkdir(parents=True, exist_ok=True)
