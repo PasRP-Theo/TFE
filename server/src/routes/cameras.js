@@ -547,7 +547,7 @@ router.get('/:id/state', (req, res) => {
 // POST /api/cameras/:id/motion — Webhook pour l'IA
 router.post('/:id/motion', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT rtsp_url, name FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
 
     const detectionLabel = req.body?.label || null;
@@ -568,8 +568,8 @@ router.post('/:id/motion', async (req, res) => {
           await pool.query(
             `INSERT INTO camera_nodes (device_id, name, host, stream_url, source, last_seen_at, last_motion_at)
              VALUES ($1, $2, $3, $4, 'ia_detector', NOW(), NOW())
-             ON CONFLICT (device_id) DO UPDATE SET last_motion_at = NOW()`,
-            [deviceId, `IA Caméra ${req.params.id}`, host, rows[0].rtsp_url]
+             ON CONFLICT (device_id) DO UPDATE SET name = EXCLUDED.name, stream_url = EXCLUDED.stream_url, last_motion_at = NOW(), last_seen_at = NOW()`,
+            [deviceId, rows[0].name, host, rows[0].rtsp_url]
           ).catch(err => console.error('[IA MOTION UPDATE ERROR]', err));
         } else {
           deviceId = updateRes.rows[0].device_id;
