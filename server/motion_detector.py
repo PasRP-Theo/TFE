@@ -143,7 +143,6 @@ def run_detector(camera_id: str, rtsp_url: str):
 
         if USE_YOLO and type_en == "unknown":
             print(f"[CAM {camera_id}] ⚪ Mouvement ignoré — aucun objet reconnu par YOLO")
-            last_trigger  = time.time()
             pending_count = 0
             pending_classify = []
             continue
