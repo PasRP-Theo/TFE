@@ -5,8 +5,8 @@ const { Pool } = pg;
 export const pool = new Pool({
   host:     process.env.DB_HOST     || 'localhost',
   port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME     || 'sentys',
-  //database: process.env.DB_NAME     || 'aubepines',
+  //database: process.env.DB_NAME     || 'sentys',
+  database: process.env.DB_NAME     || 'aubepines',
   user:     process.env.DB_USER     || 'postgres',
   password: String(process.env.DB_PASSWORD || 'admin'),
 });
@@ -203,6 +203,11 @@ export async function initDB() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS surveillance_mode BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE camera_node_motion_events ADD COLUMN IF NOT EXISTS offline_recording BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE camera_node_motion_events ADD COLUMN IF NOT EXISTS recording_path VARCHAR(255);
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_clip_duration    INTEGER NOT NULL DEFAULT 30;
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_max_storage_mb   INTEGER NOT NULL DEFAULT 500;
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_announce_interval INTEGER NOT NULL DEFAULT 30;
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_port         INTEGER NOT NULL DEFAULT 8554;
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_path         VARCHAR(60) NOT NULL DEFAULT 'cam1';
     `);
 
     await client.query(

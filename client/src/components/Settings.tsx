@@ -1083,6 +1083,208 @@ function TabHelp() {
   );
 }
 
+// ── Onglet Noeuds Pi ─────────────────────────────────────────────────────────
+
+interface PiNode {
+  id: number;
+  device_id: string;
+  name: string;
+  host: string;
+  stream_url: string;
+  location: string;
+  model: string;
+  source: string;
+  last_seen_at: string;
+  motionActive: boolean;
+  connected: boolean;
+  cfg_clip_duration: number;
+  cfg_max_storage_mb: number;
+  cfg_announce_interval: number;
+  cfg_rtsp_port: number;
+  cfg_rtsp_path: string;
+}
+
+function TabPiNodes() {
+  const { token } = useAuth();
+  const [nodes, setNodes] = useState<PiNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editingNode, setEditingNode] = useState<PiNode | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PiNode | null>(null);
+  const [draft, setDraft] = useState<Partial<PiNode>>({});
+
+  async function fetchNodes() {
+    try {
+      const res = await fetch(apiUrl('/api/camera-nodes'));
+      if (!res.ok) throw new Error('Erreur chargement');
+      const data = await res.json();
+      setNodes(Array.isArray(data.nodes) ? data.nodes : []);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchNodes(); }, []);
+
+  function openEdit(node: PiNode) {
+    setEditingNode(node);
+    setSaveError(null);
+    setDraft({
+      name: node.name,
+      location: node.location,
+      cfg_clip_duration: node.cfg_clip_duration,
+      cfg_max_storage_mb: node.cfg_max_storage_mb,
+      cfg_announce_interval: node.cfg_announce_interval,
+      cfg_rtsp_port: node.cfg_rtsp_port,
+      cfg_rtsp_path: node.cfg_rtsp_path,
+    });
+  }
+
+  async function saveConfig() {
+    if (!editingNode) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(editingNode.device_id)}/config`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: draft.name,
+          location: draft.location,
+          clipDuration: draft.cfg_clip_duration,
+          maxStorageMb: draft.cfg_max_storage_mb,
+          announceInterval: draft.cfg_announce_interval,
+          rtspPort: draft.cfg_rtsp_port,
+          rtspPath: draft.cfg_rtsp_path,
+        }),
+      });
+      if (!res.ok) throw new Error('Erreur sauvegarde');
+      setEditingNode(null);
+      fetchNodes();
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteNode(node: PiNode) {
+    try {
+      await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(node.device_id)}`), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDeleteTarget(null);
+      fetchNodes();
+    } catch { /* ignore */ }
+  }
+
+  function isOnline(node: PiNode) {
+    return node.last_seen_at && Date.now() - new Date(node.last_seen_at).getTime() < 90_000;
+  }
+
+  if (loading) return <div className="settings-loading">Chargement des noeuds…</div>;
+  if (error) return <div className="settings-msg settings-msg--error">⚠ {error}</div>;
+
+  return (
+    <div>
+      <div className="settings-section">
+        <div className="settings-section-label">NOEUDS PI DÉTECTÉS</div>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: 0 }}>
+          Les Pi Zero 2W récupèrent leur configuration depuis ce panneau à chaque démarrage.
+          Modifiez un noeud puis redémarrez le service sur le Pi pour appliquer les changements.
+        </p>
+        {nodes.length === 0 && (
+          <div className="settings-danger-zone-text">Aucun noeud Pi détecté. Lancez le service <code>sentys-agent</code> sur votre Pi.</div>
+        )}
+        {nodes.map(node => (
+          <div key={node.device_id} className="ui-add-form settings-add-form" style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <strong>{node.name}</strong>
+                <span style={{ marginLeft: '10px', fontSize: '0.8rem', color: isOnline(node) ? 'var(--accent-green)' : 'var(--text-muted)' }}>
+                  ● {isOnline(node) ? 'EN LIGNE' : 'HORS LIGNE'}
+                </span>
+                {node.motionActive && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: 'var(--accent-amber)' }}>● MOUVEMENT</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="ui-confirm-btn" onClick={() => openEdit(node)}>Configurer</button>
+                <button className="ui-delete-btn" onClick={() => setDeleteTarget(node)}>Supprimer</button>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+              <span>ID : <code>{node.device_id}</code></span>
+              <span>IP : {node.host}</span>
+              {node.location && <span>Zone : {node.location}</span>}
+              <span>Clip : {node.cfg_clip_duration}s</span>
+              <span>Stockage max : {node.cfg_max_storage_mb} Mo</span>
+              <span>RTSP : :{node.cfg_rtsp_port}/{node.cfg_rtsp_path}</span>
+              <span>Vu le : {new Date(node.last_seen_at).toLocaleString('fr-FR')}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {editingNode && (
+        <div className="settings-modal-overlay" onClick={() => setEditingNode(null)}>
+          <div className="settings-modal-card settings-modal-card--form" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="settings-modal-title">CONFIGURER — {editingNode.device_id}</div>
+            <div className="settings-modal-warning" style={{ borderTop: 'none', paddingTop: 0, marginTop: 0, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              Le Pi récupèrera ces paramètres automatiquement à la prochaine annonce (max {editingNode.cfg_announce_interval}s).
+            </div>
+            <div className="settings-modal-form">
+              <label className="settings-field-label" style={{ display: 'block', marginBottom: '4px' }}>Nom</label>
+              <input className="ui-input" value={draft.name ?? ''} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} />
+
+              <label className="settings-field-label" style={{ display: 'block', margin: '10px 0 4px' }}>Zone / Emplacement</label>
+              <input className="ui-input" placeholder="Ex: Entrée, Jardin…" value={draft.location ?? ''} onChange={e => setDraft(d => ({ ...d, location: e.target.value }))} />
+
+              <label className="settings-field-label" style={{ display: 'block', margin: '10px 0 4px' }}>Durée clip hors ligne (secondes)</label>
+              <input className="ui-input" type="number" min={5} max={300} value={draft.cfg_clip_duration ?? 30} onChange={e => setDraft(d => ({ ...d, cfg_clip_duration: Number(e.target.value) }))} />
+
+              <label className="settings-field-label" style={{ display: 'block', margin: '10px 0 4px' }}>Stockage max hors ligne (Mo)</label>
+              <input className="ui-input" type="number" min={50} max={32000} value={draft.cfg_max_storage_mb ?? 500} onChange={e => setDraft(d => ({ ...d, cfg_max_storage_mb: Number(e.target.value) }))} />
+
+              <label className="settings-field-label" style={{ display: 'block', margin: '10px 0 4px' }}>Intervalle d'annonce (secondes)</label>
+              <input className="ui-input" type="number" min={10} max={300} value={draft.cfg_announce_interval ?? 30} onChange={e => setDraft(d => ({ ...d, cfg_announce_interval: Number(e.target.value) }))} />
+
+              <label className="settings-field-label" style={{ display: 'block', margin: '10px 0 4px' }}>Port RTSP</label>
+              <input className="ui-input" type="number" min={1024} max={65535} value={draft.cfg_rtsp_port ?? 8554} onChange={e => setDraft(d => ({ ...d, cfg_rtsp_port: Number(e.target.value) }))} />
+
+              <label className="settings-field-label" style={{ display: 'block', margin: '10px 0 4px' }}>Chemin RTSP</label>
+              <input className="ui-input" placeholder="Ex: cam1" value={draft.cfg_rtsp_path ?? ''} onChange={e => setDraft(d => ({ ...d, cfg_rtsp_path: e.target.value }))} />
+            </div>
+            {saveError && <div className="settings-msg settings-msg--error">⚠ {saveError}</div>}
+            <div className="settings-modal-actions">
+              <button className="ui-link-btn" onClick={() => setEditingNode(null)} disabled={saving}>Annuler</button>
+              <button className="ui-confirm-btn" onClick={saveConfig} disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="settings-modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="settings-modal-card settings-modal-card--danger" onClick={e => e.stopPropagation()}>
+            <div className="settings-modal-title settings-modal-title--danger">SUPPRIMER LE NOEUD</div>
+            <div className="settings-modal-warning settings-modal-warning--danger">
+              Le noeud <strong>{deleteTarget.name}</strong> ({deleteTarget.device_id}) sera retiré de la base. Il réapparaîtra automatiquement s'il se reconnecte.
+            </div>
+            <div className="settings-modal-actions">
+              <button className="ui-link-btn" onClick={() => setDeleteTarget(null)}>Annuler</button>
+              <button className="ui-delete-btn ui-delete-btn--danger" onClick={() => deleteNode(deleteTarget)}>Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ArchiveRecording { filename: string; url: string; createdAt: string; size: number; }
 interface ArchiveEntry { cameraId: string; recordings: ArchiveRecording[]; }
 
@@ -1176,7 +1378,7 @@ function TabArchives() {
 
 export default function Settings() {
   const { config } = useAppConfig();
-  const [tab, setTab] = useState<"settings" | "users" | "audit" | "archives" | "help">("settings");
+  const [tab, setTab] = useState<"settings" | "users" | "audit" | "archives" | "pi" | "help">("settings");
 
   return (
     <div className="settings-wrapper">
@@ -1190,10 +1392,11 @@ export default function Settings() {
         <button className={`ui-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
         <button className={`ui-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
         <button className={`ui-tab-btn ${tab === "archives" ? "active" : ""}`} onClick={() => setTab("archives")}>ARCHIVES</button>
+        <button className={`ui-tab-btn ${tab === "pi" ? "active" : ""}`} onClick={() => setTab("pi")}>NOEUDS PI</button>
         <button className={`ui-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>À PROPOS</button>
       </div>
 
-      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
+      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : tab === "pi" ? <TabPiNodes /> : <TabHelp />}
     </div>
   );
 }

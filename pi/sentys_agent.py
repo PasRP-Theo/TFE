@@ -31,6 +31,25 @@ MAX_STORAGE_MB    = 500   # stockage max pour les clips hors ligne
 RECORD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def fetch_remote_config():
+    """Récupère la config depuis le serveur et met à jour les variables globales."""
+    global DEVICE_NAME, DEVICE_LOCATION, CLIP_DURATION_SEC, MAX_STORAGE_MB, ANNOUNCE_INTERVAL, RTSP_PORT, RTSP_PATH
+    try:
+        r = requests.get(f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/config", timeout=5)
+        if r.status_code == 200:
+            cfg = r.json()
+            DEVICE_NAME       = cfg.get("name",             DEVICE_NAME)
+            DEVICE_LOCATION   = cfg.get("location",         DEVICE_LOCATION)
+            CLIP_DURATION_SEC = int(cfg.get("clipDuration", CLIP_DURATION_SEC))
+            MAX_STORAGE_MB    = int(cfg.get("maxStorageMb", MAX_STORAGE_MB))
+            ANNOUNCE_INTERVAL = int(cfg.get("announceInterval", ANNOUNCE_INTERVAL))
+            RTSP_PORT         = int(cfg.get("rtspPort",     RTSP_PORT))
+            RTSP_PATH         = cfg.get("rtspPath",         RTSP_PATH)
+            print(f"[CONFIG] ✅ Config chargée depuis le serveur")
+    except Exception as e:
+        print(f"[CONFIG] ⚠ Impossible de charger la config distante : {e}")
+
+
 def enforce_storage_limit():
     files = sorted(RECORD_DIR.glob("*.mp4"), key=lambda f: f.stat().st_mtime)
     total = sum(f.stat().st_size for f in files)
@@ -164,6 +183,9 @@ def main():
     was_offline   = False
     last_announce = 0
 
+    if server_reachable():
+        fetch_remote_config()
+
     if list(RECORD_DIR.glob("*.mp4")) and server_reachable():
         print("[SENTYS] Clips en attente détectés au démarrage — synchronisation")
         set_mediamtx(True)
@@ -176,6 +198,7 @@ def main():
             # ── Reconnexion après coupure ──────────────────────────────────
             if was_offline:
                 print("[SENTYS] Connexion rétablie — synchronisation des clips")
+                fetch_remote_config()
                 set_mediamtx(True)
                 upload_pending()
                 was_offline = False

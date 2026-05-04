@@ -433,4 +433,82 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
   }
 });
 
+// GET /:deviceId/config — lu par le Pi à chaque démarrage/annonce (pas d'auth requis)
+router.get('/:deviceId/config', async (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT name, location, cfg_clip_duration, cfg_max_storage_mb, cfg_announce_interval, cfg_rtsp_port, cfg_rtsp_path
+       FROM camera_nodes WHERE device_id = $1`,
+      [deviceId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Noeud introuvable' });
+    const r = rows[0];
+    res.json({
+      name:             r.name,
+      location:         r.location,
+      clipDuration:     r.cfg_clip_duration,
+      maxStorageMb:     r.cfg_max_storage_mb,
+      announceInterval: r.cfg_announce_interval,
+      rtspPort:         r.cfg_rtsp_port,
+      rtspPath:         r.cfg_rtsp_path,
+    });
+  } catch (err) {
+    console.error('[NODE CONFIG GET]', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PATCH /:deviceId/config — modifié depuis l'interface admin
+router.patch('/:deviceId/config', async (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
+
+  const { name, location, clipDuration, maxStorageMb, announceInterval, rtspPort, rtspPath } = req.body;
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE camera_nodes SET
+         name                 = COALESCE($2, name),
+         location             = COALESCE($3, location),
+         cfg_clip_duration    = COALESCE($4, cfg_clip_duration),
+         cfg_max_storage_mb   = COALESCE($5, cfg_max_storage_mb),
+         cfg_announce_interval = COALESCE($6, cfg_announce_interval),
+         cfg_rtsp_port        = COALESCE($7, cfg_rtsp_port),
+         cfg_rtsp_path        = COALESCE($8, cfg_rtsp_path)
+       WHERE device_id = $1
+       RETURNING *`,
+      [
+        deviceId,
+        name        != null ? String(name).trim()        : null,
+        location    != null ? String(location).trim()    : null,
+        clipDuration    != null ? Number(clipDuration)    : null,
+        maxStorageMb    != null ? Number(maxStorageMb)    : null,
+        announceInterval != null ? Number(announceInterval) : null,
+        rtspPort    != null ? Number(rtspPort)    : null,
+        rtspPath    != null ? String(rtspPath).trim()    : null,
+      ]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Noeud introuvable' });
+    res.json({ message: 'Configuration mise à jour', node: rows[0] });
+  } catch (err) {
+    console.error('[NODE CONFIG PATCH]', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /:deviceId — supprime un noeud
+router.delete('/:deviceId', async (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
+  try {
+    await pool.query('DELETE FROM camera_nodes WHERE device_id = $1', [deviceId]);
+    res.json({ message: 'Noeud supprimé' });
+  } catch (err) {
+    console.error('[NODE DELETE]', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 export default router;
