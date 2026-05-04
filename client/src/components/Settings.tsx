@@ -1056,6 +1056,39 @@ function TabHelp() {
       </div>
 
       <div className="settings-section">
+        <div className="settings-section-label">ACCÈS EXTERNE — TAILSCALE</div>
+        <div className="settings-danger-zone-text" style={{ lineHeight: '1.7' }}>
+          <p style={{ marginTop: 0 }}>
+            <strong>Tailscale</strong> est un VPN mesh basé sur WireGuard qui permet d'accéder à SENTYS depuis n'importe où, <strong>sans ouvrir de port</strong> sur votre routeur.
+          </p>
+          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>1 — INSTALLER TAILSCALE SUR LE SERVEUR</p>
+          <pre style={{ background: 'var(--bg-secondary)', borderRadius: '6px', padding: '10px 14px', fontSize: '0.82rem', overflowX: 'auto', margin: '0 0 14px 0' }}>
+{`# Sur le PC hôte (Linux/Debian)
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up`}
+          </pre>
+          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>2 — INSTALLER TAILSCALE SUR VOS APPAREILS CLIENTS</p>
+          <ul style={{ margin: '0 0 14px 0', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
+            <li style={{ marginBottom: '6px' }}><strong>Android / iOS</strong> — Tailscale sur le Play Store / App Store</li>
+            <li style={{ marginBottom: '6px' }}><strong>Windows / macOS</strong> — <span style={{ fontFamily: 'monospace' }}>tailscale.com/download</span></li>
+            <li style={{ marginBottom: '6px' }}>Connectez-vous avec le <strong>même compte</strong> que le serveur</li>
+          </ul>
+          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>3 — ACCÉDER À SENTYS</p>
+          <p style={{ fontSize: '0.9rem', margin: '0 0 6px 0' }}>
+            Une fois connecté, accédez à SENTYS via l'IP Tailscale du serveur (ex : <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>http://100.x.x.x:3000</span>) ou via MagicDNS si activé :
+          </p>
+          <pre style={{ background: 'var(--bg-secondary)', borderRadius: '6px', padding: '10px 14px', fontSize: '0.82rem', overflowX: 'auto', margin: '0 0 14px 0' }}>
+{`# Trouver l'IP Tailscale du serveur
+tailscale ip -4
+# → ex: 100.72.14.3  →  http://100.72.14.3:3000`}
+          </pre>
+          <p style={{ marginBottom: '4px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            Tailscale chiffre tout le trafic de bout en bout. Aucune donnée ne transite par un serveur Tailscale — la connexion est directe (P2P) entre vos appareils.
+          </p>
+        </div>
+      </div>
+
+      <div className="settings-section">
         <div className="settings-section-label">RGPD — DONNÉES COLLECTÉES</div>
         <div className="settings-danger-zone-text" style={{ lineHeight: '1.7' }}>
           <p style={{ marginTop: 0 }}>
