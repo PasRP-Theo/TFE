@@ -48,7 +48,7 @@ Dès que le serveur est de nouveau accessible :
 Modifier en haut du fichier `sentys_agent.py` :
 
 ```python
-SERVER_URL        = "http://192.168.0.47:4000"   # IP du serveur host
+SERVER_URL        = "http://<SERVER_IP>:4000"   # IP du serveur host
 DEVICE_ID         = "pi-zero-01"                  # Identifiant unique du Pi
 DEVICE_NAME       = "Pi Zero 2W"                  # Nom affiché dans l'interface
 DEVICE_LOCATION   = "Entrée"                      # Zone (optionnel)
@@ -66,7 +66,7 @@ MAX_STORAGE_MB    = 500                           # Stockage max clips hors lign
 Script lancé automatiquement par cron toutes les **5 minutes**.
 
 ### Ce qu'il fait :
-1. Télécharge `sentys_agent.py` depuis `http://192.168.0.47:4000/api/agent/sentys_agent.py`
+1. Télécharge `sentys_agent.py` depuis `http://<SERVER_IP>:4000/api/agent/sentys_agent.py`
 2. Compare avec la version locale
 3. Si différent → remplace le fichier et redémarre le service `sentys-agent`
 4. Si identique → ne fait rien

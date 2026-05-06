@@ -157,7 +157,7 @@ Si l'objectif est de terminer le projet de facon pragmatique, l'ordre conseille 
 Fonctionnalites deja bien avancees :
 
 - gestion des comptes et roles
-- bootstrap admin `root/root`
+- compte administrateur initial créé au premier démarrage
 - personnalisation application / affichage / cameras / alertes
 - vue camera avec agrandissement, historique, telechargement et suppression
 - decouverte de cameras et noeuds Raspberry Pi

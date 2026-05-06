@@ -1,3 +1,6 @@
+# Private deployment info
+PRIVATE.md
+
 # Dependency directories
 node_modules/
 server/node_modules/

@@ -12,7 +12,7 @@ Pi Zero 2W
  ├── announce.py       → s'enregistre auprès du serveur au démarrage
  └── offline_recorder.py → détecte la perte de connexion, enregistre localement, sync au retour
 
-Serveur hôte (192.168.0.47:3001)
+Serveur hôte (<SERVER_IP>:4000)
  └── POST /api/camera-nodes/:deviceId/upload-recording
        → reçoit les clips, crée un event "offline_recording" dans l'historique
        → génère une alerte avec le badge "HORS LIGNE"
@@ -42,7 +42,7 @@ except ImportError:
     subprocess.run(["pip3", "install", "requests"], check=True)
     import requests
 
-SERVER_URL = os.environ.get("SERVER_URL", "http://192.168.0.47:3001")
+SERVER_URL = os.environ.get("SERVER_URL", "http://<SERVER_IP>:4000")
 DEVICE_ID  = os.environ.get("DEVICE_ID",  "picam")
 RECORD_DIR = Path("/home/picam/offline_recordings")
 RECORD_DIR.mkdir(exist_ok=True)
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 ### 1.2 Fichier de configuration
 
 ```bash
-echo 'SERVER_URL=http://192.168.0.47:3001' > /home/picam/.env
+echo 'SERVER_URL=http://<SERVER_IP>:4000' > /home/picam/.env
 echo 'DEVICE_ID=picam' >> /home/picam/.env
 ```
 
@@ -176,7 +176,7 @@ journalctl -u offline-recorder -f
 
 Sortie attendue au démarrage :
 ```
-[OFFLINE-REC] Démarré | serveur=http://192.168.0.47:3001 | device=picam
+[OFFLINE-REC] Démarré | serveur=http://<SERVER_IP>:4000 | device=picam
 ```
 
 Sortie lors d'une déconnexion :
@@ -230,7 +230,7 @@ ls -lh /home/picam/offline_recordings/
 
 **Forcer une synchronisation manuelle**
 ```bash
-SERVER_URL=http://192.168.0.47:3001 DEVICE_ID=picam python3 /home/picam/offline_recorder.py
+SERVER_URL=http://<SERVER_IP>:4000 DEVICE_ID=picam python3 /home/picam/offline_recorder.py
 ```
 
 **Tester l'endpoint depuis le serveur**

@@ -116,7 +116,7 @@ cameras:
   cam_salon:
     ffmpeg:
       inputs:
-        - path: rtsp://192.168.0.213:8554/cam1
+        - path: rtsp://<PI_IP>:8554/cam1
           roles:
             - detect
             - record
@@ -142,7 +142,7 @@ Si Frigate est trop lourd ou trop complexe à intégrer dans le périmètre du T
 import cv2
 import requests
 
-cap = cv2.VideoCapture("rtsp://192.168.0.213:8554/cam1")
+cap = cv2.VideoCapture("rtsp://<PI_IP>:8554/cam1")
 back_sub = cv2.createBackgroundSubtractorMOG2()
 
 while True:
@@ -214,7 +214,7 @@ ffmpeg -i - -c:v copy -f rtsp rtsp://127.0.0.1:8554/cam1
 L'URL RTSP consommée par le PC hôte est ensuite :
 
 ```
-rtsp://192.168.0.213:8554/cam1
+rtsp://<PI_IP>:8554/cam1
 ```
 
 Ce qui correspond à l'URL déjà utilisée dans le projet Sentys.

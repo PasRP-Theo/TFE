@@ -246,7 +246,7 @@ Host:     localhost
 Port:     5432
 Database: sentys
 User:     postgres
-Password: admin
+Password: <your_db_password>
 ```
 
 Les tables sont créées automatiquement au premier démarrage du serveur.
@@ -367,7 +367,7 @@ Dès que le serveur redevient accessible :
 ### Configuration (`sentys_agent.py`)
 
 ```python
-SERVER_URL        = "http://192.168.0.47:4000"
+SERVER_URL        = "http://<SERVER_IP>:4000"
 DEVICE_ID         = "pi-zero-01"    # unique par Pi !
 DEVICE_NAME       = "Pi Zero 2W"
 DEVICE_LOCATION   = "Entrée"       # optionnel
@@ -430,7 +430,7 @@ Pi 3 → DEVICE_ID="pi-zero-03"  RTSP_PATH="cam3"
 
 | Variable | Exemple |
 |---|---|
-| `DEPLOY_PATH` | `/home/theo/TFE` |
+| `DEPLOY_PATH` | `/home/<user>/sentys` |
 
 ### Fichiers préservés lors du déploiement
 
@@ -450,11 +450,11 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=sentys
 DB_USER=postgres
-DB_PASSWORD=admin
+DB_PASSWORD=<your_db_password>
 
 # Serveur
 PORT=4000
-JWT_SECRET=changez_moi_en_production
+JWT_SECRET=<secret_aleatoire_long>
 
 # Vidéo
 RECORDINGS_DIR=../recordings
@@ -464,7 +464,7 @@ RTSP_TRANSPORT=tcp
 RECORDINGS_RETENTION_DAYS=30
 
 # Scan réseau
-CAMERA_SCAN_SUBNETS=192.168.0
+CAMERA_SCAN_SUBNETS=<your_subnet>
 CAMERA_SCAN_CONCURRENCY=30
 CAMERA_RTSP_TIMEOUT=1000
 CAMERA_SCAN_TIMEOUT=700
@@ -580,8 +580,8 @@ pm2 logs sentys
 pm2 list
 
 # Version déployée
-cat /home/theo/TFE/.deploy-commit
-cat /home/theo/TFE/.deploy-time
+cat $DEPLOY_PATH/.deploy-commit
+cat $DEPLOY_PATH/.deploy-time
 ```
 
 ### Pi Zero 2W
