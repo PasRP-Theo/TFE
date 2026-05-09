@@ -50,7 +50,8 @@ jobs:
             -e .env.* \
             -e hls \
             -e recordings \
-            -e server/recordings
+            -e server/recordings \
+            -e venv
 
       - name: Stop application to free RAM for build
         run: pm2 stop "$PM2_APP_NAME" > /dev/null 2>&1 || true
