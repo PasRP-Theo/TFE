@@ -261,7 +261,7 @@ async function start() {
 
   // ── go2rtc (WebRTC sub-second latency) ──────────────────────
   startGo2rtc().then(ok => {
-    if (ok) syncCamerasFromDB(pool);
+    if (ok) setTimeout(() => syncCamerasFromDB(pool), 3000);
   });
 
   // Rendre les helpers go2rtc accessibles dans les routes cameras

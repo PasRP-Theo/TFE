@@ -16,18 +16,17 @@ import requests
 # ─── Configuration ────────────────────────────────────────────────────────────
 SERVER_URL        = "http://192.168.0.47:4000"
 DEVICE_MODEL      = "Raspberry Pi Zero"
-RECORD_DIR        = Path("/home/picam/offline_recordings")
+RECORD_DIR        = Path(f"/home/{os.getenv('USER', 'picam')}/offline_recordings")
 CLIP_DURATION_SEC = 30    # durée d'un clip hors ligne
 ANNOUNCE_INTERVAL = 30    # secondes entre chaque annonce au serveur
 CHECK_INTERVAL    = 10    # secondes entre chaque vérif de connexion
 MAX_STORAGE_MB    = 500   # stockage max pour les clips hors ligne
+RTSP_PORT         = 8554
+RTSP_PATH         = "cam1"
 
-# ─── Identité unique par Pi (lue depuis /home/picam/device.conf) ───────────────
-# Ce fichier n'est jamais écrasé par l'auto-update.
-# Créer avec : echo "DEVICE_ID=pi-zero-01" > /home/picam/device.conf
-#              echo "DEVICE_NAME=Pi Zero 2W" >> /home/picam/device.conf
-#              echo "DEVICE_LOCATION=" >> /home/picam/device.conf  # optionnel
-_CONF_PATH = Path("/home/picam/device.conf")
+# ─── Identité unique par Pi (lue depuis device.conf) ──────────────────────────
+_HOME     = Path(f"/home/{os.getenv('USER', 'picam')}")
+_CONF_PATH = _HOME / "device.conf"
 
 def _load_device_conf():
     conf = {}

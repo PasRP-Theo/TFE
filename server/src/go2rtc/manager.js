@@ -127,15 +127,19 @@ export async function negotiate(cameraId, sdpOffer) {
 }
 
 // ── Synchronisation initiale depuis la base ───────────────────
-export async function syncCamerasFromDB(pool) {
+export async function syncCamerasFromDB(pool, { retries = 5, delayMs = 2000 } = {}) {
   if (!ready) return;
-  try {
-    const { rows } = await pool.query(
-      "SELECT id, rtsp_url FROM cameras WHERE active = true"
-    );
-    await Promise.all(rows.map((cam) => registerStream(cam.id, cam.rtsp_url)));
-    console.log(`[go2rtc] ${rows.length} caméra(s) synchronisée(s) depuis la base`);
-  } catch (err) {
-    console.error('[go2rtc] syncCamerasFromDB :', err.message);
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const { rows } = await pool.query(
+        "SELECT id, rtsp_url FROM cameras WHERE active = true"
+      );
+      await Promise.all(rows.map((cam) => registerStream(cam.id, cam.rtsp_url)));
+      console.log(`[go2rtc] ${rows.length} caméra(s) synchronisée(s) depuis la base`);
+      return;
+    } catch (err) {
+      console.error(`[go2rtc] syncCamerasFromDB tentative ${attempt}/${retries} :`, err.message);
+      if (attempt < retries) await new Promise(r => setTimeout(r, delayMs));
+    }
   }
 }
