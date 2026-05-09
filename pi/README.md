@@ -32,7 +32,7 @@
 ```bash
 sudo nano /boot/firmware/config.txt
 ```
-Vérifier que ces deux lignes sont présentes :
+Vérifier que ces deux lignes sont présentes (les ajouter si manquantes) :
 ```
 camera_auto_detect=1
 dtoverlay=ov5647
@@ -46,10 +46,18 @@ sudo reboot
 rpicam-hello --list-cameras
 # Attendu : 0 : ov5647 [2592x1944 ...]
 ```
+
 Si la commande n'existe pas :
 ```bash
 sudo apt update && sudo apt install -y libcamera-apps
 ```
+
+Si la caméra n'est pas détectée après reboot :
+```bash
+dmesg | grep -i -E "csi|ov5647"
+# Doit afficher des lignes avec "ov5647@36"
+```
+Si rien → vérifier le câblage physique.
 
 ---
 
@@ -68,6 +76,7 @@ wget https://github.com/bluenviron/mediamtx/releases/download/v1.9.1/mediamtx_v1
 tar -xzf mediamtx_v1.9.1_linux_arm64v8.tar.gz
 sudo mv mediamtx /usr/local/bin/
 sudo mv mediamtx.yml /usr/local/etc/
+rm mediamtx_v1.9.1_linux_arm64v8.tar.gz
 ```
 
 ### Configurer le flux caméra
@@ -107,7 +116,7 @@ sudo systemctl start mediamtx
 ```bash
 sudo visudo
 ```
-Ajouter à la fin (remplacer `picam` par le nom d'utilisateur réel) :
+Ajouter à la fin (**remplacer `picam` par le nom d'utilisateur réel**) :
 ```
 picam ALL=(ALL) NOPASSWD: /bin/systemctl start mediamtx, /bin/systemctl stop mediamtx, /bin/systemctl restart mediamtx
 ```
@@ -191,10 +200,14 @@ Dans l'interface Sentys, ajouter une caméra avec l'URL RTSP :
 ```
 rtsp://<IP_PI>:8554/cam1
 ```
-Puis enregistrer le stream dans go2rtc depuis le serveur :
+
+Puis enregistrer le stream dans go2rtc depuis le serveur host :
 ```bash
 curl -X POST http://192.168.0.47:4000/api/webrtc/<ID_CAMERA>/register
 ```
+L'ID caméra est visible dans l'URL de l'interface ou dans la base de données.
+
+> **Note** : À partir du prochain redémarrage du serveur, l'enregistrement go2rtc est automatique.
 
 ---
 
@@ -205,7 +218,7 @@ curl -X POST http://192.168.0.47:4000/api/webrtc/<ID_CAMERA>/register
 | Pi Zero 2W #1 | `picam` | `/home/picam` |
 | Pi Zero 2W #2 | `picam2` | `/home/picam2` |
 
-Adapter tous les chemins et le service systemd en conséquence.
+Adapter **tous les chemins**, le `User=` dans le service systemd, et la ligne visudo en conséquence.
 
 ---
 
@@ -213,17 +226,18 @@ Adapter tous les chemins et le service systemd en conséquence.
 
 ```
 1. Modifier sentys_agent.py sur le PC
-2. git push → pipeline déploie sur le serveur host
-3. Dans les 5 minutes, le Pi télécharge la nouvelle version
+2. git push → pipeline CI/CD déploie sur le serveur host
+3. Dans les 5 minutes, chaque Pi télécharge la nouvelle version
 4. Le service sentys-agent redémarre automatiquement
 ```
 
-Aucune intervention manuelle sur le Pi nécessaire.
+Aucune intervention manuelle sur les Pi nécessaire.
 
 ---
 
 ## Dépannage
 
+### Commandes utiles
 ```bash
 # Logs du service agent
 sudo journalctl -u sentys-agent -f
@@ -231,16 +245,20 @@ sudo journalctl -u sentys-agent -f
 # Logs MediaMTX
 sudo journalctl -u mediamtx -f
 
+# Statut des services
+sudo systemctl status sentys-agent
+sudo systemctl status mediamtx
+
 # Logs des mises à jour automatiques
 cat /home/picam/update.log
 
 # Vérifier la caméra
 rpicam-hello --list-cameras
 
-# Vérifier que la caméra est bien vue par le kernel
+# Vérifier que la caméra est vue par le kernel
 dmesg | grep -i -E "csi|ov5647|camera"
 
-# Forcer une mise à jour immédiate
+# Forcer une mise à jour immédiate de l'agent
 /home/picam/auto_update.sh
 
 # Redémarrer manuellement
@@ -248,19 +266,60 @@ sudo systemctl restart sentys-agent
 sudo systemctl restart mediamtx
 ```
 
-### Caméra non détectée
-1. Vérifier le câblage (loquet bien fermé, contacts dans le bon sens)
+---
+
+### Caméra non détectée (`No cameras available!`)
+1. Vérifier le câblage (loquet bien fermé des deux côtés, contacts dans le bon sens)
 2. Vérifier que `dtoverlay=ov5647` est dans `/boot/firmware/config.txt`
 3. Rebooter et relancer `dmesg | grep -i ov5647`
 
-### Stream en reconnexion permanente
-- Vérifier que MediaMTX tourne : `sudo systemctl status mediamtx`
-- Une seule caméra dans l'interface doit pointer vers ce Pi
-- Enregistrer le stream go2rtc : `curl -X POST http://192.168.0.47:4000/api/webrtc/<ID>/register`
+---
+
+### Stream en reconnexion permanente (`404 Not Found` dans les logs serveur)
+MediaMTX ne publie pas le flux. Vérifier :
+```bash
+sudo systemctl status mediamtx
+sudo journalctl -u mediamtx -f
+```
+Causes fréquentes :
+- **`no space left on device`** sur `/dev/shm` → nettoyer et redémarrer :
+  ```bash
+  sudo rm -rf /dev/shm/mediamtx-*
+  sudo systemctl restart mediamtx
+  ```
+- **`write queue is full`** → trop de clients connectés simultanément. S'assurer qu'une seule entrée caméra dans l'interface pointe vers ce Pi.
 
 ---
 
-## Variables de configuration
+### Erreur WebRTC 502 dans l'interface
+go2rtc n'a pas le stream enregistré. Depuis le serveur host :
+```bash
+curl -X POST http://192.168.0.47:4000/api/webrtc/<ID_CAMERA>/register
+```
+
+---
+
+### `sudo: a terminal is required` dans les logs sentys-agent
+La ligne visudo est manquante. Ajouter via `sudo visudo` :
+```
+picam ALL=(ALL) NOPASSWD: /bin/systemctl start mediamtx, /bin/systemctl stop mediamtx, /bin/systemctl restart mediamtx
+```
+
+---
+
+### `NameError: name 'RTSP_PORT' is not defined`
+L'agent sur le Pi est une ancienne version. Recopier depuis le PC :
+```bash
+scp pi/sentys_agent.py picam@<IP_PI>:/home/picam/sentys_agent.py
+```
+Puis redémarrer :
+```bash
+sudo systemctl restart sentys-agent
+```
+
+---
+
+## Variables de configuration (sentys_agent.py)
 
 | Variable | Défaut | Description |
 |---|---|---|
@@ -271,4 +330,4 @@ sudo systemctl restart mediamtx
 | `ANNOUNCE_INTERVAL` | `30` | Secondes entre chaque annonce |
 | `MAX_STORAGE_MB` | `500` | Stockage max clips hors ligne |
 
-> `DEVICE_ID`, `DEVICE_NAME` et `DEVICE_LOCATION` sont lus depuis `device.conf` et ne sont jamais écrasés par les mises à jour automatiques.
+> `DEVICE_ID`, `DEVICE_NAME` et `DEVICE_LOCATION` sont lus depuis `device.conf` et ne sont **jamais** écrasés par les mises à jour automatiques.
