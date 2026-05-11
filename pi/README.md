@@ -299,6 +299,27 @@ curl -X POST http://192.168.0.47:4000/api/webrtc/<ID_CAMERA>/register
 
 ---
 
+### go2rtc orphelin après redémarrage de sentys (WebRTC 502)
+Quand pm2 redémarre sentys, l'ancien processus go2rtc devient orphelin et n'écoute plus sur le port 1984. Symptôme : `[go2rtc] registerStream : fetch failed` dans les logs pm2.
+
+Fix :
+```bash
+# Trouver et tuer l'orphelin
+ps aux | grep go2rtc
+kill <PID>
+
+# Redémarrer sentys pour relancer go2rtc proprement
+pm2 restart sentys
+
+# Vérifier que go2rtc répond
+sleep 5 && curl http://localhost:1984/api/streams
+
+# Ré-enregistrer les caméras si nécessaire
+curl -X POST http://192.168.0.47:4000/api/webrtc/<ID>/register
+```
+
+---
+
 ### `sudo: a terminal is required` dans les logs sentys-agent
 La ligne visudo est manquante. Ajouter via `sudo visudo` :
 ```
@@ -362,12 +383,17 @@ paths:
 ```
 
 ### sentys_agent.py — enregistrement hors ligne réduit
-Dans `record_clip()`, ajouter `"--framerate", "15"` dans la commande `libcamera-vid`.
+Dans `record_clip()`, remplacer `libcamera-vid` par `rpicam-vid` et ajouter `"--framerate", "15"`.
+
+> **Note** : Sur Pi OS Bookworm, `libcamera-vid` n'existe plus — utiliser `rpicam-vid`.
 
 ### auto_update.sh — sudo sans terminal
 ```bash
 echo "picam ALL=(ALL) NOPASSWD: /bin/systemctl restart sentys-agent" | sudo tee /etc/sudoers.d/sentys-agent
 ```
+
+### À NE PAS FAIRE — gpu_mem=16 casse la caméra
+Ne jamais ajouter `gpu_mem=16` dans `/boot/firmware/config.txt` — le stack caméra libcamera nécessite au minimum 64MB de mémoire GPU. Symptôme : `camera_create(): selected camera is not available` dans les logs MediaMTX, et `rpicam-hello --list-cameras` retourne "only supports Raspberry Pi platforms".
 
 ### Gains estimés
 | Optimisation | Gain |
