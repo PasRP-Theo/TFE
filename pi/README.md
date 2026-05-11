@@ -331,3 +331,49 @@ sudo systemctl restart sentys-agent
 | `MAX_STORAGE_MB` | `500` | Stockage max clips hors ligne |
 
 > `DEVICE_ID`, `DEVICE_NAME` et `DEVICE_LOCATION` sont lus depuis `device.conf` et ne sont **jamais** écrasés par les mises à jour automatiques.
+
+---
+
+## Optimisations autonomie (batterie 18650)
+
+### /boot/firmware/config.txt
+```ini
+arm_freq=800        # CPU limité à 800MHz
+#arm_boost=1        # boost CPU désactivé
+dtoverlay=disable-bt # Bluetooth désactivé
+```
+
+### Services désactivés
+```bash
+sudo systemctl disable avahi-daemon avahi-daemon.socket  # mDNS inutile (connexion par IP)
+sudo systemctl disable serial-getty@ttyAMA0              # console série inutile
+sudo systemctl disable offline-recorder.service          # doublon de sentys-agent
+```
+
+### mediamtx.yml — stream réduit
+```yaml
+paths:
+  cam1:
+    source: rpiCamera
+    rpiCameraWidth: 1280
+    rpiCameraHeight: 720
+    rpiCameraFPS: 15
+    rpiCameraBitrate: 500000
+```
+
+### sentys_agent.py — enregistrement hors ligne réduit
+Dans `record_clip()`, ajouter `"--framerate", "15"` dans la commande `libcamera-vid`.
+
+### auto_update.sh — sudo sans terminal
+```bash
+echo "picam ALL=(ALL) NOPASSWD: /bin/systemctl restart sentys-agent" | sudo tee /etc/sudoers.d/sentys-agent
+```
+
+### Gains estimés
+| Optimisation | Gain |
+|---|---|
+| CPU 800MHz + arm_boost off | ~150mA |
+| Double instance Python supprimée | ~40mA |
+| Services inutiles désactivés | ~10mA |
+| Stream 720p15 au lieu de 1080p30 | ~100mA |
+| **Autonomie estimée (2000mAh)** | **~3h30** |
