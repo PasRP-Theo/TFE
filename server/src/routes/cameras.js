@@ -84,8 +84,6 @@ function serializeCamera(camera, node = null) {
     motionActive: node ? isMotionActive(node.last_motion_at) : false,
     lastMotionAt: node?.last_motion_at || null,
     nodeDeviceId: node?.device_id || null,
-    onBattery: node?.on_battery || false,
-    batteryPercent: node?.battery_percent ?? null,
     ...getState(camera.id),
   };
 }

@@ -105,10 +105,6 @@ function normalizeNodePayload(body = {}) {
   const location = String(body.location || '').trim();
   const model = String(body.model || 'Raspberry Pi Camera Node').trim();
   const source = String(body.source || 'pi-node').trim() || 'pi-node';
-  const onBattery = body.onBattery === true || body.on_battery === true;
-  const batteryPercent = body.batteryPercent != null ? Number(body.batteryPercent)
-    : body.battery_percent != null ? Number(body.battery_percent)
-    : null;
 
   if (!deviceId || !host || !streamUrl) {
     return null;
@@ -122,8 +118,6 @@ function normalizeNodePayload(body = {}) {
     location,
     model,
     source,
-    onBattery,
-    batteryPercent: batteryPercent != null && Number.isFinite(batteryPercent) ? Math.round(batteryPercent) : null,
   };
 }
 
@@ -155,16 +149,9 @@ async function upsertNode(payload) {
   const normalized = normalizeNodePayload(payload);
   if (!normalized) return null;
 
-  // Lire l'état batterie actuel pour détecter les changements
-  const { rows: existing } = await pool.query(
-    'SELECT on_battery FROM camera_nodes WHERE device_id = $1',
-    [normalized.deviceId]
-  );
-  const previousOnBattery = existing[0]?.on_battery ?? null;
-
   const { rows } = await pool.query(
-    `INSERT INTO camera_nodes (device_id, name, host, stream_url, location, model, source, on_battery, battery_percent, last_seen_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+    `INSERT INTO camera_nodes (device_id, name, host, stream_url, location, model, source, last_seen_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
      ON CONFLICT (device_id) DO UPDATE SET
        name = EXCLUDED.name,
        host = EXCLUDED.host,
@@ -172,41 +159,12 @@ async function upsertNode(payload) {
        location = EXCLUDED.location,
        model = EXCLUDED.model,
        source = EXCLUDED.source,
-       on_battery = EXCLUDED.on_battery,
-       battery_percent = EXCLUDED.battery_percent,
        last_seen_at = NOW()
      RETURNING *`,
-    [normalized.deviceId, normalized.name, normalized.host, normalized.streamUrl, normalized.location, normalized.model, normalized.source, normalized.onBattery, normalized.batteryPercent]
+    [normalized.deviceId, normalized.name, normalized.host, normalized.streamUrl, normalized.location, normalized.model, normalized.source]
   );
 
-  const node = rows[0] || null;
-
-  // Notif push si le statut batterie a changé
-  if (node && previousOnBattery !== null && previousOnBattery !== normalized.onBattery) {
-    const camName = node.name || normalized.deviceId;
-    const title = normalized.onBattery
-      ? `🔋 Sur batterie — ${camName}`
-      : `⚡ Sur secteur — ${camName}`;
-    const body = normalized.onBattery
-      ? `La caméra ${camName} fonctionne maintenant sur batterie${normalized.batteryPercent != null ? ` (${normalized.batteryPercent}%)` : ''}.`
-      : `La caméra ${camName} est de nouveau alimentée par le secteur.`;
-
-    const pushPayload = JSON.stringify({ title, body, icon: '/pwa-192.png', data: { url: '/' } });
-    pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
-      subs.forEach(sub =>
-        sendPushNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          pushPayload
-        ).catch(async err => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
-          }
-        })
-      );
-    }).catch(() => {});
-  }
-
-  return node;
+  return rows[0] || null;
 }
 
 async function getConnectedHosts() {
