@@ -15,6 +15,8 @@ interface Camera {
   motionActive?: boolean;
   lastMotionAt?: string | null;
   nodeDeviceId?: string | null;
+  onBattery?: boolean;
+  batteryPercent?: number | null;
   status:    "running" | "paused" | "stopped" | "reconnecting";
   recording: boolean;
   startedAt: string | null;
@@ -1015,6 +1017,11 @@ export default function CameraFeed({ onStatusChange }: {
                 </div>
                 <div className="cam-card-actions" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <StatusBadge status={cam.status} />
+                  {cam.onBattery && (
+                    <span className="cam-card-battery" title={cam.batteryPercent != null ? `Batterie : ${cam.batteryPercent}%` : 'Sur batterie'}>
+                      🔋{cam.batteryPercent != null ? ` ${cam.batteryPercent}%` : ''}
+                    </span>
+                  )}
                   <MotionBadge active={cam.motionActive} />
                   <button className="cam-card-history"
                     onClick={e => { e.stopPropagation(); loadCameraHistory(cam.id); }}>

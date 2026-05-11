@@ -208,6 +208,8 @@ export async function initDB() {
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_announce_interval INTEGER NOT NULL DEFAULT 30;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_port         INTEGER NOT NULL DEFAULT 8554;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_path         VARCHAR(60) NOT NULL DEFAULT 'cam1';
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS on_battery            BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS battery_percent        INTEGER;
     `);
 
     await client.query(

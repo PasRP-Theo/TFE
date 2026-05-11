@@ -3179,6 +3179,11 @@ a:focus-visible {
   min-width: 90px;
 }
 
+.cam-card-battery {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
 .cam-focus-exit-btn {
   min-height: 44px;
   padding: 0 18px;
