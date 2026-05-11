@@ -38,7 +38,19 @@ router.post(
     }
 
     try {
-      const sdpAnswer = await negotiate(cameraId, sdpOffer);
+      let sdpAnswer;
+      try {
+        sdpAnswer = await negotiate(cameraId, sdpOffer);
+      } catch (firstErr) {
+        // Stream inconnu de go2rtc → on tente un enregistrement à la volée puis on réessaie
+        const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id = $1', [cameraId]);
+        if (rows[0]) {
+          await registerStream(cameraId, rows[0].rtsp_url);
+          sdpAnswer = await negotiate(cameraId, sdpOffer);
+        } else {
+          throw firstErr;
+        }
+      }
       res.type('application/sdp').send(sdpAnswer);
     } catch (err) {
       console.error(`[WEBRTC] Négociation cam ${cameraId} échouée :`, err.message);
