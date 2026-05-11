@@ -552,7 +552,7 @@ router.post('/:id/motion', async (req, res) => {
 
     const detectionLabel = req.body?.label || null;
     const detectionType  = req.body?.type  || null;
-    triggerMotionRecording(req.params.id, 30, detectionLabel);
+    triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name);
 
     // NOUVEAU : On allume le badge "MOUVEMENT" en mettant à jour le noeud dans la base
     if (rows[0]) {

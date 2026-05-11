@@ -246,8 +246,8 @@ router.post('/motion', async (req, res) => {
       );
 
       // Déclenche l'enregistrement vidéo immédiatement
-      pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
-        .then(({ rows: camRows }) => { if (camRows[0]) triggerMotionRecording(camRows[0].id, 30); })
+      pool.query('SELECT id, name FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
+        .then(({ rows: camRows }) => { if (camRows[0]) triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name); })
         .catch(() => {});
     }
 

@@ -669,7 +669,7 @@ export async function deleteAllRecordings(cameraId) {
   return { deletedCount };
 }
 
-export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null) {
+export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null) {
   const id = String(cameraId);
   const s = states.get(id);
   if (!s || !s.sourceUrl) return; // Permet de lancer l'enregistrement même si HLS est en "reconnecting"
@@ -710,8 +710,9 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
   console.log(`[CAM ${id}] 🎥 Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
 
   const pushTitle = detectionLabel || 'Mouvement détecté';
+  const camLabel = cameraName || `CAM ${id}`;
   const pushPayload = JSON.stringify({
-    title: `${pushTitle} — CAM ${id}`,
+    title: `${pushTitle} — ${camLabel}`,
     body: detectionLabel ? `${detectionLabel} capté par la caméra.` : 'Un mouvement a été détecté par la caméra.',
     icon: '/pwa-192.png',
     data: { url: '/videos' },
