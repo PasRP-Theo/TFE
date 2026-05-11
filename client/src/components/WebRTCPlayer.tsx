@@ -35,6 +35,20 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
         }
       };
 
+      // Détection de déconnexion WebRTC → bascule vers HLS
+      pc.onconnectionstatechange = () => {
+        if (disposed) return;
+        const state = pc.connectionState;
+        if (state === 'failed') {
+          onError();
+        } else if (state === 'disconnected') {
+          // Petite tolérance pour les décos transitoires
+          setTimeout(() => {
+            if (!disposed && pc.connectionState === 'disconnected') onError();
+          }, 3000);
+        }
+      };
+
       // Création de l'offre SDP locale
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
