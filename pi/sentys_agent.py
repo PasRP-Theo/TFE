@@ -292,7 +292,7 @@ def main():
     snap_toggle      = False
     prev_snap        = None   # chemin du snapshot précédent
     last_wake_check  = 0.0    # dernière vérification du signal de réveil
-    WAKE_CHECK_INTERVAL = 5   # secondes entre chaque vérification de wake
+    WAKE_CHECK_INTERVAL = 2   # secondes entre chaque vérification de wake
 
     if server_reachable():
         fetch_remote_config()

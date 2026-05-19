@@ -457,13 +457,16 @@ router.post('/:id/start', async (req, res) => {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
 
-    // Si la caméra vient d'un nœud Pi, le réveiller pour qu'il démarre MediaMTX
+    // Si la caméra vient d'un nœud Pi, réveiller seulement — FFmpeg démarre via la notification motion
     const host = getHostFromStreamUrl(rows[0].rtsp_url);
     if (host) {
       const { rows: nodeRows } = await pool.query(
         'SELECT device_id FROM camera_nodes WHERE host = $1 LIMIT 1', [host]
       ).catch(() => ({ rows: [] }));
-      if (nodeRows[0]) requestPiWake(nodeRows[0].device_id);
+      if (nodeRows[0]) {
+        requestPiWake(nodeRows[0].device_id);
+        return res.json({ message: 'Réveil Pi demandé', ...getState(req.params.id) });
+      }
     }
 
     await startHlsStream(rows[0]);
