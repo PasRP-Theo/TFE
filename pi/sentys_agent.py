@@ -213,10 +213,10 @@ def capture_snapshot(out_path: Path) -> bool:
     """Capture un snapshot basse résolution. Retourne True si réussi."""
     try:
         subprocess.run(
-            ['rpicam-jpeg', '-t', '500', '--nopreview',
+            ['rpicam-jpeg', '-t', '100', '--nopreview',
              '--width', str(SNAPSHOT_WIDTH), '--height', str(SNAPSHOT_HEIGHT),
              '-o', str(out_path)],
-            check=True, timeout=6,
+            check=True, timeout=4,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         return True
