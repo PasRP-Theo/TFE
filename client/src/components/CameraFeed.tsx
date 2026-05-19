@@ -451,16 +451,19 @@ export default function CameraFeed({ onStatusChange }: {
   }, [cameras, onStatusChange]);
 
   // Démarre le stream HLS quand l'utilisateur ouvre une caméra en veille ou arrêtée.
+  // Dépend uniquement de `focused` pour éviter la boucle : fetchCameras → cameras change → effet → fetchCameras…
   useEffect(() => {
     if (focused === null) return;
-    const cam = cameras.find(c => c.id === focused);
-    if (!cam) return;
-    if (cam.status === 'watching' || cam.status === 'stopped') {
-      fetch(apiUrl(`/api/cameras/${focused}/start`), { method: 'POST' })
-        .then(() => fetchCameras())
-        .catch(() => {});
-    }
-  }, [focused, cameras]);
+    setCameras(prev => {
+      const cam = prev.find(c => c.id === focused);
+      if (cam?.status === 'watching' || cam?.status === 'stopped') {
+        fetch(apiUrl(`/api/cameras/${focused}/start`), { method: 'POST' })
+          .then(() => fetchCameras())
+          .catch(() => {});
+      }
+      return prev;
+    });
+  }, [focused]);
 
   // Heartbeat toutes les 60s pour maintenir le stream actif tant que la caméra est ouverte.
   useEffect(() => {
