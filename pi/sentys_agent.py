@@ -343,7 +343,7 @@ def main():
                     if check_wake_signal():
                         print("[WAKE] 🔔 Démarrage demandé par l'interface web")
                         set_mediamtx(True)
-                        time.sleep(1)
+                        time.sleep(2)
                         notify_motion(True)
                         stream_state     = 'STREAMING'
                         last_motion_time = now
