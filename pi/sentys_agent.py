@@ -213,7 +213,7 @@ def capture_snapshot(out_path: Path) -> bool:
     """Capture un snapshot basse résolution. Retourne True si réussi."""
     try:
         subprocess.run(
-            ['rpicam-jpeg', '-t', '100', '--nopreview',
+            ['rpicam-jpeg', '-t', '300', '--nopreview',
              '--width', str(SNAPSHOT_WIDTH), '--height', str(SNAPSHOT_HEIGHT),
              '-o', str(out_path)],
             check=True, timeout=4,
@@ -336,19 +336,19 @@ def main():
             cur_snap    = snap_b if snap_toggle else snap_a
             snap_toggle = not snap_toggle
 
-            # Vérifier si le serveur demande un démarrage de stream (clic utilisateur)
-            if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
-                last_wake_check = now
-                if check_wake_signal():
-                    print("[WAKE] 🔔 Démarrage demandé par l'interface web")
-                    set_mediamtx(True)
-                    time.sleep(2)
-                    notify_motion(True)
-                    stream_state     = 'STREAMING'
-                    last_motion_time = now
-                    continue
-
             if capture_snapshot(cur_snap):
+                # Snapshot réussi → caméra libre, on peut vérifier le signal de réveil
+                if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
+                    last_wake_check = now
+                    if check_wake_signal():
+                        print("[WAKE] 🔔 Démarrage demandé par l'interface web")
+                        set_mediamtx(True)
+                        time.sleep(1)
+                        notify_motion(True)
+                        stream_state     = 'STREAMING'
+                        last_motion_time = now
+                        continue
+
                 if prev_snap is not None and prev_snap.exists():
                     if images_differ(prev_snap, cur_snap):
                         print("[MOTION] 🔴 Mouvement détecté !")
