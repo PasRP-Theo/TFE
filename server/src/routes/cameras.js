@@ -7,7 +7,8 @@ import { pipeline } from 'stream/promises';
 import { spawn } from 'child_process';
 import { pool } from '../db/index.js';
 import {
-  startCamera, pauseCamera, resumeCamera,
+  startCamera, startHlsStream, stopHlsStream, heartbeatStream,
+  pauseCamera, resumeCamera,
   stopCamera,  getState,    getAllStates,
   detectCameraStreamUrl, scanLocalNetworkForCameraStreams,
   RECORDINGS_DIR,
@@ -199,6 +200,7 @@ router.post('/', async (req, res) => {
       [name, rtspUrl, location || '']
     );
     const camera = rows[0];
+    // Démarre en mode veille (pas de FFmpeg) — le stream démarre sur demande de l'utilisateur
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
     req.app.get('go2rtc:register')?.(camera.id, rtspUrl)
       .catch(err => console.error('[go2rtc ADD]', err));
@@ -448,16 +450,22 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/start
+// POST /api/cameras/:id/start — démarre le stream HLS (déclenché par clic utilisateur)
 router.post('/:id/start', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
-    await startCamera(rows[0]);
-    res.json({ message: 'Démarrée', ...getState(req.params.id) });
+    await startHlsStream(rows[0]);
+    res.json({ message: 'Stream démarré', ...getState(req.params.id) });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
   }
+});
+
+// POST /api/cameras/:id/stream/heartbeat — maintient le stream actif (envoyé par le client toutes les 60s)
+router.post('/:id/stream/heartbeat', (req, res) => {
+  const ok = heartbeatStream(req.params.id);
+  res.json({ alive: ok });
 });
 
 // POST /api/cameras/:id/pause

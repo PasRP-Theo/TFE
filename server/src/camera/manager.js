@@ -34,6 +34,8 @@ const COMMON_CAMERA_OCTET_RANGES = [
   [121, 140],
   [80, 99],
 ];
+const STREAM_INACTIVE_TIMEOUT_MS = Number(process.env.STREAM_INACTIVE_TIMEOUT_MS || 5 * 60 * 1000);
+
 const SCAN_SUBNETS = String(process.env.CAMERA_SCAN_SUBNETS || '192.168.0')
   .split(',')
   .map(value => value.trim())
@@ -259,9 +261,31 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
 
 export const cameraEvents = new EventEmitter();
 
-// État en mémoire : camId (string) → { proc, status, recording, startedAt, hlsUrl, aiProc }
+// État en mémoire : camId (string) → { proc, status, recording, startedAt, hlsUrl, aiProc, sourceUrl }
+// Statuts possibles : 'stopped' | 'watching' | 'running' | 'reconnecting' | 'paused'
 const states = new Map();
 const activeRecordings = new Map();
+const inactivityTimers = new Map();
+
+function clearInactivityTimer(cameraId) {
+  const timer = inactivityTimers.get(String(cameraId));
+  if (timer) { clearTimeout(timer); inactivityTimers.delete(String(cameraId)); }
+}
+
+function scheduleInactivity(cameraId) {
+  clearInactivityTimer(cameraId);
+  inactivityTimers.set(String(cameraId), setTimeout(() => {
+    console.log(`[CAM ${cameraId}] ⏱ Inactivité — arrêt du stream HLS`);
+    stopHlsStream(String(cameraId));
+  }, STREAM_INACTIVE_TIMEOUT_MS));
+}
+
+export function heartbeatStream(cameraId) {
+  const s = states.get(String(cameraId));
+  if (!s || s.status !== 'running') return false;
+  scheduleInactivity(cameraId);
+  return true;
+}
 
 function ensureDir(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -411,12 +435,29 @@ async function resolveHttpStreamUrl(sourceUrl) {
   return resolved || sourceUrl;
 }
 
+// Met la caméra en mode veille : URL résolue, prête à streamer sur demande (pas de FFmpeg).
 export async function startCamera(camera) {
   const id  = String(camera.id);
   const cur = states.get(id);
-  if (cur?.status === 'running') return;
+  if (cur?.status === 'running' || cur?.status === 'watching') return;
+  if (cur?.aiProc) { cur.aiProc.kill('SIGKILL'); }
 
-  // Nettoie l'ancien processus IA si on est en reconnexion
+  let sourceUrl = String(camera.rtsp_url || '').trim();
+  const isRtsp  = /^rtsp:/i.test(sourceUrl);
+  if (!isRtsp && sourceUrl) sourceUrl = await resolveHttpStreamUrl(sourceUrl);
+
+  states.set(id, { proc: null, aiProc: null, status: 'watching', recording: false, startedAt: null, hlsUrl: null, sourceUrl });
+  broadcast(id);
+  console.log(`[CAM ${id}] En veille → ${redactStreamUrl(sourceUrl)}`);
+}
+
+// Démarre le stream HLS FFmpeg + IA (déclenché par un clic utilisateur ou une détection mouvement).
+export async function startHlsStream(camera) {
+  const id  = String(camera.id);
+  const cur = states.get(id);
+  if (cur?.status === 'running') { scheduleInactivity(id); return; }
+
+  // Tuer l'éventuel processus IA existant (sera relancé ci-dessous)
   if (cur?.aiProc) {
     cur.aiProc.kill('SIGKILL');
     await new Promise(resolve => {
@@ -433,7 +474,6 @@ export async function startCamera(camera) {
   ensureDir(hlsDir);
   ensureDir(recDir);
 
-  // Nettoyer les vieux segments HLS pour éviter les conflits et corruptions
   try {
     const oldFiles = await fsPromises.readdir(hlsDir);
     for (const f of oldFiles) {
@@ -441,125 +481,117 @@ export async function startCamera(camera) {
         await fsPromises.unlink(path.join(hlsDir, f));
       }
     }
-  } catch (err) { /* ignore */ }
+  } catch { /* ignore */ }
 
-  const ts       = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const runId    = Date.now();
   const hlsIndex = path.join(hlsDir, 'index.m3u8');
-  let sourceUrl = camera.rtsp_url;
-  const normalizedUrl = sourceUrl.trim();
-  const isRtsp    = /^rtsp:/i.test(normalizedUrl);
-  if (!isRtsp && normalizedUrl) {
-    sourceUrl = await resolveHttpStreamUrl(normalizedUrl);
-  }
 
-  const args = [];
-  args.push('-fflags', '+genpts+nobuffer', '-flags', 'low_delay'); // Optimisation de la latence
+  // Utilise sourceUrl déjà résolu si disponible (mode veille) sinon résoudre
+  let sourceUrl = cur?.sourceUrl || String(camera.rtsp_url || '').trim();
+  const isRtsp  = /^rtsp:/i.test(sourceUrl);
+  if (!isRtsp && sourceUrl && !cur?.sourceUrl) sourceUrl = await resolveHttpStreamUrl(sourceUrl);
+
+  const args = ['-fflags', '+genpts+nobuffer', '-flags', 'low_delay'];
   if (isRtsp) args.push('-rtsp_transport', RTSP_TRANSPORT);
   args.push('-y', '-i', sourceUrl);
 
-  const useCopy = isRtsp;
-  const videoCodec = useCopy ? 'copy' : 'libx264';
-  const videoCodecArgs = useCopy
+  const videoCodecArgs = isRtsp
     ? ['-c:v', 'copy']
-    : ['-c:v', videoCodec, '-preset', 'veryfast', '-tune', 'zerolatency', '-crf', '23', '-pix_fmt', 'yuv420p'];
-
-  const audioCodecArgs = ['-an'];
+    : ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-crf', '23', '-pix_fmt', 'yuv420p'];
 
   const outArgs = [
     '-map', '0:v:0',
     ...videoCodecArgs,
-    ...audioCodecArgs,
+    '-an',
     '-f', 'hls',
     '-hls_time', '1',
     '-hls_list_size', '3',
     '-hls_flags', 'delete_segments+append_list',
     '-hls_start_number_source', 'datetime',
-    '-hls_segment_type', 'fmp4', // Format ultra-compatible pour les navigateurs web modernes
-    '-hls_fmp4_init_filename', `init_${runId}.mp4`, // Fichier d'initialisation contenant les headers
-    '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.m4s`), // Segments MP4 fragmentés
+    '-hls_segment_type', 'fmp4',
+    '-hls_fmp4_init_filename', `init_${runId}.mp4`,
+    '-hls_segment_filename', path.join(hlsDir, `seg_${runId}_%05d.m4s`),
     hlsIndex,
   ];
 
   const argsFinal = [...args, ...outArgs];
-
   const proc = spawn(FFMPEG_BIN, argsFinal, { stdio: ['ignore', 'pipe', 'pipe'] });
-  console.log(`[CAM ${id}] lancement ffmpeg ${FFMPEG_BIN} ${redactCommandArgs(argsFinal).join(' ')}`);
+  console.log(`[CAM ${id}] ▶ FFmpeg ${FFMPEG_BIN} ${redactCommandArgs(argsFinal).join(' ')}`);
 
   proc.on('error', err => {
-    console.error(`[CAM ${id}] impossible de démarrer ffmpeg (${FFMPEG_BIN}): ${err.message}`);
-    states.set(id, {
-      proc: null,
-      status: 'stopped',
-      recording: false,
-      startedAt: null,
-      hlsUrl: null,
-      sourceUrl: null,
-    });
+    console.error(`[CAM ${id}] impossible de démarrer ffmpeg : ${err.message}`);
+    clearInactivityTimer(id);
+    states.set(id, { proc: null, aiProc: null, status: 'watching', recording: false, startedAt: null, hlsUrl: null, sourceUrl });
     broadcast(id);
   });
 
-  // --- DÉMARRAGE DYNAMIQUE DE L'IA ---
+  // Démarrage de l'IA
   const aiScript = path.join(PROJECT_ROOT, 'server', 'motion_detector.py');
   let aiProc = null;
   if (existsSync(aiScript)) {
-    console.log(`[CAM ${id}] 🤖 Lancement dynamique de l'IA Python...`);
     const venvPython = path.join(PROJECT_ROOT, 'venv', 'bin', 'python');
-    const pythonBin = os.platform() === 'win32' ? 'python' : (existsSync(venvPython) ? venvPython : 'python3');
-    aiProc = spawn(pythonBin, [aiScript], {
-      env: { ...process.env, CAMERA_ID: id, RTSP_URL: sourceUrl }
-    });
+    const pythonBin  = os.platform() === 'win32' ? 'python' : (existsSync(venvPython) ? venvPython : 'python3');
+    aiProc = spawn(pythonBin, [aiScript], { env: { ...process.env, CAMERA_ID: id, RTSP_URL: sourceUrl } });
     aiProc.stdout.on('data', d => console.log(`[CAM ${id} IA] ${d.toString().trim()}`));
     aiProc.stderr.on('data', d => {
       const msg = d.toString().trim();
-      // On masque les alertes GStreamer d'OpenCV pour garder des logs Node.js propres
-      if (!msg.includes('GStreamer warning') && !msg.includes('error while decoding')) {
+      if (!msg.includes('GStreamer warning') && !msg.includes('error while decoding'))
         console.error(`[CAM ${id} IA] ${msg}`);
-      }
     });
-    aiProc.on('error', err => console.error(`[CAM ${id} IA] Erreur: ${err.message}`));
+    aiProc.on('error', err => console.error(`[CAM ${id} IA] ${err.message}`));
+    console.log(`[CAM ${id}] 🤖 IA démarrée`);
   }
 
-  states.set(id, {
-    proc,
-    aiProc,
-    status:    'running',
-    recording: false,
-    startedAt: new Date().toISOString(),
-    hlsUrl:    `/hls/${id}/index.m3u8`,
-    sourceUrl: sourceUrl,
-  });
+  states.set(id, { proc, aiProc, status: 'running', recording: false, startedAt: new Date().toISOString(), hlsUrl: `/hls/${id}/index.m3u8`, sourceUrl });
   broadcast(id);
+  scheduleInactivity(id);
 
   proc.stderr.on('data', data => {
     const txt = data.toString();
-    if (txt.includes('Error') || txt.includes('error'))
-      console.error(`[CAM ${id}] ffmpeg: ${txt.slice(0, 200)}`);
+    if (txt.includes('Error') || txt.includes('error')) console.error(`[CAM ${id}] ffmpeg: ${txt.slice(0, 200)}`);
   });
 
   proc.on('close', code => {
     const s = states.get(id);
-    if (s && s.status !== 'stopped' && s.status !== 'paused') {
+    // Ne pas redémarrer si on a intentionnellement arrêté (stopped/paused/watching)
+    if (s && s.status !== 'stopped' && s.status !== 'paused' && s.status !== 'watching') {
       console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
+      clearInactivityTimer(id);
       s.status = 'reconnecting';
       broadcast(id);
-      setTimeout(() => startCamera(camera), 5000);
+      setTimeout(() => startHlsStream(camera), 5000);
     }
   });
 
-  console.log(`[CAM ${id}] Démarré → ${redactStreamUrl(sourceUrl)} transport=${isRtsp ? RTSP_TRANSPORT : 'http'}`);
+  console.log(`[CAM ${id}] ▶ Stream HLS démarré → ${redactStreamUrl(sourceUrl)}`);
+}
+
+// Arrête uniquement le stream HLS (FFmpeg + IA) et repasse en mode veille.
+export function stopHlsStream(cameraId) {
+  const id = String(cameraId);
+  const s  = states.get(id);
+  if (!s) return false;
+  clearInactivityTimer(id);
+  s.proc?.kill('SIGKILL');
+  s.proc = null;
+  if (s.aiProc) { s.aiProc.kill('SIGKILL'); s.aiProc = null; console.log(`[CAM ${id}] 🤖 IA arrêtée`); }
+  if (activeRecordings.has(id)) { activeRecordings.get(id)?.kill('SIGKILL'); activeRecordings.delete(id); }
+  s.status    = 'watching';
+  s.recording = false;
+  s.hlsUrl    = null;
+  s.startedAt = null;
+  broadcast(id);
+  console.log(`[CAM ${id}] ⏹ Stream HLS arrêté — mode veille`);
+  return true;
 }
 
 export function pauseCamera(cameraId) {
   const id = String(cameraId);
   const s  = states.get(id);
   if (!s || s.status !== 'running') return false;
-  // Sur Windows SIGSTOP n'existe pas → on tue et marque paused
+  clearInactivityTimer(id);
   s.proc?.kill('SIGKILL');
-  if (s.aiProc) {
-    s.aiProc?.kill('SIGKILL');
-    s.aiProc = null;
-  }
+  if (s.aiProc) { s.aiProc?.kill('SIGKILL'); s.aiProc = null; }
   s.status    = 'paused';
   s.recording = false;
   broadcast(id);
@@ -571,10 +603,10 @@ export function resumeCamera(camera) {
   const s  = states.get(id);
   if (s?.status === 'paused') {
     states.delete(id);
-    startCamera(camera);
+    startHlsStream(camera);
     return true;
   }
-  if (!s) { startCamera(camera); return true; }
+  if (!s) { startHlsStream(camera); return true; }
   return false;
 }
 
@@ -582,17 +614,12 @@ export function stopCamera(cameraId) {
   const id = String(cameraId);
   const s  = states.get(id);
   if (!s) return false;
+  clearInactivityTimer(id);
   s.status    = 'stopped';
   s.recording = false;
   s.proc?.kill('SIGKILL');
-  if (s.aiProc) {
-    s.aiProc?.kill('SIGKILL');
-    console.log(`[CAM ${id}] 🤖 Arrêt de l'IA.`);
-  }
-  if (activeRecordings.has(id)) {
-    activeRecordings.get(id)?.kill('SIGKILL');
-    activeRecordings.delete(id);
-  }
+  if (s.aiProc) { s.aiProc?.kill('SIGKILL'); console.log(`[CAM ${id}] 🤖 Arrêt de l'IA.`); }
+  if (activeRecordings.has(id)) { activeRecordings.get(id)?.kill('SIGKILL'); activeRecordings.delete(id); }
   states.delete(id);
   broadcast(id);
   console.log(`[CAM ${id}] Arrêtée`);
@@ -624,6 +651,8 @@ export async function cleanupOldRecordings({ retentionDays = Number(process.env.
 }
 
 export function stopAllCameras() {
+  inactivityTimers.forEach(t => clearTimeout(t));
+  inactivityTimers.clear();
   states.forEach((s, id) => {
     s.proc?.kill('SIGKILL');
     s.aiProc?.kill('SIGKILL');

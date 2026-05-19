@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
-import { startCamera, getState, triggerMotionRecording } from '../camera/manager.js';
+import { startCamera, startHlsStream, getState, triggerMotionRecording } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
 import { spawn } from 'child_process';
@@ -245,9 +245,14 @@ router.post('/motion', async (req, res) => {
         [deviceId, true, detectedAt.toISOString()]
       );
 
-      // Déclenche l'enregistrement vidéo immédiatement
-      pool.query('SELECT id, name FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
-        .then(({ rows: camRows }) => { if (camRows[0]) triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name); })
+      // Démarre le stream HLS + déclenche l'enregistrement pour la caméra liée
+      pool.query('SELECT * FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
+        .then(({ rows: camRows }) => {
+          if (camRows[0]) {
+            startHlsStream(camRows[0]).catch(() => {});
+            triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name);
+          }
+        })
         .catch(() => {});
     }
 

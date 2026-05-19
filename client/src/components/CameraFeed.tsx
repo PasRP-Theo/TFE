@@ -15,7 +15,7 @@ interface Camera {
   motionActive?: boolean;
   lastMotionAt?: string | null;
   nodeDeviceId?: string | null;
-  status:    "running" | "paused" | "stopped" | "reconnecting";
+  status:    "running" | "paused" | "stopped" | "reconnecting" | "watching";
   recording: boolean;
   startedAt: string | null;
   hlsUrl:    string | null;
@@ -270,6 +270,7 @@ function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
 function OfflineScreen({ status }: { status: Camera["status"] }) {
   const text = status === 'paused' ? 'EN PAUSE'
              : status === 'reconnecting' ? 'RECONNEXION...'
+             : status === 'watching' ? 'EN VEILLE — CLIQUEZ POUR VOIR'
              : 'FLUX INACTIF';
   return (
     <div className="cam-screen">
@@ -315,6 +316,7 @@ function StatusBadge({ status }: { status: Camera["status"] }) {
     paused:       { label: "EN PAUSE",    cls: "cam-badge--paused"    },
     stopped:      { label: "ARRÊTÉE",     cls: "cam-badge--offline"   },
     reconnecting: { label: "RECONNEXION", cls: "cam-badge--reconnect" },
+    watching:     { label: "EN VEILLE",   cls: "cam-badge--offline"   },
   }[status];
   return (
     <span className={`cam-badge ${cfg.cls}`}>
@@ -339,7 +341,9 @@ function getCameraStatusText(cam: Camera) {
       ? 'En pause'
       : cam.status === 'reconnecting'
         ? 'Reconnexion…'
-        : 'Inactif';
+        : cam.status === 'watching'
+          ? 'En veille — cliquez pour démarrer'
+          : 'Inactif';
 
   if (cam.motionActive) return `${base} · Mouvement detecte`;
   if (cam.lastMotionAt) return `${base} · Dernier mouvement ${new Date(cam.lastMotionAt).toLocaleTimeString('fr-FR')}`;
@@ -357,7 +361,8 @@ function CameraControls({ cam, onAction }: {
       <span className="cam-footer-status">
         {getCameraStatusText(cam)}
       </span>
-      {status === 'stopped'      && <button className="cam-btn-start" onClick={() => onAction(id, 'start')}>▶ START</button>}
+      {(status === 'stopped' || status === 'watching') &&
+        <button type="button" className="cam-btn-start" onClick={() => onAction(id, 'start')}>▶ START</button>}
       {status === 'running'      && <button className="cam-btn-pause" onClick={() => onAction(id, 'pause')}>⏸ PAUSE</button>}
       {status === 'paused'       && <button className="cam-btn-start" onClick={() => onAction(id, 'resume')}>▶ REPRENDRE</button>}
       {(status === 'running' || status === 'paused' || status === 'reconnecting') &&
@@ -443,6 +448,27 @@ export default function CameraFeed({ onStatusChange }: {
       onStatusChange({ reconnectingCount, stoppedCount });
     }
   }, [cameras, onStatusChange]);
+
+  // Démarre le stream HLS quand l'utilisateur ouvre une caméra en veille ou arrêtée.
+  useEffect(() => {
+    if (focused === null) return;
+    const cam = cameras.find(c => c.id === focused);
+    if (!cam) return;
+    if (cam.status === 'watching' || cam.status === 'stopped') {
+      fetch(apiUrl(`/api/cameras/${focused}/start`), { method: 'POST' })
+        .then(() => fetchCameras())
+        .catch(() => {});
+    }
+  }, [focused, cameras]);
+
+  // Heartbeat toutes les 60s pour maintenir le stream actif tant que la caméra est ouverte.
+  useEffect(() => {
+    if (focused === null) return;
+    const interval = setInterval(() => {
+      fetch(apiUrl(`/api/cameras/${focused}/stream/heartbeat`), { method: 'POST' }).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [focused]);
 
   useEffect(() => {
     if (!showAdd) return;
