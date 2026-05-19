@@ -572,14 +572,16 @@ export function stopHlsStream(cameraId) {
   const s  = states.get(id);
   if (!s) return false;
   clearInactivityTimer(id);
-  s.proc?.kill('SIGKILL');
-  s.proc = null;
-  if (s.aiProc) { s.aiProc.kill('SIGKILL'); s.aiProc = null; console.log(`[CAM ${id}] 🤖 IA arrêtée`); }
-  if (activeRecordings.has(id)) { activeRecordings.get(id)?.kill('SIGKILL'); activeRecordings.delete(id); }
+  // Mettre le status à 'watching' AVANT de tuer le proc, sinon proc.on('close')
+  // voit encore 'running' et déclenche une reconnexion indésirable.
   s.status    = 'watching';
   s.recording = false;
   s.hlsUrl    = null;
   s.startedAt = null;
+  s.proc?.kill('SIGKILL');
+  s.proc = null;
+  if (s.aiProc) { s.aiProc.kill('SIGKILL'); s.aiProc = null; console.log(`[CAM ${id}] 🤖 IA arrêtée`); }
+  if (activeRecordings.has(id)) { activeRecordings.get(id)?.kill('SIGKILL'); activeRecordings.delete(id); }
   broadcast(id);
   console.log(`[CAM ${id}] ⏹ Stream HLS arrêté — mode veille`);
   return true;
@@ -590,10 +592,10 @@ export function pauseCamera(cameraId) {
   const s  = states.get(id);
   if (!s || s.status !== 'running') return false;
   clearInactivityTimer(id);
-  s.proc?.kill('SIGKILL');
-  if (s.aiProc) { s.aiProc?.kill('SIGKILL'); s.aiProc = null; }
   s.status    = 'paused';
   s.recording = false;
+  s.proc?.kill('SIGKILL');
+  if (s.aiProc) { s.aiProc?.kill('SIGKILL'); s.aiProc = null; }
   broadcast(id);
   return true;
 }
@@ -615,7 +617,7 @@ export function stopCamera(cameraId) {
   const s  = states.get(id);
   if (!s) return false;
   clearInactivityTimer(id);
-  s.status    = 'stopped';
+  s.status    = 'stopped';   // avant kill pour éviter la reconnexion auto
   s.recording = false;
   s.proc?.kill('SIGKILL');
   if (s.aiProc) { s.aiProc?.kill('SIGKILL'); console.log(`[CAM ${id}] 🤖 Arrêt de l'IA.`); }
