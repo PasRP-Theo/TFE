@@ -157,7 +157,7 @@ def record_clip():
     ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = RECORD_DIR / f"{ts}.mp4"
     subprocess.run(
-        ['libcamera-vid', '-t', str(CLIP_DURATION_SEC * 1000),
+        ['rpicam-vid', '-t', str(CLIP_DURATION_SEC * 1000),
          '--codec', 'h264', '--width', '1280', '--height', '720', '-o', str(out)],
         check=True, timeout=CLIP_DURATION_SEC + 10,
     )
@@ -213,7 +213,7 @@ def capture_snapshot(out_path: Path) -> bool:
     """Capture un snapshot basse résolution. Retourne True si réussi."""
     try:
         subprocess.run(
-            ['libcamera-jpeg', '-t', '500', '--nopreview',
+            ['rpicam-jpeg', '-t', '500', '--nopreview',
              '--width', str(SNAPSHOT_WIDTH), '--height', str(SNAPSHOT_HEIGHT),
              '-o', str(out_path)],
             check=True, timeout=6,
@@ -340,7 +340,7 @@ def main():
                                 out = record_clip()
                                 print(f"[MOTION] 📼 Clip : {out.name}")
                             except FileNotFoundError:
-                                print("[MOTION] ❌ libcamera-vid introuvable")
+                                print("[MOTION] ❌ rpicam-vid introuvable")
                                 time.sleep(10)
                             except Exception as e:
                                 print(f"[MOTION] ❌ Recording : {e}")
