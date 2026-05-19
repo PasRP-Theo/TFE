@@ -244,20 +244,34 @@ def images_differ(path_a: Path, path_b: Path) -> bool:
         return False
 
 
-def notify_motion():
-    """Notifie le serveur qu'un mouvement a été détecté."""
+def notify_motion(active: bool = True):
+    """Notifie le serveur d'un changement d'état de mouvement."""
     try:
         r = requests.post(
             f"{SERVER_URL}/api/camera-nodes/motion",
-            json={"deviceId": DEVICE_ID, "motion": True},
+            json={"deviceId": DEVICE_ID, "motion": active},
             timeout=5,
         )
         if r.status_code == 200:
-            print("[MOTION] ✅ Serveur notifié du mouvement")
+            print(f"[MOTION] ✅ Serveur notifié ({'actif' if active else 'inactif'})")
         else:
             print(f"[MOTION] ⚠ HTTP {r.status_code}")
     except Exception as e:
         print(f"[MOTION] ❌ Impossible de notifier le serveur : {e}")
+
+
+def check_wake_signal() -> bool:
+    """Vérifie si le serveur demande un démarrage de stream (clic utilisateur)."""
+    try:
+        r = requests.get(
+            f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/wake",
+            timeout=3,
+        )
+        if r.status_code == 200:
+            return r.json().get("wake", False)
+    except Exception:
+        pass
+    return False
 
 
 # ─── Boucle principale ─────────────────────────────────────────────────────────
@@ -277,6 +291,8 @@ def main():
     snap_b           = SNAPSHOT_DIR / 'snap_b.jpg'
     snap_toggle      = False
     prev_snap        = None   # chemin du snapshot précédent
+    last_wake_check  = 0.0    # dernière vérification du signal de réveil
+    WAKE_CHECK_INTERVAL = 5   # secondes entre chaque vérification de wake
 
     if server_reachable():
         fetch_remote_config()
@@ -320,6 +336,18 @@ def main():
             cur_snap    = snap_b if snap_toggle else snap_a
             snap_toggle = not snap_toggle
 
+            # Vérifier si le serveur demande un démarrage de stream (clic utilisateur)
+            if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
+                last_wake_check = now
+                if check_wake_signal():
+                    print("[WAKE] 🔔 Démarrage demandé par l'interface web")
+                    set_mediamtx(True)
+                    time.sleep(2)
+                    notify_motion(True)
+                    stream_state     = 'STREAMING'
+                    last_motion_time = now
+                    continue
+
             if capture_snapshot(cur_snap):
                 if prev_snap is not None and prev_snap.exists():
                     if images_differ(prev_snap, cur_snap):
@@ -330,7 +358,7 @@ def main():
                             # En ligne : démarrer MediaMTX et notifier le serveur
                             set_mediamtx(True)
                             time.sleep(2)   # Laisser MediaMTX s'initialiser
-                            notify_motion()
+                            notify_motion(True)
                             stream_state = 'STREAMING'
                         else:
                             # Hors ligne : enregistrement local direct
@@ -359,6 +387,8 @@ def main():
             if now - last_motion_time > STREAM_IDLE_TIMEOUT:
                 print(f"[MOTION] ⏹ {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
                 set_mediamtx(False)
+                if online:
+                    notify_motion(False)   # Prévient le serveur pour couper le HLS proprement
                 stream_state = 'IDLE'
                 prev_snap    = None
                 snap_toggle  = False

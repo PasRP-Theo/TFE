@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
-import { startCamera, startHlsStream, getState, triggerMotionRecording } from '../camera/manager.js';
+import { startCamera, startHlsStream, stopHlsStream, getState, triggerMotionRecording } from '../camera/manager.js';
+
+// Flags en mémoire : deviceId → true quand l'UI demande un stream sur ce Pi
+const streamWakeRequests = new Map();
+
+export function requestPiWake(deviceId) {
+  streamWakeRequests.set(String(deviceId), true);
+}
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
 import { spawn } from 'child_process';
@@ -193,6 +200,14 @@ router.get('/', async (_req, res) => {
   }
 });
 
+// GET /api/camera-nodes/:deviceId/wake — le Pi poll cet endpoint toutes les 5s
+router.get('/:deviceId/wake', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  const wake = streamWakeRequests.get(deviceId) || false;
+  if (wake) streamWakeRequests.delete(deviceId);
+  res.json({ wake });
+});
+
 router.post('/announce', async (req, res) => {
   const payload = normalizeNodePayload(req.body);
   if (!payload) {
@@ -250,9 +265,15 @@ router.post('/motion', async (req, res) => {
         .then(({ rows: camRows }) => {
           if (camRows[0]) {
             startHlsStream(camRows[0]).catch(() => {});
-            triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name);
+            // Enregistrement déclenché 3s après pour laisser MediaMTX démarrer
+            setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name), 3000);
           }
         })
+        .catch(() => {});
+    } else {
+      // motion: false → le Pi a arrêté MediaMTX, on coupe proprement le stream HLS
+      pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
+        .then(({ rows: camRows }) => { if (camRows[0]) stopHlsStream(String(camRows[0].id)); })
         .catch(() => {});
     }
 

@@ -18,6 +18,7 @@ import {
   triggerMotionRecording,
 } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
+import { requestPiWake } from './cameraNodes.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -455,6 +456,16 @@ router.post('/:id/start', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
+
+    // Si la caméra vient d'un nœud Pi, le réveiller pour qu'il démarre MediaMTX
+    const host = getHostFromStreamUrl(rows[0].rtsp_url);
+    if (host) {
+      const { rows: nodeRows } = await pool.query(
+        'SELECT device_id FROM camera_nodes WHERE host = $1 LIMIT 1', [host]
+      ).catch(() => ({ rows: [] }));
+      if (nodeRows[0]) requestPiWake(nodeRows[0].device_id);
+    }
+
     await startHlsStream(rows[0]);
     res.json({ message: 'Stream démarré', ...getState(req.params.id) });
   } catch {
