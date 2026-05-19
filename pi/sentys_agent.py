@@ -26,7 +26,7 @@ RTSP_PORT          = 8554
 RTSP_PATH          = "cam1"
 
 # Détection de mouvement
-MOTION_SNAPSHOT_INTERVAL = 2     # secondes entre chaque snapshot en veille
+MOTION_SNAPSHOT_INTERVAL = 1     # secondes entre chaque snapshot en veille
 MOTION_THRESHOLD         = 25    # diff par pixel (0-255) pour considérer un changement
 MOTION_MIN_PIXELS        = 300   # nb de pixels différents pour déclarer un mouvement
 STREAM_IDLE_TIMEOUT      = 60    # secondes sans mouvement avant d'arrêter MediaMTX
@@ -357,7 +357,7 @@ def main():
                         if online:
                             # En ligne : démarrer MediaMTX et notifier le serveur
                             set_mediamtx(True)
-                            time.sleep(2)   # Laisser MediaMTX s'initialiser
+                            time.sleep(1)   # Laisser MediaMTX s'initialiser
                             notify_motion(True)
                             stream_state = 'STREAMING'
                         else:
