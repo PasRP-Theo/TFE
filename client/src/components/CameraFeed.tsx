@@ -147,10 +147,9 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
       if (HlsLib.isSupported()) {
         hls = new HlsLib({
-          lowLatencyMode: true,
-          liveSyncDurationCount: 1,
-          liveMaxLatencyDurationCount: 4,
-          maxBufferLength: 4,
+          liveSyncDurationCount: 2,
+          liveMaxLatencyDurationCount: 6,
+          maxBufferLength: 8,
         });
 
         hls.loadSource(fullUrl);

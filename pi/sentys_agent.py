@@ -278,6 +278,9 @@ def check_wake_signal() -> bool:
 
 def main():
     print(f"[SENTYS] Démarré | serveur={SERVER_URL} | device={DEVICE_ID}")
+    # S'assurer que MediaMTX est arrêté au démarrage pour libérer la caméra
+    set_mediamtx(False)
+    time.sleep(3)
 
     was_offline      = False
     last_announce    = 0.0
