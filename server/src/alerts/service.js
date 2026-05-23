@@ -34,14 +34,18 @@ export async function createAlert({
     }
   }
 
-  const { rows } = await pool.query(
-    `INSERT INTO alerts (source_type, source_id, camera_id, alert_type, level, title, message, metadata, dedupe_key)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
-     RETURNING *`,
-    [sourceType, sourceId, cameraId, alertType, level, title, message, JSON.stringify(metadata || {}), dedupeKey]
-  );
-
-  return { skipped: false, alert: rows[0] };
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO alerts (source_type, source_id, camera_id, alert_type, level, title, message, metadata, dedupe_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+       RETURNING *`,
+      [sourceType, sourceId, cameraId, alertType, level, title, message, JSON.stringify(metadata || {}), dedupeKey]
+    );
+    return { skipped: false, alert: rows[0] };
+  } catch (err) {
+    if (err.code === '23505') return { skipped: true, reason: 'dedupe-race', alertId: null };
+    throw err;
+  }
 }
 
 export async function getAlertsSummary() {
