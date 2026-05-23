@@ -284,6 +284,7 @@ def main():
 
     was_offline      = False
     last_announce    = 0.0
+    server_loss_streak = 0    # nb de checks consécutifs sans serveur pendant le streaming
 
     # États :
     #   IDLE      — caméra off, snapshots toutes les N secondes
@@ -296,6 +297,7 @@ def main():
     prev_snap        = None   # chemin du snapshot précédent
     last_wake_check  = 0.0    # dernière vérification du signal de réveil
     WAKE_CHECK_INTERVAL = 2   # secondes entre chaque vérification de wake
+    SERVER_LOSS_TOLERANCE = 3 # nb de checks sans serveur avant d'arrêter le stream
 
     if server_reachable():
         fetch_remote_config()
@@ -313,19 +315,26 @@ def main():
         if online and was_offline:
             print("[SENTYS] Connexion rétablie")
             fetch_remote_config()
+            server_loss_streak = 0
             if stream_state != 'STREAMING':
                 upload_pending()
             was_offline = False
 
         if not online:
             was_offline = True
-            # Si le serveur disparaît pendant le streaming → retour en veille
+            # Si le serveur disparaît pendant le streaming → tolérance avant d'arrêter
             if stream_state == 'STREAMING':
-                print("[SENTYS] Serveur perdu pendant le streaming — arrêt MediaMTX")
+                server_loss_streak += 1
+                if server_loss_streak < SERVER_LOSS_TOLERANCE:
+                    print(f"[SENTYS] Serveur injoignable ({server_loss_streak}/{SERVER_LOSS_TOLERANCE}) — on attend")
+                    time.sleep(CHECK_INTERVAL)
+                    continue
+                print("[SENTYS] Serveur perdu — arrêt MediaMTX")
                 set_mediamtx(False)
+                server_loss_streak = 0
                 stream_state = 'IDLE'
                 prev_snap    = None
-                time.sleep(2)
+                time.sleep(5)  # laisser la caméra se libérer complètement
                 continue
 
         # ── Annonce périodique ─────────────────────────────────────────────────
@@ -395,7 +404,7 @@ def main():
                 stream_state = 'IDLE'
                 prev_snap    = None
                 snap_toggle  = False
-                time.sleep(2)   # Laisser la caméra se libérer avant le prochain snapshot
+                time.sleep(5)   # laisser la caméra se libérer complètement avant le prochain snapshot
             else:
                 remaining = int(STREAM_IDLE_TIMEOUT - (now - last_motion_time))
                 print(f"[STREAMING] En ligne | arrêt dans {remaining}s si pas de mouvement")
