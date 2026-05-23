@@ -377,15 +377,16 @@ def main():
     # États :
     #   IDLE      — caméra off, snapshots toutes les N secondes
     #   STREAMING — MediaMTX actif (online), attente du timeout d'inactivité
-    stream_state     = 'IDLE'
-    last_motion_time = 0.0
-    snap_a           = SNAPSHOT_DIR / 'snap_a.jpg'
-    snap_b           = SNAPSHOT_DIR / 'snap_b.jpg'
-    snap_toggle      = False
-    prev_snap        = None   # chemin du snapshot précédent
-    last_wake_check  = 0.0    # dernière vérification du signal de réveil
-    WAKE_CHECK_INTERVAL = 2   # secondes entre chaque vérification de wake
-    SERVER_LOSS_TOLERANCE = 3 # nb de checks sans serveur avant d'arrêter le stream
+    stream_state          = 'IDLE'
+    last_motion_time      = 0.0
+    snap_a                = SNAPSHOT_DIR / 'snap_a.jpg'
+    snap_b                = SNAPSHOT_DIR / 'snap_b.jpg'
+    snap_toggle           = False
+    prev_snap             = None   # chemin du snapshot précédent
+    last_wake_check       = 0.0    # dernière vérification du signal de réveil
+    WAKE_CHECK_INTERVAL   = 2      # secondes entre chaque vérification de wake
+    SERVER_LOSS_TOLERANCE = 3      # nb de checks sans serveur avant d'arrêter le stream
+    wake_mode             = False  # True = démarré par clic utilisateur (pas timeout mouvement)
 
     if server_reachable():
         fetch_remote_config()
@@ -422,6 +423,7 @@ def main():
                 release_camera()
                 server_loss_streak = 0
                 stream_state = 'IDLE'
+                wake_mode    = False
                 prev_snap    = None
                 time.sleep(3)
                 continue
@@ -444,6 +446,7 @@ def main():
                     wait_for_rtsp_path()
                     notify_motion(True)
                     stream_state     = 'STREAMING'
+                    wake_mode        = True   # pas de timeout mouvement — attend SLEEP
                     last_motion_time = now
                     continue
 
@@ -463,6 +466,7 @@ def main():
                             wait_for_rtsp_path()
                             notify_motion(True)
                             stream_state = 'STREAMING'
+                            wake_mode    = False  # déclenché par mouvement, timeout actif
                         else:
                             # Hors ligne : enregistrement local direct
                             print("[MOTION] Mode hors ligne — enregistrement local")
@@ -487,29 +491,37 @@ def main():
             time.sleep(MOTION_SNAPSHOT_INTERVAL)
 
         elif stream_state == 'STREAMING':
-            if now - last_motion_time > STREAM_IDLE_TIMEOUT:
-                print(f"[MOTION] ⏹ {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
+            # Signal STOP de l'interface : priorité absolue quel que soit le mode
+            if online and check_sleep_signal():
+                print("[SLEEP] 💤 Arrêt demandé par l'interface web")
                 set_mediamtx(False)
-                if online:
-                    notify_motion(False)
+                notify_motion(False)
                 release_camera()
                 stream_state = 'IDLE'
+                wake_mode    = False
                 prev_snap    = None
                 snap_toggle  = False
                 time.sleep(3)
+                continue
+
+            if wake_mode:
+                # Mode utilisateur : on ne s'arrête jamais sur timeout mouvement,
+                # seulement sur signal SLEEP (ci-dessus) ou perte serveur prolongée.
+                time.sleep(2)
             else:
-                # Vérifier le signal sleep toutes les 2s (pas CHECK_INTERVAL)
-                if online and check_sleep_signal():
-                    print("[SLEEP] 💤 Arrêt demandé par l'interface web")
+                # Mode mouvement : arrêt automatique après STREAM_IDLE_TIMEOUT sans détection
+                if now - last_motion_time > STREAM_IDLE_TIMEOUT:
+                    print(f"[MOTION] ⏹ {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
                     set_mediamtx(False)
-                    notify_motion(False)
+                    if online:
+                        notify_motion(False)
                     release_camera()
                     stream_state = 'IDLE'
                     prev_snap    = None
                     snap_toggle  = False
                     time.sleep(3)
-                    continue
-                time.sleep(2)
+                else:
+                    time.sleep(2)
 
 
 if __name__ == "__main__":
