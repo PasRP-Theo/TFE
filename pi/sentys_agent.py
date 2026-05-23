@@ -30,6 +30,7 @@ MOTION_SNAPSHOT_INTERVAL = 1
 MOTION_THRESHOLD         = 25
 MOTION_MIN_PIXELS        = 300
 STREAM_IDLE_TIMEOUT      = 60
+WAKE_STREAM_TIMEOUT      = 300   # 5 min max pour un stream démarré manuellement
 SNAPSHOT_WIDTH           = 320
 SNAPSHOT_HEIGHT          = 240
 SNAPSHOT_DIR             = Path('/tmp/sentys_snapshots')
@@ -68,7 +69,7 @@ SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 def fetch_remote_config():
     global DEVICE_NAME, DEVICE_LOCATION, CLIP_DURATION_SEC, MAX_STORAGE_MB
     global ANNOUNCE_INTERVAL, RTSP_PORT, RTSP_PATH
-    global MOTION_SNAPSHOT_INTERVAL, MOTION_THRESHOLD, MOTION_MIN_PIXELS, STREAM_IDLE_TIMEOUT
+    global MOTION_SNAPSHOT_INTERVAL, MOTION_THRESHOLD, MOTION_MIN_PIXELS, STREAM_IDLE_TIMEOUT, WAKE_STREAM_TIMEOUT
     try:
         r = requests.get(f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/config", timeout=5)
         if r.status_code == 200:
@@ -84,6 +85,7 @@ def fetch_remote_config():
             MOTION_THRESHOLD         = int(cfg.get("motionThreshold",        MOTION_THRESHOLD))
             MOTION_MIN_PIXELS        = int(cfg.get("motionMinPixels",        MOTION_MIN_PIXELS))
             STREAM_IDLE_TIMEOUT      = int(cfg.get("streamIdleTimeout",      STREAM_IDLE_TIMEOUT))
+            WAKE_STREAM_TIMEOUT      = int(cfg.get("wakeStreamTimeout",      WAKE_STREAM_TIMEOUT))
             print("[CONFIG] ✅ Config chargée depuis le serveur")
     except Exception as e:
         print(f"[CONFIG] ⚠ Impossible de charger la config distante : {e}")
@@ -190,7 +192,7 @@ def release_camera():
             print(f"[CAM] ⚠ release_camera fuser : {e}")
 
     clean_shm()
-    time.sleep(2)
+    time.sleep(0.5)
 
 
 def set_mediamtx(active: bool):
@@ -204,18 +206,22 @@ def set_mediamtx(active: bool):
 
 def wait_for_rtsp_path(max_wait: int = 20) -> bool:
     """Attend que MediaMTX signale le path RTSP comme ready:true."""
-    for i in range(max_wait):
+    deadline = time.time() + max_wait
+    attempt  = 0
+    while time.time() < deadline:
         try:
             r = requests.get(
                 f"http://localhost:9997/v3/paths/get/{RTSP_PATH}",
                 timeout=2,
             )
             if r.status_code == 200 and r.json().get("ready") is True:
-                print(f"[MEDIAMTX] ✅ Path /{RTSP_PATH} prêt ({i+1}s)")
+                elapsed = round(time.time() - (deadline - max_wait), 1)
+                print(f"[MEDIAMTX] ✅ Path /{RTSP_PATH} prêt ({elapsed}s)")
                 return True
         except Exception:
             pass
-        time.sleep(1)
+        attempt += 1
+        time.sleep(0.5)
     print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non ready après {max_wait}s")
     return False
 
@@ -228,9 +234,9 @@ def start_stream():
 
 
 def stop_stream():
-    """Arrête MediaMTX et libère la caméra."""
+    """Arrête MediaMTX. systemctl stop gère l'arrêt propre — pas besoin de pkill."""
     set_mediamtx(False)
-    release_camera()
+    clean_shm()
 
 
 def notify_motion(active: bool):
@@ -356,9 +362,7 @@ def upload_pending():
 def main():
     print(f"[SENTYS] Démarré | serveur={SERVER_URL} | device={DEVICE_ID}")
     set_mediamtx(False)
-    time.sleep(2)
     release_camera()
-    time.sleep(2)
 
     was_offline        = False
     last_announce      = 0.0
@@ -368,12 +372,13 @@ def main():
     #         STREAMING — MediaMTX actif
     stream_state       = 'IDLE'
     last_motion_time   = 0.0
+    stream_start_time  = 0.0
     snap_a             = SNAPSHOT_DIR / 'snap_a.jpg'
     snap_b             = SNAPSHOT_DIR / 'snap_b.jpg'
     snap_toggle        = False
     prev_snap          = None
     last_wake_check    = 0.0
-    WAKE_CHECK_INTERVAL   = 2
+    WAKE_CHECK_INTERVAL   = 0.5
     SERVER_LOSS_TOLERANCE = 3
     # True = démarré par clic utilisateur → pas de timeout mouvement, attend SLEEP
     wake_mode = False
@@ -435,9 +440,10 @@ def main():
                     if not ready:
                         # Path non prêt — le serveur réessaiera via le reconnect
                         print("[WAKE] ⚠ MediaMTX non prêt, le serveur va réessayer")
-                    stream_state     = 'STREAMING'
-                    wake_mode        = True
-                    last_motion_time = now
+                    stream_state      = 'STREAMING'
+                    wake_mode         = True
+                    last_motion_time  = now
+                    stream_start_time = now
                     continue
 
             # Snapshot pour détection mouvement
@@ -475,7 +481,6 @@ def main():
                 prev_snap = cur_snap
             else:
                 release_camera()
-                time.sleep(2)
                 continue
 
             time.sleep(MOTION_SNAPSHOT_INTERVAL)
@@ -496,8 +501,19 @@ def main():
                 continue
 
             if wake_mode:
-                # Mode utilisateur : stream permanent jusqu'au STOP
-                time.sleep(2)
+                # Mode utilisateur : auto-stop après WAKE_STREAM_TIMEOUT sans clic
+                if now - stream_start_time > WAKE_STREAM_TIMEOUT:
+                    print(f"[WAKE] ⏹ {WAKE_STREAM_TIMEOUT}s écoulés — arrêt automatique")
+                    stop_stream()
+                    if online:
+                        notify_motion(False)
+                    stream_state = 'IDLE'
+                    wake_mode    = False
+                    prev_snap    = None
+                    snap_toggle  = False
+                    time.sleep(3)
+                else:
+                    time.sleep(2)
             else:
                 # Mode mouvement : arrêt automatique après STREAM_IDLE_TIMEOUT sans détection
                 if now - last_motion_time > STREAM_IDLE_TIMEOUT:
