@@ -312,6 +312,26 @@ export function getState(cameraId) {
   return { status: s.status, recording: s.recording, startedAt: s.startedAt, hlsUrl: s.hlsUrl };
 }
 
+// Met la caméra en attente du réveil Pi (status=reconnecting, pas de FFmpeg).
+// Le serveur déclenchera startHlsStream quand le Pi appellera notify_motion(True).
+export function setPiWaiting(cameraId) {
+  const id = String(cameraId);
+  const s  = states.get(id);
+  if (!s || s.status === 'running') return;
+  s.status = 'reconnecting';
+  s.hlsUrl = null;
+  broadcast(id);
+  // Timeout de sécurité : si le Pi ne répond pas en 30s, repasser en veille
+  setTimeout(() => {
+    const cur = states.get(id);
+    if (cur && cur.status === 'reconnecting' && !cur.proc) {
+      console.log(`[CAM ${id}] Pi n'a pas répondu dans les temps — retour en veille`);
+      cur.status = 'watching';
+      broadcast(id);
+    }
+  }, 30000);
+}
+
 export function getAllStates() {
   const out = {};
   states.forEach((_, k) => { out[k] = getState(k); });
