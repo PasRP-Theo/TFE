@@ -144,6 +144,31 @@ def announce(ip):
         pass
 
 
+def release_camera():
+    """Tue tous les processus qui tiennent les device nodes caméra."""
+    devices = ['/dev/media0', '/dev/media1', '/dev/media2', '/dev/video0']
+    existing = [d for d in devices if Path(d).exists()]
+    if not existing:
+        return
+    try:
+        result = subprocess.run(
+            ['sudo', 'fuser'] + existing,
+            capture_output=True, text=True, timeout=5,
+        )
+        pids = result.stdout.split() + result.stderr.split()
+        pids = list({p.strip() for p in pids if p.strip().isdigit()})
+        for pid in pids:
+            try:
+                subprocess.run(['sudo', 'kill', '-9', pid], timeout=3)
+                print(f"[CAM] Processus {pid} tué (caméra libérée)")
+            except Exception:
+                pass
+        if pids:
+            time.sleep(1)
+    except Exception as e:
+        print(f"[CAM] ⚠ release_camera : {e}")
+
+
 def set_mediamtx(active: bool):
     action = 'start' if active else 'stop'
     try:
@@ -280,7 +305,9 @@ def main():
     print(f"[SENTYS] Démarré | serveur={SERVER_URL} | device={DEVICE_ID}")
     # S'assurer que MediaMTX est arrêté au démarrage pour libérer la caméra
     set_mediamtx(False)
-    time.sleep(3)
+    time.sleep(2)
+    release_camera()
+    time.sleep(2)
 
     was_offline      = False
     last_announce    = 0.0
@@ -331,10 +358,11 @@ def main():
                     continue
                 print("[SENTYS] Serveur perdu — arrêt MediaMTX")
                 set_mediamtx(False)
+                release_camera()
                 server_loss_streak = 0
                 stream_state = 'IDLE'
                 prev_snap    = None
-                time.sleep(5)  # laisser la caméra se libérer complètement
+                time.sleep(3)
                 continue
 
         # ── Annonce périodique ─────────────────────────────────────────────────
@@ -345,22 +373,22 @@ def main():
         # ── Machine à états ────────────────────────────────────────────────────
 
         if stream_state == 'IDLE':
+            # Wake check AVANT le snapshot — ne dépend pas de la caméra
+            if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
+                last_wake_check = now
+                if check_wake_signal():
+                    print("[WAKE] 🔔 Démarrage demandé par l'interface web")
+                    set_mediamtx(True)
+                    time.sleep(2)
+                    notify_motion(True)
+                    stream_state     = 'STREAMING'
+                    last_motion_time = now
+                    continue
+
             cur_snap    = snap_b if snap_toggle else snap_a
             snap_toggle = not snap_toggle
 
             if capture_snapshot(cur_snap):
-                # Snapshot réussi → caméra libre, on peut vérifier le signal de réveil
-                if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
-                    last_wake_check = now
-                    if check_wake_signal():
-                        print("[WAKE] 🔔 Démarrage demandé par l'interface web")
-                        set_mediamtx(True)
-                        time.sleep(2)
-                        notify_motion(True)
-                        stream_state     = 'STREAMING'
-                        last_motion_time = now
-                        continue
-
                 if prev_snap is not None and prev_snap.exists():
                     if images_differ(prev_snap, cur_snap):
                         print("[MOTION] 🔴 Mouvement détecté !")
@@ -369,7 +397,7 @@ def main():
                         if online:
                             # En ligne : démarrer MediaMTX et notifier le serveur
                             set_mediamtx(True)
-                            time.sleep(1)   # Laisser MediaMTX s'initialiser
+                            time.sleep(1)
                             notify_motion(True)
                             stream_state = 'STREAMING'
                         else:
@@ -384,13 +412,13 @@ def main():
                                 time.sleep(10)
                             except Exception as e:
                                 print(f"[MOTION] ❌ Recording : {e}")
-                            # Retour en IDLE après enregistrement
                             prev_snap = None
 
                 prev_snap = cur_snap
             else:
-                # Snapshot échoué — petite pause avant de réessayer
-                time.sleep(1)
+                # Snapshot échoué — libérer la caméra si bloquée, réessayer
+                release_camera()
+                time.sleep(2)
                 continue
 
             time.sleep(MOTION_SNAPSHOT_INTERVAL)
@@ -400,11 +428,12 @@ def main():
                 print(f"[MOTION] ⏹ {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
                 set_mediamtx(False)
                 if online:
-                    notify_motion(False)   # Prévient le serveur pour couper le HLS proprement
+                    notify_motion(False)
+                release_camera()
                 stream_state = 'IDLE'
                 prev_snap    = None
                 snap_toggle  = False
-                time.sleep(5)   # laisser la caméra se libérer complètement avant le prochain snapshot
+                time.sleep(3)
             else:
                 remaining = int(STREAM_IDLE_TIMEOUT - (now - last_motion_time))
                 print(f"[STREAMING] En ligne | arrêt dans {remaining}s si pas de mouvement")
