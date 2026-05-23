@@ -1,7 +1,11 @@
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning, module='torch')
+import os
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '')
+
 import cv2
 import requests
 import time
-import os
 import sys
 import json
 import threading
