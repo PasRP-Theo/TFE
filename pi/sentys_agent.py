@@ -393,7 +393,7 @@ def main():
                 if check_wake_signal():
                     print("[WAKE] 🔔 Démarrage demandé par l'interface web")
                     set_mediamtx(True)
-                    time.sleep(2)
+                    time.sleep(3)  # laisser MediaMTX être prêt à accepter les connexions RTSP
                     notify_motion(True)
                     stream_state     = 'STREAMING'
                     last_motion_time = now

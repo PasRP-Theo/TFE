@@ -544,8 +544,8 @@ export async function startHlsStream(camera) {
     console.log(`[CAM ${id}] 🤖 IA démarrée`);
   }
 
-  reconnectFailures.delete(id); // stream démarré avec succès, reset du compteur
-  states.set(id, { proc, aiProc, status: 'running', recording: false, startedAt: new Date().toISOString(), hlsUrl: `/hls/${id}/index.m3u8`, sourceUrl });
+  const startedAt = new Date().toISOString();
+  states.set(id, { proc, aiProc, status: 'running', recording: false, startedAt, hlsUrl: `/hls/${id}/index.m3u8`, sourceUrl });
   broadcast(id);
   scheduleInactivity(id);
 
@@ -558,21 +558,34 @@ export async function startHlsStream(camera) {
     const s = states.get(id);
     if (s && s.status !== 'stopped' && s.status !== 'paused' && s.status !== 'watching') {
       const now = Date.now();
+      const runTime = now - new Date(startedAt).getTime();
+
+      // Si le stream a duré plus de 15s → vraie déconnexion, reset compteur et reconnecte
+      if (runTime > 15000) {
+        reconnectFailures.delete(id);
+        console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
+        clearInactivityTimer(id);
+        s.status = 'reconnecting';
+        broadcast(id);
+        const t = setTimeout(() => { reconnectTimers.delete(id); startHlsStream(camera); }, 5000);
+        reconnectTimers.set(id, t);
+        return;
+      }
+
+      // Échec rapide (MediaMTX pas encore prêt) → compteur d'échecs
       const fail = reconnectFailures.get(id) || { count: 0, lastAt: 0 };
-      // Réinitialise le compteur si le dernier échec date de plus de 30s
-      const count = (now - fail.lastAt < 30000) ? fail.count + 1 : 1;
+      const count = (now - fail.lastAt < 60000) ? fail.count + 1 : 1;
       reconnectFailures.set(id, { count, lastAt: now });
 
       if (count >= 4) {
-        // Trop d'échecs consécutifs rapides → veille sans boucler
-        console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), ${count} échecs — mise en veille`);
+        console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), ${count} échecs rapides — mise en veille`);
         reconnectFailures.delete(id);
         s.status = 'watching';
         broadcast(id);
         return;
       }
 
-      console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
+      console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), tentative ${count}/4 dans 5s…`);
       clearInactivityTimer(id);
       s.status = 'reconnecting';
       broadcast(id);
