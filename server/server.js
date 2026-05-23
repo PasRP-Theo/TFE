@@ -9,7 +9,7 @@ import bcrypt          from "bcryptjs";
 import jwt             from "jsonwebtoken";
 import rateLimit       from "express-rate-limit";
 import { existsSync, mkdirSync } from "fs";
-import { initDB, pool }      from "./src/db/index.js";
+import { initDB, pool, scheduleDiscoveryCleanup } from "./src/db/index.js";
 import userRoutes            from "./src/routes/users.js";
 import systemRoutes          from "./src/routes/system.js";
 import cameraRoutes          from "./src/routes/cameras.js";
@@ -403,6 +403,7 @@ async function start() {
   setInterval(() => cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err)), 24 * 60 * 60 * 1000);
   runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err));
   setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
+  scheduleDiscoveryCleanup(10, 5 * 60 * 1000); // purge les annonces > 10 min, toutes les 5 min
 
   const PORT = process.env.PORT || 4000;
   httpServer.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));

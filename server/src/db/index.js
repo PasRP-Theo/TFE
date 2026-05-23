@@ -278,3 +278,17 @@ export async function initDB() {
     client.release();
   }
 }
+
+// Supprime les entrées camera_discoveries dont last_seen_at est plus vieux que ttlMinutes
+async function _pruneStaleDiscoveries(ttlMinutes) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM camera_discoveries WHERE last_seen_at < NOW() - ($1 || ' minutes')::INTERVAL`,
+    [ttlMinutes]
+  );
+  if (rowCount > 0) console.log(`[DISCOVERY CLEANUP] ${rowCount} entrée(s) expirée(s) supprimée(s)`);
+}
+
+export function scheduleDiscoveryCleanup(ttlMinutes = 10, intervalMs = 5 * 60 * 1000) {
+  _pruneStaleDiscoveries(ttlMinutes).catch(err => console.error('[DISCOVERY CLEANUP]', err));
+  setInterval(() => _pruneStaleDiscoveries(ttlMinutes).catch(err => console.error('[DISCOVERY CLEANUP]', err)), intervalMs);
+}
