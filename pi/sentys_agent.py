@@ -145,28 +145,36 @@ def announce(ip):
 
 
 def release_camera():
-    """Tue tous les processus qui tiennent les device nodes caméra."""
+    """Tue tous les processus qui tiennent la caméra."""
+    # Tuer par nom (mtxrpicam et rpicam* n'apparaissent pas toujours dans fuser)
+    for pattern in ['mtxrpicam', 'rpicam-jpeg', 'rpicam-vid']:
+        try:
+            subprocess.run(['sudo', 'pkill', '-9', '-f', pattern],
+                           capture_output=True, timeout=3)
+        except Exception:
+            pass
+
+    # Tuer aussi par device node pour les autres processus
     devices = ['/dev/media0', '/dev/media1', '/dev/media2', '/dev/video0']
     existing = [d for d in devices if Path(d).exists()]
-    if not existing:
-        return
-    try:
-        result = subprocess.run(
-            ['sudo', 'fuser'] + existing,
-            capture_output=True, text=True, timeout=5,
-        )
-        pids = result.stdout.split() + result.stderr.split()
-        pids = list({p.strip() for p in pids if p.strip().isdigit()})
-        for pid in pids:
-            try:
-                subprocess.run(['sudo', 'kill', '-9', pid], timeout=3)
-                print(f"[CAM] Processus {pid} tué (caméra libérée)")
-            except Exception:
-                pass
-        if pids:
-            time.sleep(1)
-    except Exception as e:
-        print(f"[CAM] ⚠ release_camera : {e}")
+    if existing:
+        try:
+            result = subprocess.run(
+                ['sudo', 'fuser'] + existing,
+                capture_output=True, text=True, timeout=5,
+            )
+            pids = result.stdout.split() + result.stderr.split()
+            pids = list({p.strip() for p in pids if p.strip().isdigit()})
+            for pid in pids:
+                try:
+                    subprocess.run(['sudo', 'kill', '-9', pid], timeout=3)
+                    print(f"[CAM] Processus {pid} tué (caméra libérée)")
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[CAM] ⚠ release_camera fuser : {e}")
+
+    time.sleep(2)  # laisser le kernel libérer la caméra
 
 
 def set_mediamtx(active: bool):
