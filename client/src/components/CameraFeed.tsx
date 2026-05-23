@@ -108,6 +108,9 @@ function getHistoryGroupLabel(value: string) {
 // ── Lecteur HLS ────────────────────────────────────────────
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Timestamp unique à chaque montage du composant — force le navigateur à recharger
+  // le manifest depuis le serveur plutôt que de servir une version mise en cache.
+  const mountTokenRef = useRef(Date.now());
 
   let pathOnly = hlsUrl;
   try {
@@ -117,7 +120,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
   } catch {
     // ignore
   }
-  const fullUrl = apiUrl(`${pathOnly}?v=${encodeURIComponent(streamKey)}`);
+  const fullUrl = apiUrl(`${pathOnly}?v=${encodeURIComponent(streamKey)}&_=${mountTokenRef.current}`);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -306,11 +309,11 @@ function StartingScreen() {
 }
 
 // ── Écran caméra ──────────────────────────────────────────
-function CameraScreen({ cam, time }: { cam: Camera; time: Date }) {
+function CameraScreen({ cam, time, openKey = 0 }: { cam: Camera; time: Date; openKey?: number }) {
   return (
     <div className="cam-screen">
       {cam.status === 'running' && cam.hlsUrl
-        ? <CameraPlayer cam={cam} streamKey={`${cam.id}:${cam.startedAt || 'pending'}:${cam.status}`} />
+        ? <CameraPlayer cam={cam} streamKey={`${cam.id}:${cam.startedAt || 'pending'}:${cam.status}:${openKey}`} />
         : cam.status === 'running'
           ? <StartingScreen />
           : <OfflineScreen status={cam.status} />
@@ -405,6 +408,7 @@ export default function CameraFeed({ onStatusChange }: {
   const [editingNameId, setEditingNameId] = useState<number | null>(null);
   const [editNameValue, setEditNameValue] = useState('');
   const [focused, setFocused] = useState<number | null>(null);
+  const focusOpenCountRef = useRef(0);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newRtsp, setNewRtsp] = useState('');
@@ -1032,7 +1036,7 @@ export default function CameraFeed({ onStatusChange }: {
               </div>
             </div>
             <div className="cam-screen-shell cam-screen-shell--focus-mode">
-              <CameraScreen cam={focusedCam} time={time} />
+              <CameraScreen cam={focusedCam} time={time} openKey={focusOpenCountRef.current} />
             </div>
             <CameraControls cam={focusedCam} onAction={handleAction} />
           </div>
@@ -1059,7 +1063,7 @@ export default function CameraFeed({ onStatusChange }: {
             <div
               key={cam.id}
               className={`cam-card ${cam.recording ? 'cam-card--rec' : ''} ${focused === cam.id ? 'cam-card--focused' : ''}`}
-              onClick={() => setFocused(cam.id)}
+              onClick={() => { focusOpenCountRef.current += 1; setFocused(cam.id); }}
             >
             <div className="cam-card-header">
                 <div className="cam-card-title" style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '8px' }}>
