@@ -9,51 +9,51 @@ const router = Router();
 
 // POST /auth/register
 router.post('/register', async (req, res) => {
-  const { email, password, role = 'user' } = req.body;
-  if (!email || !password)
-    return res.status(400).json({ error: 'Email et mot de passe requis' });
+  const { username, password, role = 'user' } = req.body;
+  if (!username || !password)
+    return res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' });
   if (password.length < 8)
     return res.status(400).json({ error: 'Mot de passe trop court (8 caractères min)' });
   try {
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
-      `INSERT INTO users (email, password, role)
-       VALUES ($1, $2, $3) RETURNING id, email, role, created_at`,
-      [email.toLowerCase().trim(), hash, role]
+      `INSERT INTO users (username, password, role)
+       VALUES ($1, $2, $3) RETURNING id, username, role, created_at`,
+      [username.toLowerCase().trim(), hash, role]
     );
     res.status(201).json({ user: rows[0] });
   } catch (err) {
     if (err.code === '23505')
-      return res.status(409).json({ error: 'Cet email est déjà utilisé' });
+      return res.status(409).json({ error: 'Ce nom d\'utilisateur est déjà utilisé' });
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
 // POST /auth/login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password)
+  const { username, password } = req.body;
+  if (!username || !password)
     return res.status(400).json({ error: 'Champs manquants' });
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email.toLowerCase().trim()]
+      'SELECT * FROM users WHERE username = $1',
+      [username.toLowerCase().trim()]
     );
     const user = rows[0];
     if (!user || !(await bcrypt.compare(password, user.password)))
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      return res.status(401).json({ error: 'Nom d\'utilisateur ou mot de passe incorrect' });
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    req.session.userId = user.id;
-    req.session.email  = user.email;
-    req.session.role   = user.role;
+    req.session.userId   = user.id;
+    req.session.username = user.username;
+    req.session.role     = user.role;
 
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -72,7 +72,7 @@ router.post('/logout', (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, role, created_at FROM users WHERE id = $1',
+      'SELECT id, username, role, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Utilisateur introuvable' });

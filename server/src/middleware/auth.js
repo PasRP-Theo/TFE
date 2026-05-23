@@ -14,7 +14,7 @@ export function requireAuth(req, res, next) {
 
   // 2. Essai session cookie
   if (req.session?.userId) {
-    req.user = { id: req.session.userId, email: req.session.email, role: req.session.role };
+    req.user = { id: req.session.userId, username: req.session.username, role: req.session.role };
     return next();
   }
 
