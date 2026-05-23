@@ -410,6 +410,7 @@ def main():
                 last_wake_check = now
                 if check_wake_signal():
                     print("[WAKE] 🔔 Démarrage demandé par l'interface web")
+                    release_camera()  # libérer avant MediaMTX pour que le source démarre
                     set_mediamtx(True)
                     wait_for_rtsp_path()
                     notify_motion(True)
@@ -428,6 +429,7 @@ def main():
 
                         if online:
                             # En ligne : démarrer MediaMTX et notifier le serveur
+                            release_camera()
                             set_mediamtx(True)
                             wait_for_rtsp_path()
                             notify_motion(True)
