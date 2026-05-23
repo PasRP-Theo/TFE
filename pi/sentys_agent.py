@@ -144,8 +144,26 @@ def announce(ip):
         pass
 
 
+def clean_shm():
+    """Supprime les répertoires temporaires laissés par MediaMTX dans /dev/shm.
+    Ces répertoires s'accumulent après chaque redémarrage et finissent par saturer /dev/shm
+    (tmpfs 64 Mo sur Pi), ce qui empêche MediaMTX d'extraire libcamera.so au prochain démarrage."""
+    try:
+        import glob
+        dirs = glob.glob('/dev/shm/mediamtx-rpicamera-*')
+        if dirs:
+            for d in dirs:
+                try:
+                    subprocess.run(['sudo', 'rm', '-rf', d], timeout=5, capture_output=True)
+                except Exception:
+                    pass
+            print(f"[SHM] 🧹 {len(dirs)} répertoire(s) MediaMTX supprimé(s) de /dev/shm")
+    except Exception as e:
+        print(f"[SHM] ⚠ clean_shm : {e}")
+
+
 def release_camera():
-    """Tue tous les processus qui tiennent la caméra."""
+    """Tue tous les processus qui tiennent la caméra et nettoie /dev/shm."""
     # Tuer par nom (mtxrpicam et rpicam* n'apparaissent pas toujours dans fuser)
     for pattern in ['mtxrpicam', 'rpicam-jpeg', 'rpicam-vid']:
         try:
@@ -173,6 +191,9 @@ def release_camera():
                     pass
         except Exception as e:
             print(f"[CAM] ⚠ release_camera fuser : {e}")
+
+    # Nettoyer /dev/shm pour éviter "no space left on device" au prochain démarrage MediaMTX
+    clean_shm()
 
     time.sleep(2)  # laisser le kernel libérer la caméra
 
