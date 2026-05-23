@@ -3,10 +3,15 @@ import { pool } from '../db/index.js';
 import { startCamera, startHlsStream, stopHlsStream, getState, triggerMotionRecording } from '../camera/manager.js';
 
 // Flags en mémoire : deviceId → true quand l'UI demande un stream sur ce Pi
-const streamWakeRequests = new Map();
+const streamWakeRequests  = new Map();
+const streamSleepRequests = new Map();
 
 export function requestPiWake(deviceId) {
   streamWakeRequests.set(String(deviceId), true);
+}
+
+export function requestPiSleep(deviceId) {
+  streamSleepRequests.set(String(deviceId), true);
 }
 import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
@@ -200,12 +205,20 @@ router.get('/', async (_req, res) => {
   }
 });
 
-// GET /api/camera-nodes/:deviceId/wake — le Pi poll cet endpoint toutes les 5s
+// GET /api/camera-nodes/:deviceId/wake — le Pi poll cet endpoint pour démarrer
 router.get('/:deviceId/wake', (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const wake = streamWakeRequests.get(deviceId) || false;
   if (wake) streamWakeRequests.delete(deviceId);
   res.json({ wake });
+});
+
+// GET /api/camera-nodes/:deviceId/sleep — le Pi poll cet endpoint pour s'arrêter
+router.get('/:deviceId/sleep', (req, res) => {
+  const deviceId = String(req.params.deviceId || '').trim();
+  const sleep = streamSleepRequests.get(deviceId) || false;
+  if (sleep) streamSleepRequests.delete(deviceId);
+  res.json({ sleep });
 });
 
 router.post('/announce', async (req, res) => {

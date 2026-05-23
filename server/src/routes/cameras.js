@@ -18,7 +18,7 @@ import {
   triggerMotionRecording,
 } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
-import { requestPiWake } from './cameraNodes.js';
+import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -502,8 +502,16 @@ router.post('/:id/resume', async (req, res) => {
 });
 
 // POST /api/cameras/:id/stop
-router.post('/:id/stop', (req, res) => {
+router.post('/:id/stop', async (req, res) => {
   stopCamera(req.params.id);
+  // Signaler au Pi de couper MediaMTX
+  try {
+    const { rows } = await pool.query(`
+      SELECT cn.device_id FROM camera_nodes cn
+      JOIN cameras c ON c.rtsp_url = cn.stream_url
+      WHERE c.id = $1 LIMIT 1`, [req.params.id]);
+    if (rows[0]) requestPiSleep(rows[0].device_id);
+  } catch { /* non bloquant */ }
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });
 });
 

@@ -299,6 +299,20 @@ def check_wake_signal() -> bool:
     return False
 
 
+def check_sleep_signal() -> bool:
+    """Vérifie si le serveur demande un arrêt de stream (clic Stop utilisateur)."""
+    try:
+        r = requests.get(
+            f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/sleep",
+            timeout=3,
+        )
+        if r.status_code == 200:
+            return r.json().get("sleep", False)
+    except Exception:
+        pass
+    return False
+
+
 # ─── Boucle principale ─────────────────────────────────────────────────────────
 
 def main():
@@ -435,6 +449,17 @@ def main():
                 snap_toggle  = False
                 time.sleep(3)
             else:
+                # Vérifier si l'interface demande un arrêt
+                if online and check_sleep_signal():
+                    print("[SLEEP] 💤 Arrêt demandé par l'interface web")
+                    set_mediamtx(False)
+                    notify_motion(False)
+                    release_camera()
+                    stream_state = 'IDLE'
+                    prev_snap    = None
+                    snap_toggle  = False
+                    time.sleep(3)
+                    continue
                 remaining = int(STREAM_IDLE_TIMEOUT - (now - last_motion_time))
                 print(f"[STREAMING] En ligne | arrêt dans {remaining}s si pas de mouvement")
                 time.sleep(CHECK_INTERVAL)

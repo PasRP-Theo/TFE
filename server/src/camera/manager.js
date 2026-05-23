@@ -267,6 +267,7 @@ const states = new Map();
 const activeRecordings = new Map();
 const inactivityTimers = new Map();
 const reconnectTimers = new Map();
+const reconnectFailures = new Map(); // id → { count, lastAt }
 
 function clearInactivityTimer(cameraId) {
   const timer = inactivityTimers.get(String(cameraId));
@@ -543,6 +544,7 @@ export async function startHlsStream(camera) {
     console.log(`[CAM ${id}] 🤖 IA démarrée`);
   }
 
+  reconnectFailures.delete(id); // stream démarré avec succès, reset du compteur
   states.set(id, { proc, aiProc, status: 'running', recording: false, startedAt: new Date().toISOString(), hlsUrl: `/hls/${id}/index.m3u8`, sourceUrl });
   broadcast(id);
   scheduleInactivity(id);
@@ -554,8 +556,22 @@ export async function startHlsStream(camera) {
 
   proc.on('close', code => {
     const s = states.get(id);
-    // Ne pas redémarrer si on a intentionnellement arrêté (stopped/paused/watching)
     if (s && s.status !== 'stopped' && s.status !== 'paused' && s.status !== 'watching') {
+      const now = Date.now();
+      const fail = reconnectFailures.get(id) || { count: 0, lastAt: 0 };
+      // Réinitialise le compteur si le dernier échec date de plus de 30s
+      const count = (now - fail.lastAt < 30000) ? fail.count + 1 : 1;
+      reconnectFailures.set(id, { count, lastAt: now });
+
+      if (count >= 4) {
+        // Trop d'échecs consécutifs rapides → veille sans boucler
+        console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), ${count} échecs — mise en veille`);
+        reconnectFailures.delete(id);
+        s.status = 'watching';
+        broadcast(id);
+        return;
+      }
+
       console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
       clearInactivityTimer(id);
       s.status = 'reconnecting';
