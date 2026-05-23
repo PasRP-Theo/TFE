@@ -545,9 +545,31 @@ export async function startHlsStream(camera) {
   }
 
   const startedAt = new Date().toISOString();
-  states.set(id, { proc, aiProc, status: 'running', recording: false, startedAt, hlsUrl: `/hls/${id}/index.m3u8`, sourceUrl });
+  states.set(id, { proc, aiProc, status: 'running', recording: false, startedAt, hlsUrl: null, sourceUrl });
   broadcast(id);
   scheduleInactivity(id);
+
+  // Attend que FFmpeg écrive le premier manifeste HLS avant d'exposer l'URL au client
+  // (évite l'écran noir "Connexion au flux..." pendant la phase d'init)
+  const waitForManifest = async () => {
+    const deadline = Date.now() + 12000;
+    while (Date.now() < deadline) {
+      const s = states.get(id);
+      if (!s || s.status === 'watching' || s.status === 'stopped') return;
+      try {
+        await fsPromises.access(hlsIndex);
+        s.hlsUrl = `/hls/${id}/index.m3u8`;
+        broadcast(id);
+        console.log(`[CAM ${id}] ✔ Manifeste HLS prêt`);
+        return;
+      } catch { /* pas encore créé */ }
+      await new Promise(r => setTimeout(r, 300));
+    }
+    // Timeout : on expose quand même l'URL pour que le client puisse afficher l'erreur
+    const s = states.get(id);
+    if (s && s.status === 'running') { s.hlsUrl = `/hls/${id}/index.m3u8`; broadcast(id); }
+  };
+  waitForManifest().catch(() => {});
 
   proc.stderr.on('data', data => {
     const txt = data.toString();

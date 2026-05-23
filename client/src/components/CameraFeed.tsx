@@ -287,13 +287,33 @@ function OfflineScreen({ status }: { status: Camera["status"] }) {
   );
 }
 
+// ── Écran démarrage ───────────────────────────────────────
+function StartingScreen() {
+  return (
+    <div className="cam-screen">
+      <div className="cam-offline">
+        <div className="cam-offline-icon" style={{ fontSize: '20px', opacity: 0.7 }}>
+          <span className="cam-rec-dot-anim" style={{ display: 'inline-block', marginRight: '8px', backgroundColor: '#fff' }} />
+        </div>
+        <p className="cam-offline-text">DÉMARRAGE DU FLUX...</p>
+      </div>
+      <div className="cam-corner cam-corner--tl" />
+      <div className="cam-corner cam-corner--tr" />
+      <div className="cam-corner cam-corner--bl" />
+      <div className="cam-corner cam-corner--br" />
+    </div>
+  );
+}
+
 // ── Écran caméra ──────────────────────────────────────────
 function CameraScreen({ cam, time }: { cam: Camera; time: Date }) {
   return (
     <div className="cam-screen">
       {cam.status === 'running' && cam.hlsUrl
         ? <CameraPlayer cam={cam} streamKey={`${cam.id}:${cam.startedAt || 'pending'}:${cam.status}`} />
-        : <OfflineScreen status={cam.status} />
+        : cam.status === 'running'
+          ? <StartingScreen />
+          : <OfflineScreen status={cam.status} />
       }
       {cam.recording && (
         <div className="cam-rec-indicator">
@@ -505,6 +525,14 @@ export default function CameraFeed({ onStatusChange }: {
     const t = setInterval(fetchCameras, config.cameraRefreshSeconds * 1000);
     return () => clearInterval(t);
   }, [config.cameraRefreshSeconds]);
+
+  // Poll rapide (toutes les 800ms) quand une caméra est en cours de démarrage (running mais pas encore de flux HLS)
+  const hasStartingCamera = cameras.some(c => c.status === 'running' && !c.hlsUrl);
+  useEffect(() => {
+    if (!hasStartingCamera) return;
+    const t = setInterval(fetchCameras, 800);
+    return () => clearInterval(t);
+  }, [hasStartingCamera]);
 
   useEffect(() => {
     let stopped = false;

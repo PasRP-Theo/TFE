@@ -22,7 +22,10 @@ export function startGo2rtc() {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
+    let errored = false;
+
     proc.on('error', (err) => {
+      errored = true;
       if (err.code === 'ENOENT') {
         console.warn('[go2rtc] Binaire introuvable — WebRTC désactivé, HLS actif en fallback.');
         console.warn('[go2rtc] Installez go2rtc : https://github.com/AlexxIT/go2rtc/releases');
@@ -59,8 +62,9 @@ export function startGo2rtc() {
     });
 
     // Timeout de sécurité : si go2rtc ne log pas ":1984" en 4s, on suppose qu'il tourne quand même
+    // Mais seulement si le processus n'a pas échoué au démarrage (ex: binaire manquant)
     setTimeout(() => {
-      if (!ready) {
+      if (!ready && !errored) {
         console.warn('[go2rtc] Timeout détection — on suppose go2rtc actif.');
         onReady();
       }

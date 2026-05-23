@@ -15,6 +15,17 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
     let disposed = false;
 
     async function connect() {
+      // Vérifie rapidement si go2rtc est disponible avant de démarrer ICE
+      try {
+        const statusRes = await fetch(apiUrl('/api/webrtc/status'));
+        if (statusRes.ok) {
+          const { available } = await statusRes.json();
+          if (!available) { if (!disposed) onError(); return; }
+        }
+      } catch { /* ignore, on tente quand même */ }
+
+      if (disposed) return;
+
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -53,11 +64,10 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // Attente de la fin du gathering ICE (max 3s)
-      // go2rtc a besoin des candidats ICE pour établir la connexion
+      // Attente de la fin du gathering ICE (max 1s — réseau local, pas besoin de plus)
       await new Promise<void>((resolve) => {
         if (pc.iceGatheringState === 'complete') return resolve();
-        const timeout = setTimeout(resolve, 3000);
+        const timeout = setTimeout(resolve, 1000);
         pc.addEventListener('icegatheringstatechange', function handler() {
           if (pc.iceGatheringState === 'complete') {
             clearTimeout(timeout);
