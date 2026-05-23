@@ -488,6 +488,16 @@ export async function startHlsStream(camera) {
     });
   }
 
+  // Vérification post-await : si le status a changé pendant l'attente (ex. stopHlsStream
+  // appelé pendant qu'on tuait l'IA), on abandonne pour ne pas écraser le nouvel état.
+  {
+    const s = states.get(id);
+    if (!s || s.status === 'watching' || s.status === 'stopped' || s.status === 'paused') {
+      console.log(`[CAM ${id}] startHlsStream annulé — état changé pendant l'init (${s?.status ?? 'supprimé'})`);
+      return;
+    }
+  }
+
   ensureDir(HLS_DIR);
   ensureDir(RECORDINGS_DIR);
 
@@ -512,6 +522,15 @@ export async function startHlsStream(camera) {
   let sourceUrl = cur?.sourceUrl || String(camera.rtsp_url || '').trim();
   const isRtsp  = /^rtsp:/i.test(sourceUrl);
   if (!isRtsp && sourceUrl && !cur?.sourceUrl) sourceUrl = await resolveHttpStreamUrl(sourceUrl);
+
+  // Vérification post-await (résolution URL HTTP peut aussi prendre du temps)
+  {
+    const s = states.get(id);
+    if (!s || s.status === 'watching' || s.status === 'stopped' || s.status === 'paused') {
+      console.log(`[CAM ${id}] startHlsStream annulé — état changé après résolution URL (${s?.status ?? 'supprimé'})`);
+      return;
+    }
+  }
 
   const args = ['-fflags', '+genpts+nobuffer', '-flags', 'low_delay'];
   if (isRtsp) args.push('-rtsp_transport', RTSP_TRANSPORT);
@@ -562,6 +581,18 @@ export async function startHlsStream(camera) {
     });
     aiProc.on('error', err => console.error(`[CAM ${id} IA] ${err.message}`));
     console.log(`[CAM ${id}] 🤖 IA démarrée`);
+  }
+
+  // Dernière vérification avant d'écraser l'état — stopHlsStream peut avoir été
+  // appelé pendant le démarrage de l'IA ou de FFmpeg (race condition async).
+  {
+    const s = states.get(id);
+    if (!s || s.status === 'watching' || s.status === 'stopped' || s.status === 'paused') {
+      console.log(`[CAM ${id}] startHlsStream annulé — état changé après spawn FFmpeg (${s?.status ?? 'supprimé'})`);
+      proc.kill('SIGKILL');
+      if (aiProc) aiProc.kill('SIGKILL');
+      return;
+    }
   }
 
   const startedAt = new Date().toISOString();
