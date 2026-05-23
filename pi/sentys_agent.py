@@ -299,21 +299,21 @@ def check_wake_signal() -> bool:
     return False
 
 
-def wait_for_rtsp_path(max_wait: int = 15) -> bool:
-    """Attend que MediaMTX enregistre le path RTSP (API locale port 9997)."""
+def wait_for_rtsp_path(max_wait: int = 20) -> bool:
+    """Attend que MediaMTX signale le path RTSP comme ready:true (API port 9997)."""
     for i in range(max_wait):
         try:
             r = requests.get(
                 f"http://localhost:9997/v3/paths/get/{RTSP_PATH}",
                 timeout=2,
             )
-            if r.status_code == 200:
+            if r.status_code == 200 and r.json().get("ready") is True:
                 print(f"[MEDIAMTX] ✅ Path /{RTSP_PATH} prêt ({i+1}s)")
                 return True
         except Exception:
             pass
         time.sleep(1)
-    print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non disponible après {max_wait}s")
+    print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non ready après {max_wait}s")
     return False
 
 
