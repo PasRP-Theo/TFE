@@ -50,16 +50,16 @@ function classifyNodeMotion(rtspUrl) {
   return new Promise((resolve) => {
     const pythonBin = os.platform() === 'win32' ? 'python' : (existsSync(VENV_PYTHON) ? VENV_PYTHON : 'python3');
     const child = spawn(pythonBin, [AI_SCRIPT, '--analyze'], {
-      env: { ...process.env, RTSP_URL: rtspUrl },
+      env: { ...process.env, RTSP_URL: rtspUrl, CUDA_VISIBLE_DEVICES: '' },
     });
 
     let stdout = '';
     let stderr = '';
     const timeout = setTimeout(() => {
       child.kill();
-      console.warn('[CLASSIFY] Timeout YOLO après 20s — fallback motion');
+      console.warn('[CLASSIFY] Timeout YOLO après 60s — fallback motion');
       resolve({ type: 'motion', label: 'Mouvement détecté', confidence: 0 });
-    }, 20000);
+    }, 60000);
 
     child.stdout.on('data', d => { stdout += d.toString(); });
     child.stderr.on('data', d => { stderr += d.toString(); });
