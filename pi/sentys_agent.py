@@ -299,6 +299,24 @@ def check_wake_signal() -> bool:
     return False
 
 
+def wait_for_rtsp_path(max_wait: int = 15) -> bool:
+    """Attend que MediaMTX enregistre le path RTSP (API locale port 9997)."""
+    for i in range(max_wait):
+        try:
+            r = requests.get(
+                f"http://localhost:9997/v3/paths/get/{RTSP_PATH}",
+                timeout=2,
+            )
+            if r.status_code == 200:
+                print(f"[MEDIAMTX] ✅ Path /{RTSP_PATH} prêt ({i+1}s)")
+                return True
+        except Exception:
+            pass
+        time.sleep(1)
+    print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non disponible après {max_wait}s")
+    return False
+
+
 def check_sleep_signal() -> bool:
     """Vérifie si le serveur demande un arrêt de stream (clic Stop utilisateur)."""
     try:
@@ -393,7 +411,7 @@ def main():
                 if check_wake_signal():
                     print("[WAKE] 🔔 Démarrage demandé par l'interface web")
                     set_mediamtx(True)
-                    time.sleep(3)  # laisser MediaMTX être prêt à accepter les connexions RTSP
+                    wait_for_rtsp_path()
                     notify_motion(True)
                     stream_state     = 'STREAMING'
                     last_motion_time = now
@@ -411,7 +429,7 @@ def main():
                         if online:
                             # En ligne : démarrer MediaMTX et notifier le serveur
                             set_mediamtx(True)
-                            time.sleep(1)
+                            wait_for_rtsp_path()
                             notify_motion(True)
                             stream_state = 'STREAMING'
                         else:
