@@ -212,7 +212,7 @@ export async function initDB() {
       -- Contraintes CHECK sur les colonnes source
       DO $$ BEGIN
         ALTER TABLE camera_discoveries ADD CONSTRAINT chk_discoveries_source
-          CHECK (source IN ('announce', 'mdns', 'manual'));
+          CHECK (source IN ('announce', 'mdns', 'manual', 'pi-node'));
       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
       DO $$ BEGIN
