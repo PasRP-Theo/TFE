@@ -449,7 +449,7 @@ def main():
                 snap_toggle  = False
                 time.sleep(3)
             else:
-                # Vérifier si l'interface demande un arrêt
+                # Vérifier le signal sleep toutes les 2s (pas CHECK_INTERVAL)
                 if online and check_sleep_signal():
                     print("[SLEEP] 💤 Arrêt demandé par l'interface web")
                     set_mediamtx(False)
@@ -460,9 +460,7 @@ def main():
                     snap_toggle  = False
                     time.sleep(3)
                     continue
-                remaining = int(STREAM_IDLE_TIMEOUT - (now - last_motion_time))
-                print(f"[STREAMING] En ligne | arrêt dans {remaining}s si pas de mouvement")
-                time.sleep(CHECK_INTERVAL)
+                time.sleep(2)
 
 
 if __name__ == "__main__":
