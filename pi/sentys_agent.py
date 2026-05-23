@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Sentys Agent — Pi Zero 2W
-Détection de mouvement par snapshots → démarrage MediaMTX à la demande.
-Mode hors-ligne : enregistrement local + sync au retour.
+Sentys Agent — Pi Zero 2W (mode 24/7)
+MediaMTX tourne en permanence via systemd — RTSP toujours disponible.
+L'agent annonce le nœud, détecte le mouvement et gère les enregistrements hors-ligne.
 """
 
 import os
@@ -15,24 +15,22 @@ from datetime import datetime
 import requests
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-SERVER_URL         = "http://192.168.0.47:4000"
-DEVICE_MODEL       = "Raspberry Pi Zero"
-RECORD_DIR         = Path(f"/home/{os.getenv('USER', 'picam')}/offline_recordings")
+SERVER_URL    = "http://192.168.0.47:4000"
+DEVICE_MODEL  = "Raspberry Pi Zero"
+RECORD_DIR    = Path(f"/home/{os.getenv('USER', 'picam')}/offline_recordings")
 CLIP_DURATION_SEC  = 30
 ANNOUNCE_INTERVAL  = 30
-CHECK_INTERVAL     = 10
 MAX_STORAGE_MB     = 500
 RTSP_PORT          = 8554
 RTSP_PATH          = "cam1"
 
-# Détection de mouvement
-MOTION_SNAPSHOT_INTERVAL = 1     # secondes entre chaque snapshot en veille
-MOTION_THRESHOLD         = 25    # diff par pixel (0-255) pour considérer un changement
-MOTION_MIN_PIXELS        = 300   # nb de pixels différents pour déclarer un mouvement
-STREAM_IDLE_TIMEOUT      = 60    # secondes sans mouvement avant d'arrêter MediaMTX
-SNAPSHOT_WIDTH           = 320
-SNAPSHOT_HEIGHT          = 240
-SNAPSHOT_DIR             = Path('/tmp/sentys_snapshots')
+# Détection de mouvement (frames tirées du flux RTSP local)
+MOTION_CHECK_INTERVAL = 2      # secondes entre chaque analyse
+MOTION_THRESHOLD      = 25     # diff par pixel (0-255)
+MOTION_MIN_PIXELS     = 300    # pixels différents pour déclarer un mouvement
+SNAPSHOT_WIDTH        = 320
+SNAPSHOT_HEIGHT       = 240
+SNAPSHOT_DIR          = Path('/tmp/sentys_snapshots')
 
 # ─── Identité unique par Pi ────────────────────────────────────────────────────
 _HOME      = Path(f"/home/{os.getenv('USER', 'picam')}")
@@ -68,22 +66,21 @@ SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 def fetch_remote_config():
     global DEVICE_NAME, DEVICE_LOCATION, CLIP_DURATION_SEC, MAX_STORAGE_MB
     global ANNOUNCE_INTERVAL, RTSP_PORT, RTSP_PATH
-    global MOTION_SNAPSHOT_INTERVAL, MOTION_THRESHOLD, MOTION_MIN_PIXELS, STREAM_IDLE_TIMEOUT
+    global MOTION_CHECK_INTERVAL, MOTION_THRESHOLD, MOTION_MIN_PIXELS
     try:
         r = requests.get(f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/config", timeout=5)
         if r.status_code == 200:
             cfg = r.json()
-            DEVICE_NAME              = cfg.get("name",             DEVICE_NAME)
-            DEVICE_LOCATION          = cfg.get("location",         DEVICE_LOCATION)
-            CLIP_DURATION_SEC        = int(cfg.get("clipDuration", CLIP_DURATION_SEC))
-            MAX_STORAGE_MB           = int(cfg.get("maxStorageMb", MAX_STORAGE_MB))
-            ANNOUNCE_INTERVAL        = int(cfg.get("announceInterval", ANNOUNCE_INTERVAL))
-            RTSP_PORT                = int(cfg.get("rtspPort",     RTSP_PORT))
-            RTSP_PATH                = cfg.get("rtspPath",         RTSP_PATH)
-            MOTION_SNAPSHOT_INTERVAL = int(cfg.get("motionSnapshotInterval", MOTION_SNAPSHOT_INTERVAL))
-            MOTION_THRESHOLD         = int(cfg.get("motionThreshold",         MOTION_THRESHOLD))
-            MOTION_MIN_PIXELS        = int(cfg.get("motionMinPixels",         MOTION_MIN_PIXELS))
-            STREAM_IDLE_TIMEOUT      = int(cfg.get("streamIdleTimeout",       STREAM_IDLE_TIMEOUT))
+            DEVICE_NAME           = cfg.get("name",             DEVICE_NAME)
+            DEVICE_LOCATION       = cfg.get("location",         DEVICE_LOCATION)
+            CLIP_DURATION_SEC     = int(cfg.get("clipDuration", CLIP_DURATION_SEC))
+            MAX_STORAGE_MB        = int(cfg.get("maxStorageMb", MAX_STORAGE_MB))
+            ANNOUNCE_INTERVAL     = int(cfg.get("announceInterval", ANNOUNCE_INTERVAL))
+            RTSP_PORT             = int(cfg.get("rtspPort",     RTSP_PORT))
+            RTSP_PATH             = cfg.get("rtspPath",         RTSP_PATH)
+            MOTION_CHECK_INTERVAL = int(cfg.get("motionSnapshotInterval", MOTION_CHECK_INTERVAL))
+            MOTION_THRESHOLD      = int(cfg.get("motionThreshold",        MOTION_THRESHOLD))
+            MOTION_MIN_PIXELS     = int(cfg.get("motionMinPixels",        MOTION_MIN_PIXELS))
             print("[CONFIG] ✅ Config chargée depuis le serveur")
     except Exception as e:
         print(f"[CONFIG] ⚠ Impossible de charger la config distante : {e}")
@@ -144,80 +141,6 @@ def announce(ip):
         pass
 
 
-def clean_shm():
-    """Supprime les répertoires temporaires laissés par MediaMTX dans /dev/shm.
-    Ces répertoires s'accumulent après chaque redémarrage et finissent par saturer /dev/shm
-    (tmpfs 64 Mo sur Pi), ce qui empêche MediaMTX d'extraire libcamera.so au prochain démarrage."""
-    try:
-        import glob
-        dirs = glob.glob('/dev/shm/mediamtx-rpicamera-*')
-        if dirs:
-            for d in dirs:
-                try:
-                    subprocess.run(['sudo', 'rm', '-rf', d], timeout=5, capture_output=True)
-                except Exception:
-                    pass
-            print(f"[SHM] 🧹 {len(dirs)} répertoire(s) MediaMTX supprimé(s) de /dev/shm")
-    except Exception as e:
-        print(f"[SHM] ⚠ clean_shm : {e}")
-
-
-def release_camera():
-    """Tue tous les processus qui tiennent la caméra et nettoie /dev/shm."""
-    # Tuer par nom (mtxrpicam et rpicam* n'apparaissent pas toujours dans fuser)
-    for pattern in ['mtxrpicam', 'rpicam-jpeg', 'rpicam-vid']:
-        try:
-            subprocess.run(['sudo', 'pkill', '-9', '-f', pattern],
-                           capture_output=True, timeout=3)
-        except Exception:
-            pass
-
-    # Tuer aussi par device node pour les autres processus
-    devices = ['/dev/media0', '/dev/media1', '/dev/media2', '/dev/video0']
-    existing = [d for d in devices if Path(d).exists()]
-    if existing:
-        try:
-            result = subprocess.run(
-                ['sudo', 'fuser'] + existing,
-                capture_output=True, text=True, timeout=5,
-            )
-            pids = result.stdout.split() + result.stderr.split()
-            pids = list({p.strip() for p in pids if p.strip().isdigit()})
-            for pid in pids:
-                try:
-                    subprocess.run(['sudo', 'kill', '-9', pid], timeout=3)
-                    print(f"[CAM] Processus {pid} tué (caméra libérée)")
-                except Exception:
-                    pass
-        except Exception as e:
-            print(f"[CAM] ⚠ release_camera fuser : {e}")
-
-    # Nettoyer /dev/shm pour éviter "no space left on device" au prochain démarrage MediaMTX
-    clean_shm()
-
-    time.sleep(2)  # laisser le kernel libérer la caméra
-
-
-def set_mediamtx(active: bool):
-    action = 'start' if active else 'stop'
-    try:
-        subprocess.run(['sudo', 'systemctl', action, 'mediamtx'], check=True, timeout=10)
-        print(f"[MEDIAMTX] {'▶' if active else '⏹'} MediaMTX {action}")
-    except Exception as e:
-        print(f"[MEDIAMTX] ❌ Impossible de {action} MediaMTX : {e}")
-
-
-def record_clip():
-    ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = RECORD_DIR / f"{ts}.mp4"
-    subprocess.run(
-        ['rpicam-vid', '-t', str(CLIP_DURATION_SEC * 1000),
-         '--codec', 'h264', '--width', '1280', '--height', '720', '-o', str(out)],
-        check=True, timeout=CLIP_DURATION_SEC + 10,
-    )
-    return out
-
-
 MIN_CLIP_SIZE = 50 * 1024
 
 def upload_pending():
@@ -228,7 +151,7 @@ def upload_pending():
     for f in files:
         size = f.stat().st_size
         if size < MIN_CLIP_SIZE:
-            print(f"[SYNC] ⚠ {f.name} trop petit ({size} octets) — supprimé")
+            print(f"[SYNC] ⚠ {f.name} trop petit ({size} o) — supprimé")
             try: f.unlink()
             except: pass
         else:
@@ -261,26 +184,41 @@ def upload_pending():
             break
 
 
-# ─── Détection de mouvement ────────────────────────────────────────────────────
+# ─── Détection de mouvement via le flux RTSP local ───────────────────────────
 
-def capture_snapshot(out_path: Path) -> bool:
-    """Capture un snapshot basse résolution. Retourne True si réussi."""
+def _ffmpeg_bin():
+    """Retourne le chemin de ffmpeg si disponible, None sinon."""
+    for candidate in ['ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg']:
+        try:
+            r = subprocess.run([candidate, '-version'], capture_output=True, timeout=3)
+            if r.returncode == 0:
+                return candidate
+        except Exception:
+            pass
+    return None
+
+_FFMPEG = _ffmpeg_bin()
+
+def capture_frame_from_rtsp(out_path: Path) -> bool:
+    """Tire un frame du flux RTSP local via ffmpeg. Retourne True si réussi."""
+    if not _FFMPEG:
+        return False
     try:
-        subprocess.run(
-            ['rpicam-jpeg', '-t', '300', '--nopreview',
-             '--width', str(SNAPSHOT_WIDTH), '--height', str(SNAPSHOT_HEIGHT),
-             '-o', str(out_path)],
-            check=True, timeout=4,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        subprocess.run([
+            _FFMPEG, '-y',
+            '-rtsp_transport', 'tcp',
+            '-i', f'rtsp://localhost:{RTSP_PORT}/{RTSP_PATH}',
+            '-vframes', '1',
+            '-vf', f'scale={SNAPSHOT_WIDTH}:{SNAPSHOT_HEIGHT}',
+            '-q:v', '5',
+            str(out_path),
+        ], check=True, timeout=6, capture_output=True)
         return True
-    except Exception as e:
-        print(f"[SNAPSHOT] ⚠ Échec capture : {e}")
+    except Exception:
         return False
 
 
 def images_differ(path_a: Path, path_b: Path) -> bool:
-    """Retourne True si les deux images montrent un mouvement significatif."""
     try:
         from PIL import Image
         import numpy as np
@@ -289,7 +227,6 @@ def images_differ(path_a: Path, path_b: Path) -> bool:
         changed = int(np.sum(np.abs(img_a - img_b) > MOTION_THRESHOLD))
         return changed > MOTION_MIN_PIXELS
     except ImportError:
-        # Fallback sans Pillow : comparaison de taille de fichier (moins précis)
         try:
             return abs(path_a.stat().st_size - path_b.stat().st_size) > 3000
         except Exception:
@@ -298,8 +235,7 @@ def images_differ(path_a: Path, path_b: Path) -> bool:
         return False
 
 
-def notify_motion(active: bool = True):
-    """Notifie le serveur d'un changement d'état de mouvement."""
+def notify_motion(active: bool):
     try:
         r = requests.post(
             f"{SERVER_URL}/api/camera-nodes/motion",
@@ -308,85 +244,47 @@ def notify_motion(active: bool = True):
         )
         if r.status_code == 200:
             print(f"[MOTION] ✅ Serveur notifié ({'actif' if active else 'inactif'})")
-        else:
-            print(f"[MOTION] ⚠ HTTP {r.status_code}")
     except Exception as e:
-        print(f"[MOTION] ❌ Impossible de notifier le serveur : {e}")
+        print(f"[MOTION] ❌ {e}")
 
 
-def check_wake_signal() -> bool:
-    """Vérifie si le serveur demande un démarrage de stream (clic utilisateur)."""
+def record_clip_from_rtsp() -> Path | None:
+    """Enregistre un clip depuis le flux RTSP local (hors-ligne)."""
+    if not _FFMPEG:
+        return None
+    ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = RECORD_DIR / f"{ts}.mp4"
     try:
-        r = requests.get(
-            f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/wake",
-            timeout=3,
-        )
-        if r.status_code == 200:
-            return r.json().get("wake", False)
-    except Exception:
-        pass
-    return False
-
-
-def wait_for_rtsp_path(max_wait: int = 20) -> bool:
-    """Attend que MediaMTX signale le path RTSP comme ready:true (API port 9997)."""
-    for i in range(max_wait):
-        try:
-            r = requests.get(
-                f"http://localhost:9997/v3/paths/get/{RTSP_PATH}",
-                timeout=2,
-            )
-            if r.status_code == 200 and r.json().get("ready") is True:
-                print(f"[MEDIAMTX] ✅ Path /{RTSP_PATH} prêt ({i+1}s)")
-                return True
-        except Exception:
-            pass
-        time.sleep(1)
-    print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non ready après {max_wait}s")
-    return False
-
-
-def check_sleep_signal() -> bool:
-    """Vérifie si le serveur demande un arrêt de stream (clic Stop utilisateur)."""
-    try:
-        r = requests.get(
-            f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/sleep",
-            timeout=3,
-        )
-        if r.status_code == 200:
-            return r.json().get("sleep", False)
-    except Exception:
-        pass
-    return False
+        subprocess.run([
+            _FFMPEG, '-y',
+            '-rtsp_transport', 'tcp',
+            '-i', f'rtsp://localhost:{RTSP_PORT}/{RTSP_PATH}',
+            '-t', str(CLIP_DURATION_SEC),
+            '-c', 'copy',
+            str(out),
+        ], check=True, timeout=CLIP_DURATION_SEC + 15, capture_output=True)
+        return out
+    except Exception as e:
+        print(f"[MOTION] ❌ Enregistrement hors-ligne : {e}")
+        return None
 
 
 # ─── Boucle principale ─────────────────────────────────────────────────────────
 
 def main():
-    print(f"[SENTYS] Démarré | serveur={SERVER_URL} | device={DEVICE_ID}")
-    # S'assurer que MediaMTX est arrêté au démarrage pour libérer la caméra
-    set_mediamtx(False)
-    time.sleep(2)
-    release_camera()
-    time.sleep(2)
+    print(f"[SENTYS] Démarré (mode 24/7) | serveur={SERVER_URL} | device={DEVICE_ID}")
+    if not _FFMPEG:
+        print("[SENTYS] ⚠ ffmpeg introuvable — détection mouvement et enregistrements hors-ligne désactivés")
 
-    was_offline      = False
-    last_announce    = 0.0
-    server_loss_streak = 0    # nb de checks consécutifs sans serveur pendant le streaming
+    was_offline   = False
+    last_announce = 0.0
+    motion_active = False
 
-    # États :
-    #   IDLE      — caméra off, snapshots toutes les N secondes
-    #   STREAMING — MediaMTX actif (online), attente du timeout d'inactivité
-    stream_state          = 'IDLE'
-    last_motion_time      = 0.0
-    snap_a                = SNAPSHOT_DIR / 'snap_a.jpg'
-    snap_b                = SNAPSHOT_DIR / 'snap_b.jpg'
-    snap_toggle           = False
-    prev_snap             = None   # chemin du snapshot précédent
-    last_wake_check       = 0.0    # dernière vérification du signal de réveil
-    WAKE_CHECK_INTERVAL   = 2      # secondes entre chaque vérification de wake
-    SERVER_LOSS_TOLERANCE = 3      # nb de checks sans serveur avant d'arrêter le stream
-    wake_mode             = False  # True = démarré par clic utilisateur (pas timeout mouvement)
+    snap_a      = SNAPSHOT_DIR / 'snap_a.jpg'
+    snap_b      = SNAPSHOT_DIR / 'snap_b.jpg'
+    snap_toggle = False
+    prev_snap   = None
+    last_motion = 0.0
 
     if server_reachable():
         fetch_remote_config()
@@ -404,124 +302,48 @@ def main():
         if online and was_offline:
             print("[SENTYS] Connexion rétablie")
             fetch_remote_config()
-            server_loss_streak = 0
-            if stream_state != 'STREAMING':
-                upload_pending()
+            upload_pending()
             was_offline = False
 
         if not online:
             was_offline = True
-            # Si le serveur disparaît pendant le streaming → tolérance avant d'arrêter
-            if stream_state == 'STREAMING':
-                server_loss_streak += 1
-                if server_loss_streak < SERVER_LOSS_TOLERANCE:
-                    print(f"[SENTYS] Serveur injoignable ({server_loss_streak}/{SERVER_LOSS_TOLERANCE}) — on attend")
-                    time.sleep(CHECK_INTERVAL)
-                    continue
-                print("[SENTYS] Serveur perdu — arrêt MediaMTX")
-                set_mediamtx(False)
-                release_camera()
-                server_loss_streak = 0
-                stream_state = 'IDLE'
-                wake_mode    = False
-                prev_snap    = None
-                time.sleep(3)
-                continue
 
         # ── Annonce périodique ─────────────────────────────────────────────────
         if online and ip and now - last_announce >= ANNOUNCE_INTERVAL:
             announce(ip)
             last_announce = now
 
-        # ── Machine à états ────────────────────────────────────────────────────
-
-        if stream_state == 'IDLE':
-            # Wake check AVANT le snapshot — ne dépend pas de la caméra
-            if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
-                last_wake_check = now
-                if check_wake_signal():
-                    print("[WAKE] 🔔 Démarrage demandé par l'interface web")
-                    release_camera()  # libérer avant MediaMTX pour que le source démarre
-                    set_mediamtx(True)
-                    wait_for_rtsp_path()
-                    notify_motion(True)
-                    stream_state     = 'STREAMING'
-                    wake_mode        = True   # pas de timeout mouvement — attend SLEEP
-                    last_motion_time = now
-                    continue
-
+        # ── Détection de mouvement ─────────────────────────────────────────────
+        if _FFMPEG:
             cur_snap    = snap_b if snap_toggle else snap_a
             snap_toggle = not snap_toggle
 
-            if capture_snapshot(cur_snap):
+            if capture_frame_from_rtsp(cur_snap):
                 if prev_snap is not None and prev_snap.exists():
-                    if images_differ(prev_snap, cur_snap):
-                        print("[MOTION] 🔴 Mouvement détecté !")
-                        last_motion_time = now
-
-                        if online:
-                            # En ligne : démarrer MediaMTX et notifier le serveur
-                            release_camera()
-                            set_mediamtx(True)
-                            wait_for_rtsp_path()
-                            notify_motion(True)
-                            stream_state = 'STREAMING'
-                            wake_mode    = False  # déclenché par mouvement, timeout actif
-                        else:
-                            # Hors ligne : enregistrement local direct
-                            print("[MOTION] Mode hors ligne — enregistrement local")
-                            enforce_storage_limit()
-                            try:
-                                out = record_clip()
-                                print(f"[MOTION] 📼 Clip : {out.name}")
-                            except FileNotFoundError:
-                                print("[MOTION] ❌ rpicam-vid introuvable")
-                                time.sleep(10)
-                            except Exception as e:
-                                print(f"[MOTION] ❌ Recording : {e}")
-                            prev_snap = None
+                    moved = images_differ(prev_snap, cur_snap)
+                    if moved:
+                        last_motion = now
+                        if not motion_active:
+                            motion_active = True
+                            if online:
+                                notify_motion(True)
+                            else:
+                                # Hors-ligne : enregistrement local
+                                print("[MOTION] Mode hors-ligne — enregistrement local")
+                                enforce_storage_limit()
+                                out = record_clip_from_rtsp()
+                                if out:
+                                    print(f"[MOTION] 📼 Clip : {out.name}")
+                    else:
+                        # Mouvement retombé depuis > 10s → notifier fin
+                        if motion_active and now - last_motion > 10:
+                            motion_active = False
+                            if online:
+                                notify_motion(False)
 
                 prev_snap = cur_snap
-            else:
-                # Snapshot échoué — libérer la caméra si bloquée, réessayer
-                release_camera()
-                time.sleep(2)
-                continue
 
-            time.sleep(MOTION_SNAPSHOT_INTERVAL)
-
-        elif stream_state == 'STREAMING':
-            # Signal STOP de l'interface : priorité absolue quel que soit le mode
-            if online and check_sleep_signal():
-                print("[SLEEP] 💤 Arrêt demandé par l'interface web")
-                set_mediamtx(False)
-                notify_motion(False)
-                release_camera()
-                stream_state = 'IDLE'
-                wake_mode    = False
-                prev_snap    = None
-                snap_toggle  = False
-                time.sleep(3)
-                continue
-
-            if wake_mode:
-                # Mode utilisateur : on ne s'arrête jamais sur timeout mouvement,
-                # seulement sur signal SLEEP (ci-dessus) ou perte serveur prolongée.
-                time.sleep(2)
-            else:
-                # Mode mouvement : arrêt automatique après STREAM_IDLE_TIMEOUT sans détection
-                if now - last_motion_time > STREAM_IDLE_TIMEOUT:
-                    print(f"[MOTION] ⏹ {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
-                    set_mediamtx(False)
-                    if online:
-                        notify_motion(False)
-                    release_camera()
-                    stream_state = 'IDLE'
-                    prev_snap    = None
-                    snap_toggle  = False
-                    time.sleep(3)
-                else:
-                    time.sleep(2)
+        time.sleep(MOTION_CHECK_INTERVAL)
 
 
 if __name__ == "__main__":

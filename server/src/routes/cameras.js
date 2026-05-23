@@ -18,7 +18,6 @@ import {
   triggerMotionRecording,
 } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
-import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -451,24 +450,11 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/start — démarre le stream HLS (déclenché par clic utilisateur)
+// POST /api/cameras/:id/start — démarre le stream HLS (RTSP toujours disponible en mode 24/7)
 router.post('/:id/start', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
-
-    // Si la caméra vient d'un nœud Pi, réveiller seulement — FFmpeg démarre via la notification motion
-    const host = getHostFromStreamUrl(rows[0].rtsp_url);
-    if (host) {
-      const { rows: nodeRows } = await pool.query(
-        'SELECT device_id FROM camera_nodes WHERE host = $1 LIMIT 1', [host]
-      ).catch(() => ({ rows: [] }));
-      if (nodeRows[0]) {
-        requestPiWake(nodeRows[0].device_id);
-        return res.json({ message: 'Réveil Pi demandé', ...getState(req.params.id) });
-      }
-    }
-
     await startHlsStream(rows[0]);
     res.json({ message: 'Stream démarré', ...getState(req.params.id) });
   } catch {
@@ -501,17 +487,9 @@ router.post('/:id/resume', async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/stop
-router.post('/:id/stop', async (req, res) => {
+// POST /api/cameras/:id/stop — arrête FFmpeg côté serveur (MediaMTX Pi continue de tourner)
+router.post('/:id/stop', (req, res) => {
   stopCamera(req.params.id);
-  // Signaler au Pi de couper MediaMTX
-  try {
-    const { rows } = await pool.query(`
-      SELECT cn.device_id FROM camera_nodes cn
-      JOIN cameras c ON c.rtsp_url = cn.stream_url
-      WHERE c.id = $1 LIMIT 1`, [req.params.id]);
-    if (rows[0]) requestPiSleep(rows[0].device_id);
-  } catch { /* non bloquant */ }
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });
 });
 
