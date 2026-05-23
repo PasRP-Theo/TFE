@@ -385,27 +385,42 @@ router.post('/:deviceId/connect', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
 
+  const client = await pool.connect();
   try {
-    const { rows: nodeRows } = await pool.query('SELECT * FROM camera_nodes WHERE device_id = $1', [deviceId]);
-    const node = nodeRows[0];
-    if (!node) return res.status(404).json({ error: 'Noeud camera introuvable' });
+    await client.query('BEGIN');
 
-    const { rows: existingRows } = await pool.query('SELECT * FROM cameras WHERE rtsp_url = $1 LIMIT 1', [node.stream_url]);
+    const { rows: nodeRows } = await client.query('SELECT * FROM camera_nodes WHERE device_id = $1', [deviceId]);
+    const node = nodeRows[0];
+    if (!node) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Noeud camera introuvable' });
+    }
+
+    const { rows: existingRows } = await client.query(
+      'SELECT * FROM cameras WHERE rtsp_url = $1 LIMIT 1',
+      [node.stream_url]
+    );
     if (existingRows[0]) {
+      await client.query('ROLLBACK');
       return res.json({ message: 'Camera deja connectee', alreadyConnected: true, camera: serializeCamera(existingRows[0]) });
     }
 
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       'INSERT INTO cameras (name, rtsp_url, location) VALUES ($1, $2, $3) RETURNING *',
       [node.name, node.stream_url, node.location || node.host]
     );
+    await client.query('COMMIT');
+
     const camera = rows[0];
     await startCamera(camera).catch(err => console.error('[CAM NODE CONNECT START]', err));
 
     res.status(201).json({ message: 'Camera connectee', camera: serializeCamera(camera) });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('[CAM NODE CONNECT]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la connexion du noeud camera' });
+  } finally {
+    client.release();
   }
 });
 
@@ -429,10 +444,21 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
     const node = nodeRows[0];
     if (!node) return res.status(404).json({ error: 'Noeud introuvable' });
 
-    // Déplacer le fichier dans le dossier de la caméra associée si elle existe
-    let finalFilename = req.file.filename;
     const { rows: camRows } = await pool.query('SELECT id, name FROM cameras WHERE rtsp_url = $1 LIMIT 1', [node.stream_url]);
     const linkedCam = camRows[0] || null;
+
+    const offlineCamId    = linkedCam ? String(linkedCam.id) : null;
+    const offlineCamLabel = linkedCam ? `CAM ${linkedCam.id} — ${linkedCam.name}` : node.name;
+
+    // INSERT d'abord — si ça échoue, le fichier reste intact dans offline
+    await pool.query(
+      `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
+       VALUES ($1, true, $2, true, $3)`,
+      [deviceId, detectedAt.toISOString(), req.file.filename]
+    );
+
+    // Déplacer le fichier après le commit DB
+    let finalFilename = req.file.filename;
     if (linkedCam) {
       const cameraId = linkedCam.id;
       const camDir = path.join(RECORDINGS_DIR, String(cameraId));
@@ -440,18 +466,8 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
       const newPath = path.join(camDir, req.file.filename);
       try {
         renameSync(req.file.path, newPath);
-        finalFilename = req.file.filename;
-      } catch { /* garde le fichier dans offline si échec */ }
+      } catch { /* garde le fichier dans offline si échec du rename */ }
     }
-
-    const offlineCamId    = linkedCam ? String(linkedCam.id) : null;
-    const offlineCamLabel = linkedCam ? `CAM ${linkedCam.id} — ${linkedCam.name}` : node.name;
-
-    await pool.query(
-      `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
-       VALUES ($1, true, $2, true, $3)`,
-      [deviceId, detectedAt.toISOString(), finalFilename]
-    );
 
     await createAlert({
       sourceType: 'camera-node',
