@@ -208,6 +208,36 @@ export async function initDB() {
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_announce_interval INTEGER NOT NULL DEFAULT 30;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_port         INTEGER NOT NULL DEFAULT 8554;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_path         VARCHAR(60) NOT NULL DEFAULT 'cam1';
+
+      -- Contraintes CHECK sur les colonnes source
+      DO $$ BEGIN
+        ALTER TABLE camera_discoveries ADD CONSTRAINT chk_discoveries_source
+          CHECK (source IN ('announce', 'mdns', 'manual'));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$ BEGIN
+        ALTER TABLE camera_nodes ADD CONSTRAINT chk_nodes_source
+          CHECK (source IN ('pi-node', 'announce', 'manual'));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      -- Contrainte CHECK format PIN (chiffres uniquement, 4-8 caractères)
+      DO $$ BEGIN
+        ALTER TABLE app_settings ADD CONSTRAINT chk_kiosk_pin
+          CHECK (kiosk_pin ~ '^[0-9]{4,8}$');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    `);
+
+    await client.query(`
+      -- Index manquants sur alerts
+      CREATE INDEX IF NOT EXISTS idx_alerts_camera_id
+        ON alerts(camera_id) WHERE camera_id IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_alerts_source_id
+        ON alerts(source_id) WHERE source_id IS NOT NULL;
+
+      -- Index unique partiel sur dedupe_key (ignore les NULLs)
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_dedupe_key_unique
+        ON alerts(dedupe_key) WHERE dedupe_key IS NOT NULL;
     `);
 
     await client.query(
