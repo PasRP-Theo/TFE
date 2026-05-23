@@ -7,9 +7,40 @@
                            │
                   sert /api/agent/sentys_agent.py
                            │
-              [Pi Zero 2W] ──cron 5min──→ télécharge & redémarre
+              [Pi Zero 2W] ──cron 5min──→ télécharge & redémarre si diff
                     │
-              MediaMTX → flux RTSP → Serveur → HLS/WebRTC → Interface
+              sentys-agent.service (tourne en permanence)
+                    │
+        ┌───────────┴───────────┐
+        │                       │
+  Snapshots (veille)     Wake signal reçu
+  rpicam-jpeg            ou mouvement détecté
+        │                       │
+  Mouvement ?          MediaMTX démarre
+        │                       │
+       Oui              RTSP prêt (2s)
+        │                       │
+  MediaMTX démarre      notify_motion(True)
+        │                       │
+  notify_motion(True)   Serveur lance FFmpeg
+        │                       │
+  Serveur lance FFmpeg   HLS → Interface web
+```
+
+### Flux wake/sleep (clic utilisateur)
+```
+Interface [START] → serveur status=reconnecting + signal wake
+  → Pi démarre MediaMTX → attend RTSP prêt → notify_motion(True)
+  → serveur démarre FFmpeg → flux visible en ~4s
+Interface [STOP] → serveur arrête FFmpeg + signal sleep
+  → Pi arrête MediaMTX → retour snapshots
+```
+
+### Flux mouvement automatique
+```
+Pi détecte différence entre 2 snapshots (toutes les 1s)
+  → MediaMTX démarre → notify_motion(True) → FFmpeg démarre
+  → 60s sans nouveau mouvement → MediaMTX s'arrête → FFmpeg s'arrête
 ```
 
 ---
@@ -32,7 +63,7 @@
 ```bash
 sudo nano /boot/firmware/config.txt
 ```
-Vérifier que ces deux lignes sont présentes (les ajouter si manquantes) :
+Vérifier que ces lignes sont présentes (les ajouter si manquantes) :
 ```
 camera_auto_detect=1
 dtoverlay=ov5647
@@ -79,18 +110,34 @@ sudo mv mediamtx.yml /usr/local/etc/
 rm mediamtx_v1.9.1_linux_arm64v8.tar.gz
 ```
 
-### Configurer le flux caméra
+### Configurer MediaMTX
 ```bash
 sudo nano /usr/local/etc/mediamtx.yml
 ```
-Trouver la section `paths:` et remplacer son contenu par :
+
+Deux choses à configurer :
+
+**1. Activer l'API REST** (nécessaire pour que l'agent vérifie si le RTSP est prêt) :
+```yaml
+api: yes
+```
+
+**2. Configurer le flux caméra** — trouver la section `paths:` et remplacer par :
 ```yaml
 paths:
   cam1:
     source: rpiCamera
+    rpiCameraWidth: 1280
+    rpiCameraHeight: 720
+    rpiCameraFPS: 15
+    rpiCameraBitrate: 500000
 ```
 
 ### Créer le service systemd MediaMTX
+
+MediaMTX est géré **à la demande** par l'agent (démarré/arrêté selon le mouvement ou les clics
+utilisateur). Le service systemd est créé **sans** `enable` — l'agent le contrôle via `systemctl start/stop`.
+
 ```bash
 sudo nano /etc/systemd/system/mediamtx.service
 ```
@@ -101,54 +148,65 @@ After=network.target
 
 [Service]
 ExecStart=/usr/local/bin/mediamtx /usr/local/etc/mediamtx.yml
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 ```
 ```bash
-sudo systemctl enable mediamtx
-sudo systemctl start mediamtx
+sudo systemctl daemon-reload
+# Ne PAS faire systemctl enable — l'agent gère le démarrage
 ```
 
-### Autoriser le contrôle de MediaMTX sans mot de passe
+### Autoriser le contrôle sans mot de passe
+
+L'agent a besoin de démarrer/arrêter MediaMTX, libérer la caméra et nettoyer `/dev/shm`.
+
 ```bash
 sudo visudo
 ```
-Ajouter à la fin (**remplacer `picam` par le nom d'utilisateur réel**) :
+Ajouter à la fin (**remplacer `picam2` par le nom d'utilisateur réel**) :
 ```
-picam ALL=(ALL) NOPASSWD: /bin/systemctl start mediamtx, /bin/systemctl stop mediamtx, /bin/systemctl restart mediamtx
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl start mediamtx
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl stop mediamtx
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl restart mediamtx
+picam2 ALL=(ALL) NOPASSWD: /usr/bin/pkill
+picam2 ALL=(ALL) NOPASSWD: /bin/kill
+picam2 ALL=(ALL) NOPASSWD: /usr/bin/fuser
+picam2 ALL=(ALL) NOPASSWD: /bin/rm
 ```
+
+> `pkill`, `fuser` et `rm` sont utilisés pour libérer la caméra et nettoyer `/dev/shm/mediamtx-rpicamera-*`
+> avant chaque démarrage MediaMTX (évite "no space left on device").
 
 ---
 
-## Étape 4 — Copier les fichiers de l'agent
+## Étape 4 — Créer le fichier d'identité
 
-Depuis ton **PC Windows** (pas depuis le Pi) :
+Ce fichier n'est **jamais** écrasé par les mises à jour automatiques :
 ```bash
-scp pi/sentys_agent.py picam@<IP_PI>:/home/picam/sentys_agent.py
-scp pi/auto_update.sh picam@<IP_PI>:/home/picam/auto_update.sh
-```
-```bash
-# Sur le Pi
-chmod +x /home/picam/auto_update.sh
-```
-
----
-
-## Étape 5 — Créer le fichier d'identité
-
-Sur le Pi — ce fichier n'est **jamais** écrasé par les mises à jour automatiques :
-```bash
-cat > /home/picam/device.conf << 'EOF'
-DEVICE_ID=pi-zero-01
-DEVICE_NAME=Pi Zero 2W - Cam1
+cat > ~/device.conf << 'EOF'
+DEVICE_ID=pi-zero-02
+DEVICE_NAME=Pi Zero 2W - Cam2
 DEVICE_LOCATION=Entrée
 EOF
 ```
 
 > Chaque Pi doit avoir un `DEVICE_ID` unique (`pi-zero-01`, `pi-zero-02`, etc.).
+
+---
+
+## Étape 5 — Installer l'agent et le script de mise à jour
+
+```bash
+# Télécharger l'agent depuis le serveur
+curl http://192.168.0.47:4000/api/agent/sentys_agent.py -o ~/sentys_agent.py
+
+# Copier le script de mise à jour (depuis le PC, ou via scp)
+scp pi/auto_update.sh picam2@<IP_PI>:~/auto_update.sh
+chmod +x ~/auto_update.sh
+```
 
 ---
 
@@ -159,23 +217,29 @@ sudo nano /etc/systemd/system/sentys-agent.service
 ```
 ```ini
 [Unit]
-Description=Sentys Agent
-After=network.target
+Description=Sentys Camera Agent
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/picam/sentys_agent.py
-WorkingDirectory=/home/picam
+Type=simple
+User=picam2
+WorkingDirectory=/home/picam2
+ExecStart=/usr/bin/python3 /home/picam2/sentys_agent.py
 Restart=always
 RestartSec=5
-User=picam
 Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
 ```
 ```bash
+sudo systemctl daemon-reload
 sudo systemctl enable sentys-agent
 sudo systemctl start sentys-agent
+
+# Vérifier
+sudo systemctl status sentys-agent
 ```
 
 ---
@@ -187,10 +251,12 @@ crontab -e
 ```
 Ajouter à la fin :
 ```
-*/5 * * * * /home/picam/auto_update.sh >> /home/picam/update.log 2>&1
+*/5 * * * * /home/picam2/auto_update.sh >> /home/picam2/update.log 2>&1
 ```
 
-> Le Pi télécharge la dernière version de `sentys_agent.py` depuis le serveur toutes les 5 minutes et redémarre le service si une différence est détectée.
+> Toutes les 5 minutes, le Pi télécharge la dernière version de `sentys_agent.py` depuis le serveur.
+> Si le fichier a changé (checksum différent), il remplace l'ancien et redémarre le service.
+> Le fichier `device.conf` n'est jamais touché.
 
 ---
 
@@ -201,13 +267,8 @@ Dans l'interface Sentys, ajouter une caméra avec l'URL RTSP :
 rtsp://<IP_PI>:8554/cam1
 ```
 
-Puis enregistrer le stream dans go2rtc depuis le serveur host :
-```bash
-curl -X POST http://192.168.0.47:4000/api/webrtc/<ID_CAMERA>/register
-```
-L'ID caméra est visible dans l'URL de l'interface ou dans la base de données.
-
-> **Note** : À partir du prochain redémarrage du serveur, l'enregistrement go2rtc est automatique.
+Le Pi annonce automatiquement son existence au serveur toutes les 30 secondes — la caméra
+apparaît aussi dans la liste de découverte réseau.
 
 ---
 
@@ -218,7 +279,7 @@ L'ID caméra est visible dans l'URL de l'interface ou dans la base de données.
 | Pi Zero 2W #1 | `picam` | `/home/picam` |
 | Pi Zero 2W #2 | `picam2` | `/home/picam2` |
 
-Adapter **tous les chemins**, le `User=` dans le service systemd, et la ligne visudo en conséquence.
+Adapter **tous les chemins**, le `User=` dans les services systemd, et les lignes visudo.
 
 ---
 
@@ -227,11 +288,11 @@ Adapter **tous les chemins**, le `User=` dans le service systemd, et la ligne vi
 ```
 1. Modifier sentys_agent.py sur le PC
 2. git push → pipeline CI/CD déploie sur le serveur host
-3. Dans les 5 minutes, chaque Pi télécharge la nouvelle version
-4. Le service sentys-agent redémarre automatiquement
+3. Dans les 5 minutes, chaque Pi télécharge la nouvelle version automatiquement
+4. Le service sentys-agent redémarre si le fichier a changé
 ```
 
-Aucune intervention manuelle sur les Pi nécessaire.
+Aucune intervention manuelle sur les Pi nécessaire après l'installation initiale.
 
 ---
 
@@ -239,31 +300,37 @@ Aucune intervention manuelle sur les Pi nécessaire.
 
 ### Commandes utiles
 ```bash
-# Logs du service agent
+# Logs de l'agent en direct
 sudo journalctl -u sentys-agent -f
 
-# Logs MediaMTX
+# Logs MediaMTX en direct
 sudo journalctl -u mediamtx -f
+
+# Logs serveur (depuis le serveur host)
+pm2 logs sentys --lines 0
 
 # Statut des services
 sudo systemctl status sentys-agent
 sudo systemctl status mediamtx
 
-# Logs des mises à jour automatiques
-cat /home/picam/update.log
+# Vérifier que le RTSP est prêt (quand MediaMTX tourne)
+curl -s http://localhost:9997/v3/paths/get/cam1 | python3 -m json.tool | grep ready
+
+# Vérifier l'espace /dev/shm
+df -h /dev/shm
+ls /dev/shm/
+
+# Nettoyer /dev/shm manuellement
+sudo rm -rf /dev/shm/mediamtx-rpicamera-*
 
 # Vérifier la caméra
 rpicam-hello --list-cameras
 
-# Vérifier que la caméra est vue par le kernel
-dmesg | grep -i -E "csi|ov5647|camera"
+# Logs des mises à jour automatiques
+cat ~/update.log
 
 # Forcer une mise à jour immédiate de l'agent
-/home/picam/auto_update.sh
-
-# Redémarrer manuellement
-sudo systemctl restart sentys-agent
-sudo systemctl restart mediamtx
+~/auto_update.sh
 ```
 
 ---
@@ -276,66 +343,64 @@ sudo systemctl restart mediamtx
 ---
 
 ### Stream en reconnexion permanente (`404 Not Found` dans les logs serveur)
+
 MediaMTX ne publie pas le flux. Vérifier :
 ```bash
 sudo systemctl status mediamtx
-sudo journalctl -u mediamtx -f
+sudo journalctl -u mediamtx -n 50
 ```
+
 Causes fréquentes :
-- **`no space left on device`** sur `/dev/shm` → nettoyer et redémarrer :
-  ```bash
-  sudo rm -rf /dev/shm/mediamtx-*
-  sudo systemctl restart mediamtx
-  ```
-- **`write queue is full`** → trop de clients connectés simultanément. S'assurer qu'une seule entrée caméra dans l'interface pointe vers ce Pi.
 
----
-
-### Erreur WebRTC 502 dans l'interface
-go2rtc n'a pas le stream enregistré. Depuis le serveur host :
+**`no space left on device`** sur `/dev/shm` → MediaMTX ne peut pas extraire `libcamera.so` :
 ```bash
-curl -X POST http://192.168.0.47:4000/api/webrtc/<ID_CAMERA>/register
+df -h /dev/shm        # si > 90% → nettoyer
+sudo rm -rf /dev/shm/mediamtx-rpicamera-*
+sudo systemctl restart mediamtx
+```
+L'agent nettoie automatiquement `/dev/shm` avant chaque démarrage MediaMTX depuis la version actuelle.
+
+**`api: no`** dans mediamtx.yml → l'agent ne peut pas vérifier si le RTSP est prêt :
+```bash
+sudo sed -i 's/^api: no/api: yes/' /usr/local/etc/mediamtx.yml
+sudo systemctl restart mediamtx
 ```
 
----
-
-### go2rtc orphelin après redémarrage de sentys (WebRTC 502)
-Quand pm2 redémarre sentys, l'ancien processus go2rtc devient orphelin et n'écoute plus sur le port 1984. Symptôme : `[go2rtc] registerStream : fetch failed` dans les logs pm2.
-
-Fix :
+**Caméra déjà utilisée par un autre processus** :
 ```bash
-# Trouver et tuer l'orphelin
-ps aux | grep go2rtc
-kill <PID>
-
-# Redémarrer sentys pour relancer go2rtc proprement
-pm2 restart sentys
-
-# Vérifier que go2rtc répond
-sleep 5 && curl http://localhost:1984/api/streams
-
-# Ré-enregistrer les caméras si nécessaire
-curl -X POST http://192.168.0.47:4000/api/webrtc/<ID>/register
+sudo fuser /dev/media0 /dev/media1 /dev/video0
+sudo pkill -9 -f rpicam
+sudo systemctl restart sentys-agent
 ```
 
 ---
 
 ### `sudo: a terminal is required` dans les logs sentys-agent
-La ligne visudo est manquante. Ajouter via `sudo visudo` :
-```
-picam ALL=(ALL) NOPASSWD: /bin/systemctl start mediamtx, /bin/systemctl stop mediamtx, /bin/systemctl restart mediamtx
+
+Les lignes visudo sont manquantes ou incorrectes. Vérifier via `sudo visudo` que toutes les lignes
+`NOPASSWD` pour `pkill`, `kill`, `fuser` et `rm` sont présentes (voir Étape 3).
+
+---
+
+### MediaMTX path jamais ready (`⚠ Path /cam1 non ready après 20s`)
+
+1. Vérifier que `api: yes` est dans mediamtx.yml
+2. Vérifier `/dev/shm` (voir ci-dessus)
+3. Tester manuellement :
+```bash
+sudo systemctl start mediamtx
+sleep 3
+curl -s http://localhost:9997/v3/paths/get/cam1
+# "ready": true attendu
 ```
 
 ---
 
-### `NameError: name 'RTSP_PORT' is not defined`
-L'agent sur le Pi est une ancienne version. Recopier depuis le PC :
-```bash
-scp pi/sentys_agent.py picam@<IP_PI>:/home/picam/sentys_agent.py
+### `sudo: a terminal is required` au restart du service
+
+Ajouter dans visudo la permission pour `systemctl restart sentys-agent` :
 ```
-Puis redémarrer :
-```bash
-sudo systemctl restart sentys-agent
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl restart sentys-agent
 ```
 
 ---
@@ -347,11 +412,17 @@ sudo systemctl restart sentys-agent
 | `SERVER_URL` | `http://192.168.0.47:4000` | IP du serveur host |
 | `RTSP_PORT` | `8554` | Port MediaMTX |
 | `RTSP_PATH` | `cam1` | Chemin du flux RTSP |
-| `CLIP_DURATION_SEC` | `30` | Durée d'un clip hors ligne |
-| `ANNOUNCE_INTERVAL` | `30` | Secondes entre chaque annonce |
-| `MAX_STORAGE_MB` | `500` | Stockage max clips hors ligne |
+| `ANNOUNCE_INTERVAL` | `30` | Secondes entre chaque annonce au serveur |
+| `MOTION_SNAPSHOT_INTERVAL` | `1` | Secondes entre chaque snapshot en veille |
+| `MOTION_THRESHOLD` | `25` | Différence par pixel pour détecter un changement |
+| `MOTION_MIN_PIXELS` | `300` | Pixels différents minimum pour déclencher |
+| `STREAM_IDLE_TIMEOUT` | `60` | Secondes sans mouvement avant d'arrêter MediaMTX |
+| `CLIP_DURATION_SEC` | `30` | Durée d'un clip hors-ligne |
+| `MAX_STORAGE_MB` | `500` | Stockage max clips hors-ligne |
 
-> `DEVICE_ID`, `DEVICE_NAME` et `DEVICE_LOCATION` sont lus depuis `device.conf` et ne sont **jamais** écrasés par les mises à jour automatiques.
+> `DEVICE_ID`, `DEVICE_NAME` et `DEVICE_LOCATION` sont lus depuis `device.conf`
+> et ne sont **jamais** écrasés par les mises à jour automatiques.
+> Ces valeurs peuvent aussi être overridées depuis l'interface serveur (config distante).
 
 ---
 
@@ -359,19 +430,18 @@ sudo systemctl restart sentys-agent
 
 ### /boot/firmware/config.txt
 ```ini
-arm_freq=800        # CPU limité à 800MHz
-#arm_boost=1        # boost CPU désactivé
+arm_freq=800         # CPU limité à 800MHz
+#arm_boost=1         # boost CPU désactivé
 dtoverlay=disable-bt # Bluetooth désactivé
 ```
 
-### Services désactivés
+### Services inutiles à désactiver
 ```bash
-sudo systemctl disable avahi-daemon avahi-daemon.socket  # mDNS inutile (connexion par IP)
-sudo systemctl disable serial-getty@ttyAMA0              # console série inutile
-sudo systemctl disable offline-recorder.service          # doublon de sentys-agent
+sudo systemctl disable avahi-daemon avahi-daemon.socket
+sudo systemctl disable serial-getty@ttyAMA0
 ```
 
-### mediamtx.yml — stream réduit
+### mediamtx.yml — qualité réduite
 ```yaml
 paths:
   cam1:
@@ -382,24 +452,15 @@ paths:
     rpiCameraBitrate: 500000
 ```
 
-### sentys_agent.py — enregistrement hors ligne réduit
-Dans `record_clip()`, remplacer `libcamera-vid` par `rpicam-vid` et ajouter `"--framerate", "15"`.
-
-> **Note** : Sur Pi OS Bookworm, `libcamera-vid` n'existe plus — utiliser `rpicam-vid`.
-
-### auto_update.sh — sudo sans terminal
-```bash
-echo "picam ALL=(ALL) NOPASSWD: /bin/systemctl restart sentys-agent" | sudo tee /etc/sudoers.d/sentys-agent
-```
-
 ### À NE PAS FAIRE — gpu_mem=16 casse la caméra
-Ne jamais ajouter `gpu_mem=16` dans `/boot/firmware/config.txt` — le stack caméra libcamera nécessite au minimum 64MB de mémoire GPU. Symptôme : `camera_create(): selected camera is not available` dans les logs MediaMTX, et `rpicam-hello --list-cameras` retourne "only supports Raspberry Pi platforms".
+Ne jamais ajouter `gpu_mem=16` dans `/boot/firmware/config.txt` — libcamera nécessite
+minimum 64MB de mémoire GPU. Symptôme : `camera_create(): selected camera is not available`.
 
 ### Gains estimés
 | Optimisation | Gain |
 |---|---|
 | CPU 800MHz + arm_boost off | ~150mA |
-| Double instance Python supprimée | ~40mA |
-| Services inutiles désactivés | ~10mA |
+| Bluetooth désactivé | ~10mA |
 | Stream 720p15 au lieu de 1080p30 | ~100mA |
-| **Autonomie estimée (2000mAh)** | **~3h30** |
+| MediaMTX on-demand (pas 24/7) | ~200mA en veille |
+| **Autonomie estimée (2000mAh)** | **~4h en streaming, >12h en veille** |
