@@ -266,6 +266,7 @@ export const cameraEvents = new EventEmitter();
 const states = new Map();
 const activeRecordings = new Map();
 const inactivityTimers = new Map();
+const reconnectTimers = new Map();
 
 function clearInactivityTimer(cameraId) {
   const timer = inactivityTimers.get(String(cameraId));
@@ -559,7 +560,8 @@ export async function startHlsStream(camera) {
       clearInactivityTimer(id);
       s.status = 'reconnecting';
       broadcast(id);
-      setTimeout(() => startHlsStream(camera), 5000);
+      const t = setTimeout(() => { reconnectTimers.delete(id); startHlsStream(camera); }, 5000);
+      reconnectTimers.set(id, t);
     }
   });
 
@@ -572,6 +574,7 @@ export function stopHlsStream(cameraId) {
   const s  = states.get(id);
   if (!s) return false;
   clearInactivityTimer(id);
+  const rt = reconnectTimers.get(id); if (rt) { clearTimeout(rt); reconnectTimers.delete(id); }
   // Mettre le status à 'watching' AVANT de tuer le proc, sinon proc.on('close')
   // voit encore 'running' et déclenche une reconnexion indésirable.
   s.status    = 'watching';
@@ -617,6 +620,7 @@ export function stopCamera(cameraId) {
   const s  = states.get(id);
   if (!s) return false;
   clearInactivityTimer(id);
+  const rt = reconnectTimers.get(id); if (rt) { clearTimeout(rt); reconnectTimers.delete(id); }
   s.status    = 'stopped';   // avant kill pour éviter la reconnexion auto
   s.recording = false;
   s.proc?.kill('SIGKILL');
