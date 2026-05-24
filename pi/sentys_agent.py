@@ -444,15 +444,16 @@ def main():
                 if check_wake_signal():
                     print("[WAKE] 🔔 Démarrage demandé par l'interface web")
                     ready = start_stream()
-                    # notify_motion(True) déclenche FFmpeg côté serveur
-                    notify_motion(True)
-                    if not ready:
-                        # Path non prêt — le serveur réessaiera via le reconnect
-                        print("[WAKE] ⚠ MediaMTX non prêt, le serveur va réessayer")
-                    stream_state      = 'STREAMING'
-                    wake_mode         = True
-                    last_motion_time  = now
-                    stream_start_time = now
+                    if ready:
+                        # RTSP confirmé prêt → déclenche FFmpeg côté serveur
+                        notify_motion(True)
+                        stream_state      = 'STREAMING'
+                        wake_mode         = True
+                        last_motion_time  = now
+                        stream_start_time = now
+                    else:
+                        print("[WAKE] ⚠ MediaMTX non prêt — retour en veille, réessaie dans quelques secondes")
+                        stop_stream()
                     continue
 
             # Snapshot pour détection mouvement
