@@ -386,8 +386,8 @@ function CameraControls({ cam, onAction }: {
       </span>
       {(status === 'stopped' || status === 'watching') &&
         <button type="button" className="cam-btn-start" onClick={() => onAction(id, 'start')}>▶ START</button>}
-      {status === 'running'      && <button className="cam-btn-pause" onClick={() => onAction(id, 'pause')}>⏸ PAUSE</button>}
-      {status === 'paused'       && <button className="cam-btn-start" onClick={() => onAction(id, 'resume')}>▶ REPRENDRE</button>}
+      {/* {status === 'running'      && <button className="cam-btn-pause" onClick={() => onAction(id, 'pause')}>⏸ PAUSE</button>} */}
+      {/* {status === 'paused'       && <button className="cam-btn-start" onClick={() => onAction(id, 'resume')}>▶ REPRENDRE</button>} */}
       {(status === 'running' || status === 'paused' || status === 'reconnecting') &&
         <button className="cam-btn-stop" onClick={() => onAction(id, 'stop')}>⏹ STOP</button>}
     </div>
