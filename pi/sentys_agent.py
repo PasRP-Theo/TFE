@@ -163,9 +163,13 @@ def clean_shm():
         print(f"[SHM] ⚠ clean_shm : {e}")
 
 
-def release_camera():
-    """Tue tous les processus qui tiennent la caméra et nettoie /dev/shm."""
-    for pattern in ['mtxrpicam', 'rpicam-jpeg', 'rpicam-vid']:
+def release_camera(kill_rpicam_jpeg: bool = True):
+    """Tue les processus qui tiennent la caméra et nettoie /dev/shm.
+    kill_rpicam_jpeg=False quand appelé depuis l'IDLE (ne pas tuer un snapshot en cours)."""
+    patterns = ['mtxrpicam', 'rpicam-vid']
+    if kill_rpicam_jpeg:
+        patterns.append('rpicam-jpeg')
+    for pattern in patterns:
         try:
             subprocess.run(['sudo', 'pkill', '-9', '-f', pattern],
                            capture_output=True, timeout=3)
@@ -234,8 +238,13 @@ def start_stream():
 
 
 def stop_stream():
-    """Arrête MediaMTX. systemctl stop gère l'arrêt propre — pas besoin de pkill."""
+    """Arrête MediaMTX et tue le processus mtxrpicam orphelin pour libérer la caméra."""
     set_mediamtx(False)
+    # mtxrpicam peut survivre quelques instants après l'arrêt de mediamtx — le tuer explicitement
+    try:
+        subprocess.run(['sudo', 'pkill', '-9', '-f', 'mtxrpicam'], capture_output=True, timeout=3)
+    except Exception:
+        pass
     clean_shm()
 
 
@@ -480,7 +489,7 @@ def main():
 
                 prev_snap = cur_snap
             else:
-                release_camera()
+                release_camera(kill_rpicam_jpeg=False)
                 continue
 
             time.sleep(MOTION_SNAPSHOT_INTERVAL)
