@@ -331,7 +331,7 @@ export function setPiWaiting(cameraId) {
   s.status = 'reconnecting';
   s.hlsUrl = null;
   broadcast(id);
-  // Timeout de sécurité : si le Pi ne répond pas en 30s, repasser en veille
+  // Timeout de sécurité : si le Pi ne répond pas en 60s (boot lent + réseau), repasser en veille
   setTimeout(() => {
     const cur = states.get(id);
     if (cur && cur.status === 'reconnecting' && !cur.proc) {
@@ -339,7 +339,7 @@ export function setPiWaiting(cameraId) {
       cur.status = 'watching';
       broadcast(id);
     }
-  }, 30000);
+  }, 60000);
 }
 
 export function getAllStates() {
