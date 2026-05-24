@@ -553,7 +553,6 @@ export async function startHlsStream(camera) {
   const args = ['-fflags', '+genpts+nobuffer', '-flags', 'low_delay'];
   if (isRtsp) {
     args.push('-rtsp_transport', RTSP_TRANSPORT);
-    args.push('-stimeout', '5000000'); // timeout socket RTSP 5s — évite boucle infinie si Pi hors ligne
   }
   args.push('-y', '-i', sourceUrl);
 
