@@ -489,6 +489,12 @@ export async function startHlsStream(camera) {
   const cur = states.get(id);
   if (cur?.status === 'running') { scheduleInactivity(id); return; }
 
+  // Token pour détecter si stopHlsStream/stopCamera intervient pendant les await ci-dessous.
+  // On ne doit annuler QUE si une intervention extérieure a changé le status — pas si on
+  // est parti de 'watching' (déclenchement par mouvement) et qu'il est toujours 'watching'.
+  const startToken = Date.now();
+  if (cur) cur._startToken = startToken;
+
   // Tuer l'éventuel processus IA existant (sera relancé ci-dessous)
   if (cur?.aiProc) {
     cur.aiProc.kill('SIGKILL');
@@ -498,11 +504,12 @@ export async function startHlsStream(camera) {
     });
   }
 
-  // Vérification post-await : si le status a changé pendant l'attente (ex. stopHlsStream
-  // appelé pendant qu'on tuait l'IA), on abandonne pour ne pas écraser le nouvel état.
+  // Vérification post-await : annuler seulement si une fonction extérieure a pris la main
+  // (stopHlsStream → status='watching' + token différent, stopCamera → state supprimé).
   {
     const s = states.get(id);
-    if (!s || s.status === 'watching' || s.status === 'stopped' || s.status === 'paused') {
+    if (!s || s.status === 'stopped' || s.status === 'paused' ||
+        (s._startToken !== startToken)) {
       console.log(`[CAM ${id}] startHlsStream annulé — état changé pendant l'init (${s?.status ?? 'supprimé'})`);
       return;
     }
@@ -536,7 +543,8 @@ export async function startHlsStream(camera) {
   // Vérification post-await (résolution URL HTTP peut aussi prendre du temps)
   {
     const s = states.get(id);
-    if (!s || s.status === 'watching' || s.status === 'stopped' || s.status === 'paused') {
+    if (!s || s.status === 'stopped' || s.status === 'paused' ||
+        (s._startToken !== startToken)) {
       console.log(`[CAM ${id}] startHlsStream annulé — état changé après résolution URL (${s?.status ?? 'supprimé'})`);
       return;
     }
@@ -596,11 +604,12 @@ export async function startHlsStream(camera) {
     console.log(`[CAM ${id}] 🤖 IA démarrée`);
   }
 
-  // Dernière vérification avant d'écraser l'état — stopHlsStream peut avoir été
-  // appelé pendant le démarrage de l'IA ou de FFmpeg (race condition async).
+  // Dernière vérification avant d'écraser l'état — stopHlsStream/stopCamera peut avoir
+  // été appelé pendant le spawn FFmpeg+IA (race condition async).
   {
     const s = states.get(id);
-    if (!s || s.status === 'watching' || s.status === 'stopped' || s.status === 'paused') {
+    if (!s || s.status === 'stopped' || s.status === 'paused' ||
+        (s._startToken !== startToken)) {
       console.log(`[CAM ${id}] startHlsStream annulé — état changé après spawn FFmpeg (${s?.status ?? 'supprimé'})`);
       proc.kill('SIGKILL');
       if (aiProc) aiProc.kill('SIGKILL');
@@ -692,6 +701,8 @@ export function stopHlsStream(cameraId) {
   const rt = reconnectTimers.get(id); if (rt) { clearTimeout(rt); reconnectTimers.delete(id); }
   // Mettre le status à 'watching' AVANT de tuer le proc, sinon proc.on('close')
   // voit encore 'running' et déclenche une reconnexion indésirable.
+  // Invalider le token pour annuler tout startHlsStream concurrent en cours d'init.
+  s._startToken = Date.now();
   s.status    = 'watching';
   s.recording = false;
   s.hlsUrl    = null;
