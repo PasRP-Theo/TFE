@@ -316,8 +316,18 @@ export function getState(cameraId) {
 // Le serveur déclenchera startHlsStream quand le Pi appellera notify_motion(True).
 export function setPiWaiting(cameraId) {
   const id = String(cameraId);
-  const s  = states.get(id);
-  if (!s || s.status === 'running') return;
+  let s = states.get(id);
+  // Si la caméra n'a pas d'état (ex. stopCamera appelé avant), en créer un minimal
+  if (!s) {
+    states.set(id, { proc: null, aiProc: null, status: 'watching', recording: false, startedAt: null, hlsUrl: null, sourceUrl: null });
+    s = states.get(id);
+  }
+  if (s.status === 'running') return;
+  // Annuler tout timer de reconnect existant (boucle infinie si Pi était hors ligne)
+  clearInactivityTimer(id);
+  const rt = reconnectTimers.get(id); if (rt) { clearTimeout(rt); reconnectTimers.delete(id); }
+  // Tuer un éventuel FFmpeg zombie (reconnect raté)
+  if (s.proc) { s.proc.kill('SIGKILL'); s.proc = null; }
   s.status = 'reconnecting';
   s.hlsUrl = null;
   broadcast(id);
@@ -533,7 +543,10 @@ export async function startHlsStream(camera) {
   }
 
   const args = ['-fflags', '+genpts+nobuffer', '-flags', 'low_delay'];
-  if (isRtsp) args.push('-rtsp_transport', RTSP_TRANSPORT);
+  if (isRtsp) {
+    args.push('-rtsp_transport', RTSP_TRANSPORT);
+    args.push('-stimeout', '5000000'); // timeout socket RTSP 5s — évite boucle infinie si Pi hors ligne
+  }
   args.push('-y', '-i', sourceUrl);
 
   const videoCodecArgs = isRtsp
