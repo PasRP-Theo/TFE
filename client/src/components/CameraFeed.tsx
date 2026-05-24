@@ -263,7 +263,7 @@ function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
   const [useHls, setUseHls] = useState(false);
   const handleError = useCallback(() => setUseHls(true), []);
 
-  if (useHls || !cam.hlsUrl) {
+  if (useHls || !cam.hlsUrl || cam.nodeDeviceId) {
     return <HlsPlayer hlsUrl={cam.hlsUrl!} streamKey={streamKey} />;
   }
   return <WebRTCPlayer cameraId={cam.id} onError={handleError} />;
