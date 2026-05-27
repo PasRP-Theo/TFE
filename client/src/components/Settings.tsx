@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks/useAppearance";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
-import { apiUrl, readJsonResponse } from '../lib/api';
+import { apiUrl, apiFetch, readJsonResponse } from '../lib/api';
 import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 import { subscribeUserToPush, unsubscribeUserFromPush, isPushSubscribed } from "./push";
 
@@ -1128,14 +1128,14 @@ function formatArchiveSize(bytes: number) {
 }
 
 function TabArchives() {
-  const { token } = useAuth();
+  useAuth();
   const [archives, setArchives] = useState<ArchiveEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purging, setPurging] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(apiUrl('/api/cameras/archives'))
+    apiFetch(apiUrl('/api/cameras/archives'))
       .then(r => r.json())
       .then(data => { setArchives(Array.isArray(data) ? data : []); })
       .catch(() => setError('Impossible de charger les archives'))
@@ -1145,9 +1145,8 @@ function TabArchives() {
   async function purge(cameraId: string) {
     setPurging(cameraId);
     try {
-      await fetch(apiUrl(`/api/cameras/archives/${cameraId}`), {
+      await apiFetch(apiUrl(`/api/cameras/archives/${cameraId}`), {
         method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       setArchives(prev => prev.filter(a => a.cameraId !== cameraId));
     } finally {

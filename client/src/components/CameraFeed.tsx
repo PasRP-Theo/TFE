@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
-import { apiUrl } from "../lib/api";
+import { apiUrl, apiFetch } from "../lib/api";
 import { WebRTCPlayer } from "./WebRTCPlayer";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -444,7 +444,7 @@ export default function CameraFeed({ onStatusChange }: {
   async function fetchDiscoveries(silent = false) {
     if (!silent) setDiscoveriesLoading(true);
     try {
-      const res = await fetch(apiUrl('/api/cameras/discoveries'));
+      const res = await apiFetch(apiUrl('/api/cameras/discoveries'));
       if (!res.ok) {
         const isJson = res.headers.get('content-type')?.includes('application/json');
         const data = isJson ? await res.json() : null;
@@ -480,7 +480,7 @@ export default function CameraFeed({ onStatusChange }: {
     if (focused === null) return;
     const cam = camerasRef.current.find(c => c.id === focused);
     if (cam?.status === 'watching' || cam?.status === 'stopped') {
-      fetch(apiUrl(`/api/cameras/${focused}/start`), { method: 'POST' })
+      apiFetch(apiUrl(`/api/cameras/${focused}/start`), { method: 'POST' })
         .then(() => fetchCameras())
         .catch(() => {});
     }
@@ -490,7 +490,7 @@ export default function CameraFeed({ onStatusChange }: {
   useEffect(() => {
     if (focused === null) return;
     const interval = setInterval(() => {
-      fetch(apiUrl(`/api/cameras/${focused}/stream/heartbeat`), { method: 'POST' }).catch(() => {});
+      apiFetch(apiUrl(`/api/cameras/${focused}/stream/heartbeat`), { method: 'POST' }).catch(() => {});
     }, 60_000);
     return () => clearInterval(interval);
   }, [focused]);
@@ -516,7 +516,7 @@ export default function CameraFeed({ onStatusChange }: {
 
   async function fetchCameras() {
     try {
-      const res  = await fetch(apiUrl('/api/cameras'));
+      const res  = await apiFetch(apiUrl('/api/cameras'));
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data)) setCameras(data);
@@ -543,7 +543,7 @@ export default function CameraFeed({ onStatusChange }: {
     async function fetchSysInfo() {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(apiUrl('/api/system/info'), {
+        const res = await apiFetch(apiUrl('/api/system/info'), {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!res.ok) return;
@@ -562,7 +562,7 @@ export default function CameraFeed({ onStatusChange }: {
 
   async function handleAction(id: number, action: "start" | "pause" | "resume" | "stop") {
     try {
-      await fetch(apiUrl(`/api/cameras/${id}/${action}`), { method: 'POST' });
+      await apiFetch(apiUrl(`/api/cameras/${id}/${action}`), { method: 'POST' });
       fetchCameras();
     } catch { /* ignore */ }
   }
@@ -571,7 +571,7 @@ export default function CameraFeed({ onStatusChange }: {
     setSearchingNetwork(true);
     setDiscoverMessage('Recherche des caméras en cours…');
     try {
-      const res = await fetch(apiUrl('/api/cameras/discover'));
+      const res = await apiFetch(apiUrl('/api/cameras/discover'));
       if (!res.ok) {
         const isJson = res.headers.get('content-type')?.includes('application/json');
         const data = isJson ? await res.json() : null;
@@ -595,7 +595,7 @@ export default function CameraFeed({ onStatusChange }: {
   async function addCamera() {
     if (!newName.trim() || !newRtsp.trim()) return;
     try {
-      const res  = await fetch(apiUrl('/api/cameras'), {
+      const res  = await apiFetch(apiUrl('/api/cameras'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, rtsp_url: newRtsp, location: newLoc }),
@@ -624,7 +624,7 @@ export default function CameraFeed({ onStatusChange }: {
 
   async function addDiscoveredDevice(device: DiscoveredCamera) {
     try {
-      const res  = await fetch(apiUrl('/api/cameras'), {
+      const res  = await apiFetch(apiUrl('/api/cameras'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -653,7 +653,7 @@ export default function CameraFeed({ onStatusChange }: {
 
   async function confirmDeleteCamera() {
     if (!cameraDeleteTarget) return;
-    await fetch(apiUrl(`/api/cameras/${cameraDeleteTarget.id}`), { method: 'DELETE' });
+    await apiFetch(apiUrl(`/api/cameras/${cameraDeleteTarget.id}`), { method: 'DELETE' });
     setCameras(prev => prev.filter(c => c.id !== cameraDeleteTarget.id));
     if (focused === cameraDeleteTarget.id) setFocused(null);
     if (historyCameraId === cameraDeleteTarget.id) closeHistory();
@@ -668,7 +668,7 @@ export default function CameraFeed({ onStatusChange }: {
     setHistorySearch('');
     setHistorySort('recent');
     try {
-      const res = await fetch(apiUrl(`/api/cameras/${id}/history`));
+      const res = await apiFetch(apiUrl(`/api/cameras/${id}/history`));
       if (!res.ok) {
         const isJson = res.headers.get('content-type')?.includes('application/json');
         const data = isJson ? await res.json() : null;
@@ -695,7 +695,7 @@ export default function CameraFeed({ onStatusChange }: {
     setHistoryDeleteLoading(true);
     setHistoryDeleteError(null);
     try {
-      const res = await fetch(apiUrl(`/api/cameras/${historyCameraId}/history/${encodeURIComponent(recordDeleteTarget.filename)}`), {
+      const res = await apiFetch(apiUrl(`/api/cameras/${historyCameraId}/history/${encodeURIComponent(recordDeleteTarget.filename)}`), {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -718,7 +718,7 @@ export default function CameraFeed({ onStatusChange }: {
     setHistoryDeleteLoading(true);
     setHistoryDeleteError(null);
     try {
-      const res = await fetch(apiUrl(`/api/cameras/${historyCameraId}/history`), {
+      const res = await apiFetch(apiUrl(`/api/cameras/${historyCameraId}/history`), {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -742,7 +742,7 @@ export default function CameraFeed({ onStatusChange }: {
     setMotionHistoryLoading(true);
     setMotionHistoryError(null);
     try {
-      const res = await fetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(deviceId)}/motion-history`));
+      const res = await apiFetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(deviceId)}/motion-history`));
       if (!res.ok) {
         const isJson = res.headers.get('content-type')?.includes('application/json');
         const data = isJson ? await res.json() : null;
@@ -780,7 +780,7 @@ export default function CameraFeed({ onStatusChange }: {
       return;
     }
     try {
-      const res = await fetch(apiUrl(`/api/cameras/${id}`), {
+      const res = await apiFetch(apiUrl(`/api/cameras/${id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editNameValue.trim() }),

@@ -15,6 +15,15 @@ export function apiUrl(path: string) {
   return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
 }
 
+export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = localStorage.getItem('token');
+  const headers = new Headers(options.headers as HeadersInit | undefined);
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(url, { ...options, headers });
+}
+
 export async function readJsonResponse<T>(response: Response): Promise<T> {
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
   const rawText = await response.text();
