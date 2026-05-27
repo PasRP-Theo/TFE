@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiUrl } from '../lib/api';
+import { apiUrl, apiFetch } from '../lib/api';
 
 interface WebRTCPlayerProps {
   cameraId: number;
@@ -17,7 +17,7 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
     async function connect() {
       // Vérifie rapidement si go2rtc est disponible avant de démarrer ICE
       try {
-        const statusRes = await fetch(apiUrl('/api/webrtc/status'));
+        const statusRes = await apiFetch(apiUrl('/api/webrtc/status'));
         if (statusRes.ok) {
           const { available } = await statusRes.json();
           if (!available) { if (!disposed) onError(); return; }
@@ -80,7 +80,7 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
       if (disposed) { pc.close(); return; }
 
       // Envoi de l'offre SDP au serveur Node.js qui la proxie vers go2rtc
-      const res = await fetch(apiUrl(`/api/webrtc/${cameraId}`), {
+      const res = await apiFetch(apiUrl(`/api/webrtc/${cameraId}`), {
         method:  'POST',
         headers: { 'Content-Type': 'application/sdp' },
         body:    pc.localDescription!.sdp,
