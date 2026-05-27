@@ -35,6 +35,11 @@ SNAPSHOT_WIDTH           = 320
 SNAPSHOT_HEIGHT          = 240
 SNAPSHOT_DIR             = Path('/tmp/sentys_snapshots')
 
+# Backoff serveur : intervalle min/max entre les checks de connectivité (secondes)
+SERVER_CHECK_INTERVAL_ONLINE  = 10
+SERVER_CHECK_INTERVAL_MIN     = 10
+SERVER_CHECK_INTERVAL_MAX     = 120
+
 # ─── Identité unique par Pi ────────────────────────────────────────────────────
 _HOME      = Path(f"/home/{os.getenv('USER', 'picam')}")
 _CONF_PATH = _HOME / "device.conf"
@@ -92,15 +97,25 @@ def fetch_remote_config():
 
 
 def enforce_storage_limit():
-    files = sorted(RECORD_DIR.glob("*.mp4"), key=lambda f: f.stat().st_mtime)
-    total = sum(f.stat().st_size for f in files)
+    """Supprime les clips les plus anciens si le stockage dépasse MAX_STORAGE_MB.
+    Re-stat chaque fichier avant suppression pour gérer les accès concurrents."""
+    try:
+        files = sorted(RECORD_DIR.glob("*.mp4"), key=lambda f: f.stat().st_mtime)
+    except Exception:
+        return
+    total = sum(f.stat().st_size for f in files if f.exists())
     limit = MAX_STORAGE_MB * 1024 * 1024
     while total > limit and files:
         oldest = files.pop(0)
-        freed  = oldest.stat().st_size
-        oldest.unlink()
-        total -= freed
-        print(f"[STORAGE] 🗑 {oldest.name} supprimé ({freed // 1024 // 1024} Mo libérés)")
+        try:
+            freed = oldest.stat().st_size
+            oldest.unlink()
+            total -= freed
+            print(f"[STORAGE] 🗑 {oldest.name} supprimé ({freed // 1024 // 1024} Mo libérés)")
+        except FileNotFoundError:
+            pass  # Déjà supprimé par un autre processus
+        except Exception as e:
+            print(f"[STORAGE] ⚠ {oldest.name} : {e}")
 
 
 def get_local_ip():
@@ -211,7 +226,6 @@ def set_mediamtx(active: bool):
 def wait_for_rtsp_path(max_wait: int = 20) -> bool:
     """Attend que MediaMTX signale le path RTSP comme ready:true."""
     deadline = time.time() + max_wait
-    attempt  = 0
     while time.time() < deadline:
         try:
             r = requests.get(
@@ -224,7 +238,6 @@ def wait_for_rtsp_path(max_wait: int = 20) -> bool:
                 return True
         except Exception:
             pass
-        attempt += 1
         time.sleep(0.5)
     print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non ready après {max_wait}s")
     return False
@@ -240,7 +253,6 @@ def start_stream():
 def stop_stream():
     """Arrête MediaMTX et tue le processus mtxrpicam orphelin pour libérer la caméra."""
     set_mediamtx(False)
-    # mtxrpicam peut survivre quelques instants après l'arrêt de mediamtx — le tuer explicitement
     try:
         subprocess.run(['sudo', 'pkill', '-9', '-f', 'mtxrpicam'], capture_output=True, timeout=3)
     except Exception:
@@ -326,22 +338,31 @@ def images_differ(path_a: Path, path_b: Path) -> bool:
 MIN_CLIP_SIZE = 50 * 1024
 
 def upload_pending():
+    """Envoie au serveur tous les clips enregistrés hors-ligne.
+    Appelé au démarrage ET à chaque reconnexion serveur."""
     files = sorted(RECORD_DIR.glob("*.mp4"))
     if not files:
         return
+
     valid = []
     for f in files:
-        size = f.stat().st_size
+        try:
+            size = f.stat().st_size
+        except FileNotFoundError:
+            continue
         if size < MIN_CLIP_SIZE:
             print(f"[SYNC] ⚠ {f.name} trop petit ({size} o) — supprimé")
             try: f.unlink()
             except: pass
         else:
             valid.append(f)
+
     if not valid:
         return
-    print(f"[SYNC] {len(valid)} fichier(s) à envoyer")
+
+    print(f"[SYNC] {len(valid)} fichier(s) à envoyer au serveur")
     for f in valid:
+        # Nom attendu : YYYYMMDD_HHMMSS.mp4 (format datetime)
         try:
             detected_at = datetime.strptime(f.stem, "%Y%m%d_%H%M%S").isoformat()
         except Exception:
@@ -355,12 +376,12 @@ def upload_pending():
                     timeout=120,
                 )
             if r.status_code in (200, 201):
-                print(f"[SYNC] ✅ {f.name}")
+                print(f"[SYNC] ✅ {f.name} → serveur (URL: {r.json().get('url', '?')})")
                 try: f.unlink()
                 except: pass
             else:
-                print(f"[SYNC] ❌ {f.name} — HTTP {r.status_code}")
-                break
+                print(f"[SYNC] ❌ {f.name} — HTTP {r.status_code}: {r.text[:200]}")
+                break  # On arrête en cas d'erreur serveur, on réessaiera plus tard
         except Exception as e:
             print(f"[SYNC] ❌ {f.name} — {e}")
             break
@@ -377,6 +398,11 @@ def main():
     last_announce      = 0.0
     server_loss_streak = 0
 
+    # Backoff connectivité serveur : évite de spammer le serveur hors-ligne
+    last_server_check      = 0.0
+    server_check_interval  = SERVER_CHECK_INTERVAL_ONLINE
+    online                 = False
+
     # États : IDLE — caméra off, snapshots périodiques
     #         STREAMING — MediaMTX actif
     stream_state       = 'IDLE'
@@ -392,29 +418,50 @@ def main():
     # True = démarré par clic utilisateur → pas de timeout mouvement, attend SLEEP
     wake_mode = False
 
-    if server_reachable():
-        fetch_remote_config()
+    # Vérification initiale du serveur
+    online = server_reachable()
+    last_server_check = time.time()
 
-    if list(RECORD_DIR.glob("*.mp4")) and server_reachable():
+    if online:
+        fetch_remote_config()
+        server_check_interval = SERVER_CHECK_INTERVAL_ONLINE
+
+    # Sync clips hors-ligne en attente avant de démarrer la boucle principale
+    if list(RECORD_DIR.glob("*.mp4")) and online:
         print("[SENTYS] Clips en attente au démarrage — synchronisation")
         upload_pending()
 
     while True:
-        ip     = get_local_ip()
-        online = server_reachable()
-        now    = time.time()
+        ip  = get_local_ip()
+        now = time.time()
+
+        # ── Vérification connectivité avec backoff exponentiel ────────────────
+        if now - last_server_check >= server_check_interval:
+            online = server_reachable()
+            last_server_check = now
+            if online:
+                server_check_interval = SERVER_CHECK_INTERVAL_ONLINE
+            else:
+                # Backoff exponentiel : 10s → 20s → 40s → ... → 120s max
+                server_check_interval = min(server_check_interval * 2, SERVER_CHECK_INTERVAL_MAX)
 
         # ── Reconnexion serveur ────────────────────────────────────────────────
         if online and was_offline:
-            print("[SENTYS] Connexion rétablie")
+            print("[SENTYS] 🟢 Connexion rétablie — synchronisation des clips hors-ligne")
             fetch_remote_config()
-            server_loss_streak = 0
+            server_loss_streak    = 0
+            server_check_interval = SERVER_CHECK_INTERVAL_ONLINE
+            # Upload les clips offline SAUF si on est en train de streamer
+            # (on uploaderait après l'arrêt du stream)
             if stream_state != 'STREAMING':
                 upload_pending()
             was_offline = False
 
         if not online:
+            if not was_offline:
+                print("[SENTYS] 🔴 Serveur injoignable — passage en mode hors-ligne")
             was_offline = True
+
             if stream_state == 'STREAMING':
                 server_loss_streak += 1
                 if server_loss_streak < SERVER_LOSS_TOLERANCE:
@@ -438,7 +485,7 @@ def main():
         # ── État IDLE : snapshots + écoute wake ───────────────────────────────
         if stream_state == 'IDLE':
 
-            # Signal wake (clic START dans l'interface) — vérifié toutes les 2s
+            # Signal wake (clic START dans l'interface) — vérifié toutes les 500ms
             if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
                 last_wake_check = now
                 if check_wake_signal():
@@ -472,21 +519,29 @@ def main():
                             stream_state = 'STREAMING'
                             wake_mode    = False
                         else:
-                            print("[MOTION] Mode hors-ligne — enregistrement local")
+                            # ── Mode hors-ligne : enregistrement local ─────────────
+                            print("[MOTION] 📴 Mode hors-ligne — enregistrement local")
                             enforce_storage_limit()
+                            ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            out = RECORD_DIR / f"{ts}.mp4"
                             try:
-                                ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                out = RECORD_DIR / f"{ts}.mp4"
                                 subprocess.run(
                                     ['rpicam-vid', '-t', str(CLIP_DURATION_SEC * 1000),
                                      '--codec', 'h264', '--width', '1280', '--height', '720',
                                      '-o', str(out)],
                                     check=True, timeout=CLIP_DURATION_SEC + 10,
                                 )
-                                print(f"[MOTION] 📼 Clip : {out.name}")
+                                print(f"[MOTION] 📼 Clip enregistré : {out.name}")
                             except Exception as e:
-                                print(f"[MOTION] ❌ Recording : {e}")
+                                print(f"[MOTION] ❌ Échec enregistrement : {e}")
+                                # Supprime le fichier partiel si présent
+                                try:
+                                    if out.exists(): out.unlink()
+                                except Exception:
+                                    pass
                             prev_snap = None
+                            # Réinitialise le snap pour ne pas re-déclencher immédiatement
+                            continue
 
                 prev_snap = cur_snap
             else:
@@ -507,6 +562,9 @@ def main():
                 wake_mode    = False
                 prev_snap    = None
                 snap_toggle  = False
+                # Upload les clips en attente si nécessaire
+                if list(RECORD_DIR.glob("*.mp4")):
+                    upload_pending()
                 time.sleep(3)
                 continue
 
@@ -534,6 +592,9 @@ def main():
                     stream_state = 'IDLE'
                     prev_snap    = None
                     snap_toggle  = False
+                    # Upload les clips en attente si on vient de revenir en IDLE
+                    if online and list(RECORD_DIR.glob("*.mp4")):
+                        upload_pending()
                     time.sleep(3)
                 else:
                     time.sleep(2)

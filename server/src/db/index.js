@@ -209,16 +209,18 @@ export async function initDB() {
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_port         INTEGER NOT NULL DEFAULT 8554;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_path         VARCHAR(60) NOT NULL DEFAULT 'cam1';
 
-      -- Contraintes CHECK sur les colonnes source
+      -- Contraintes CHECK sur les colonnes source (DROP+CREATE pour mise à jour)
       DO $$ BEGIN
+        ALTER TABLE camera_discoveries DROP CONSTRAINT IF EXISTS chk_discoveries_source;
         ALTER TABLE camera_discoveries ADD CONSTRAINT chk_discoveries_source
-          CHECK (source IN ('announce', 'mdns', 'manual', 'pi-node'));
-      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CHECK (source IN ('announce', 'mdns', 'manual', 'pi-node', 'probe'));
+      END $$;
 
       DO $$ BEGIN
+        ALTER TABLE camera_nodes DROP CONSTRAINT IF EXISTS chk_nodes_source;
         ALTER TABLE camera_nodes ADD CONSTRAINT chk_nodes_source
-          CHECK (source IN ('pi-node', 'announce', 'manual'));
-      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CHECK (source IN ('pi-node', 'announce', 'manual', 'mediamtx', 'ia_detector'));
+      END $$;
 
       -- Contrainte CHECK format PIN (chiffres uniquement, 4-8 caractères)
       DO $$ BEGIN

@@ -20,6 +20,8 @@ import {
 } from '../camera/manager.js';
 import { createAlert } from '../alerts/service.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -46,31 +48,6 @@ function normalizeDiscoveryPayload(body = {}) {
     model,
     source,
   };
-}
-
-function getHostFromStreamUrl(streamUrl) {
-  const value = String(streamUrl || '').trim();
-  if (!value) return '';
-  try {
-    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
-    return parsed.hostname || parsed.host || '';
-  } catch {
-    return '';
-  }
-}
-
-function maskStreamUrl(streamUrl) {
-  const value = String(streamUrl || '').trim();
-  if (!value) return value;
-
-  try {
-    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
-    if (parsed.username) parsed.username = '***';
-    if (parsed.password) parsed.password = '***';
-    return parsed.toString();
-  } catch {
-    return value.replace(/\/\/([^:@/]+):([^@/]+)@/g, '//***:***@');
-  }
 }
 
 function isMotionActive(lastMotionAt) {
@@ -189,7 +166,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/cameras — ajouter
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const normalized = normalizeCreateCameraPayload(req.body);
   if (!normalized.ok) {
     return res.status(400).json({ error: normalized.error || 'Parametres camera invalides' });
@@ -279,7 +256,7 @@ router.get('/discoveries', async (_req, res) => {
 
 // GET /api/cameras/discover?host=192.168.0.101
 // GET /api/cameras/discover          -> recherche automatique sur le réseau local
-router.get('/discover', async (req, res) => {
+router.get('/discover', requireAuth, async (req, res) => {
   const host = String(req.query.host || '').trim();
   const abortController = new AbortController();
   const startedAt = Date.now();
@@ -332,7 +309,7 @@ router.get('/discover', async (req, res) => {
 });
 
 // GET /api/cameras/scan — Scan rapide MediaMTX (Pi Zero 2W) sur le réseau local
-router.get('/scan', async (req, res) => {
+router.get('/scan', requireAuth, async (req, res) => {
   const foundCameras = [];
   const port = 9997;
   const auth = Buffer.from(`${process.env.MEDIAMTX_USER || 'admin'}:${process.env.MEDIAMTX_PASSWORD || 'admin'}`).toString('base64');
@@ -421,7 +398,7 @@ router.get('/scan', async (req, res) => {
 });
 
 // PATCH /api/cameras/:id — modifier le nom
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Nom invalide' });
@@ -440,7 +417,7 @@ router.patch('/:id', async (req, res) => {
 });
 
 // DELETE /api/cameras/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     stopCamera(req.params.id);
     req.app.get('go2rtc:unregister')?.(req.params.id)
@@ -453,7 +430,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/cameras/:id/start
-router.post('/:id/start', async (req, res) => {
+router.post('/:id/start', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
@@ -480,20 +457,20 @@ router.post('/:id/start', async (req, res) => {
 });
 
 // POST /api/cameras/:id/stream/heartbeat — maintient le stream actif (envoyé par le client toutes les 60s)
-router.post('/:id/stream/heartbeat', (req, res) => {
+router.post('/:id/stream/heartbeat', requireAuth, (req, res) => {
   const ok = heartbeatStream(req.params.id);
   res.json({ alive: ok });
 });
 
 // POST /api/cameras/:id/pause
-router.post('/:id/pause', (req, res) => {
+router.post('/:id/pause', requireAuth, (req, res) => {
   const ok = pauseCamera(req.params.id);
   if (!ok) return res.status(400).json({ error: 'Caméra non active' });
   res.json({ message: 'En pause', ...getState(req.params.id) });
 });
 
 // POST /api/cameras/:id/resume
-router.post('/:id/resume', async (req, res) => {
+router.post('/:id/resume', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
@@ -505,7 +482,7 @@ router.post('/:id/resume', async (req, res) => {
 });
 
 // POST /api/cameras/:id/stop
-router.post('/:id/stop', async (req, res) => {
+router.post('/:id/stop', requireAuth, async (req, res) => {
   stopCamera(req.params.id);
   try {
     const { rows } = await pool.query(`
@@ -518,7 +495,7 @@ router.post('/:id/stop', async (req, res) => {
 });
 
 // GET /api/cameras/archives — dossiers d'enregistrements sans caméra correspondante
-router.get('/archives', async (_req, res) => {
+router.get('/archives', requireAuth, async (_req, res) => {
   try {
     const { rows } = await pool.query('SELECT id FROM cameras');
     const existingIds = new Set(rows.map(r => String(r.id)));
@@ -558,7 +535,7 @@ router.get('/archives', async (_req, res) => {
 });
 
 // DELETE /api/cameras/archives/:id — purge un dossier orphelin
-router.delete('/archives/:id', async (req, res) => {
+router.delete('/archives/:id', requireAuth, requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT id FROM cameras WHERE id = $1', [req.params.id]);
   if (rows.length > 0) {
     return res.status(400).json({ error: 'Cette caméra existe encore, utilisez /history' });
@@ -698,7 +675,7 @@ router.post('/:id/upload-offline', async (req, res) => {
 });
 
 // GET /api/cameras/:id/history
-router.get('/:id/history', async (req, res) => {
+router.get('/:id/history', requireAuth, async (req, res) => {
   const cameraId = String(req.params.id);
   const camDir = path.join(RECORDINGS_DIR, cameraId);
   if (!existsSync(camDir)) {
@@ -727,7 +704,7 @@ router.get('/:id/history', async (req, res) => {
   }
 });
 
-router.delete('/:id/history', async (req, res) => {
+router.delete('/:id/history', requireAuth, requireAdmin, async (req, res) => {
   try {
     const result = await deleteAllRecordings(req.params.id);
     res.json({ message: 'Historique supprimé', deletedCount: result.deletedCount });
@@ -737,7 +714,7 @@ router.delete('/:id/history', async (req, res) => {
   }
 });
 
-router.delete('/:id/history/:filename', async (req, res) => {
+router.delete('/:id/history/:filename', requireAuth, requireAdmin, async (req, res) => {
   try {
     const result = await deleteRecording(req.params.id, req.params.filename);
     if (!result.deleted) {

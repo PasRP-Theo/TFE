@@ -288,6 +288,10 @@ async function start() {
   // Force le type TEXT pour la colonne details au cas où elle aurait été créée en JSON précédemment
   await pool.query("ALTER TABLE audit_logs ALTER COLUMN details TYPE TEXT USING details::text").catch(() => {});
 
+  // Index pour accélérer les recherches dans audit_logs
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_audit_logs_username_created ON audit_logs(username, created_at DESC)").catch(() => {});
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at DESC)").catch(() => {});
+
 
   // device_id → timestamp de la première suspicion de déconnexion
   const suspectedOfflineNodes = new Map();

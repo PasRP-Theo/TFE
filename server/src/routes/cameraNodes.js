@@ -1,6 +1,16 @@
 import { Router } from 'express';
+import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import os from 'os';
+import multer from 'multer';
 import { pool } from '../db/index.js';
-import { startCamera, startHlsStream, stopHlsStream, getState, triggerMotionRecording } from '../camera/manager.js';
+import { startCamera, startHlsStream, stopHlsStream, getState, triggerMotionRecording, RECORDINGS_DIR } from '../camera/manager.js';
+import { createAlert } from '../alerts/service.js';
+import { sendPushNotification } from './push.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
 
 // Flags en mémoire : deviceId → true quand l'UI demande un stream sur ce Pi
 const streamWakeRequests  = new Map();
@@ -13,15 +23,6 @@ export function requestPiWake(deviceId) {
 export function requestPiSleep(deviceId) {
   streamSleepRequests.set(String(deviceId), true);
 }
-import { createAlert } from '../alerts/service.js';
-import { sendPushNotification } from './push.js';
-import { spawn } from 'child_process';
-import { existsSync, mkdirSync, renameSync, unlinkSync } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import os from 'os';
-import multer from 'multer';
-import { RECORDINGS_DIR } from '../camera/manager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT_CN = path.resolve(__dirname, '..', '..', '..');
@@ -84,31 +85,6 @@ function classifyNodeMotion(rtspUrl) {
 const router = Router();
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
 
-function getHostFromStreamUrl(streamUrl) {
-  const value = String(streamUrl || '').trim();
-  if (!value) return '';
-  try {
-    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
-    return parsed.hostname || parsed.host || '';
-  } catch {
-    return '';
-  }
-}
-
-function maskStreamUrl(streamUrl) {
-  const value = String(streamUrl || '').trim();
-  if (!value) return value;
-
-  try {
-    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
-    if (parsed.username) parsed.username = '***';
-    if (parsed.password) parsed.password = '***';
-    return parsed.toString();
-  } catch {
-    return value.replace(/\/\/([^:@/]+):([^@/]+)@/g, '//***:***@');
-  }
-}
-
 function normalizeNodePayload(body = {}) {
   const streamUrl = String(body.streamUrl || body.rtsp_url || '').trim();
   const host = String(body.host || getHostFromStreamUrl(streamUrl) || '').trim();
@@ -122,15 +98,7 @@ function normalizeNodePayload(body = {}) {
     return null;
   }
 
-  return {
-    deviceId,
-    name,
-    host,
-    streamUrl,
-    location,
-    model,
-    source,
-  };
+  return { deviceId, name, host, streamUrl, location, model, source };
 }
 
 function computeMotionActive(lastMotionAt) {
@@ -184,7 +152,8 @@ async function getConnectedHosts() {
   return new Set(rows.map(row => getHostFromStreamUrl(row.rtsp_url)).filter(Boolean));
 }
 
-router.get('/', async (_req, res) => {
+// GET /api/camera-nodes/
+router.get('/', requireAuth, async (_req, res) => {
   try {
     const [nodesResult, connectedHosts] = await Promise.all([
       pool.query(
@@ -221,6 +190,7 @@ router.get('/:deviceId/sleep', (req, res) => {
   res.json({ sleep });
 });
 
+// POST /api/camera-nodes/announce — appelé par le Pi au démarrage (pas d'auth requis)
 router.post('/announce', async (req, res) => {
   const payload = normalizeNodePayload(req.body);
   if (!payload) {
@@ -236,13 +206,14 @@ router.post('/announce', async (req, res) => {
     });
   } catch (err) {
     console.error('[CAM NODE ANNOUNCE]', err);
-    res.status(500).json({ error: 'Erreur serveur lors de l’annonce du noeud camera' });
+    res.status(500).json({ error: 'Erreur serveur lors de l\'annonce du noeud camera' });
   }
 });
 
+// POST /api/camera-nodes/motion — appelé par le Pi (pas d'auth requis)
 router.post('/motion', async (req, res) => {
   const deviceId = String(req.body.deviceId || req.body.device_id || '').trim();
-  const motion = req.body.motion !== false;
+  const motion = Boolean(req.body.motion) !== false && req.body.motion !== false;
   const detectedAtInput = String(req.body.detectedAt || req.body.detected_at || '').trim();
   if (!deviceId) {
     return res.status(400).json({ error: 'deviceId requis' });
@@ -301,7 +272,6 @@ router.post('/motion', async (req, res) => {
     if (motion) {
       const node = rows[0];
       setImmediate(async () => {
-        // Résoudre la caméra DB associée à ce nœud (via stream_url)
         let linkedCamera = null;
         try {
           const { rows: camRows } = await pool.query(
@@ -374,7 +344,8 @@ router.post('/motion', async (req, res) => {
   }
 });
 
-router.get('/:deviceId/motion-history', async (req, res) => {
+// GET /api/camera-nodes/:deviceId/motion-history
+router.get('/:deviceId/motion-history', requireAuth, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
 
@@ -390,11 +361,12 @@ router.get('/:deviceId/motion-history', async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('[CAM NODE MOTION HISTORY]', err);
-    res.status(500).json({ error: 'Erreur serveur lors de la lecture de l’historique mouvement' });
+    res.status(500).json({ error: 'Erreur serveur lors de la lecture de l\'historique mouvement' });
   }
 });
 
-router.post('/:deviceId/connect', async (req, res) => {
+// POST /api/camera-nodes/:deviceId/connect — connexion noeud → caméra (admin)
+router.post('/:deviceId/connect', requireAuth, requireAdmin, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
 
@@ -437,6 +409,7 @@ router.post('/:deviceId/connect', async (req, res) => {
   }
 });
 
+// POST /api/camera-nodes/:deviceId/upload-recording — appelé par le Pi après reconnexion
 router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || !req.file) return res.status(400).json({ error: 'deviceId et fichier requis' });
@@ -463,24 +436,30 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
     const offlineCamId    = linkedCam ? String(linkedCam.id) : null;
     const offlineCamLabel = linkedCam ? `CAM ${linkedCam.id} — ${linkedCam.name}` : node.name;
 
-    // INSERT d'abord — si ça échoue, le fichier reste intact dans offline
-    await pool.query(
-      `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
-       VALUES ($1, true, $2, true, $3)`,
-      [deviceId, detectedAt.toISOString(), req.file.filename]
-    );
-
-    // Déplacer le fichier après le commit DB
+    // Déplace le fichier dans le dossier de la caméra liée avant l'insertion en base
     let finalFilename = req.file.filename;
+    let recordingUrl  = `/recordings/offline/${req.file.filename}`;
+
     if (linkedCam) {
       const cameraId = linkedCam.id;
-      const camDir = path.join(RECORDINGS_DIR, String(cameraId));
+      const camDir   = path.join(RECORDINGS_DIR, String(cameraId));
       mkdirSync(camDir, { recursive: true });
       const newPath = path.join(camDir, req.file.filename);
       try {
         renameSync(req.file.path, newPath);
-      } catch { /* garde le fichier dans offline si échec du rename */ }
+        recordingUrl = `/recordings/${cameraId}/${encodeURIComponent(req.file.filename)}`;
+        console.log(`[UPLOAD RECORDING] Fichier déplacé vers ${newPath}`);
+      } catch (err) {
+        console.warn('[UPLOAD RECORDING] Rename échoué, fichier conservé dans offline:', err.message);
+      }
     }
+
+    // INSERT avec le chemin final
+    await pool.query(
+      `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
+       VALUES ($1, true, $2, true, $3)`,
+      [deviceId, detectedAt.toISOString(), recordingUrl]
+    );
 
     await createAlert({
       sourceType: 'camera-node',
@@ -499,20 +478,21 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
         host: node.host,
         location: node.location,
         detectedAt: detectedAt.toISOString(),
-        recordingFile: req.file.filename,
+        recordingFile: finalFilename,
+        recordingUrl,
       },
       dedupeKey: `offline:${offlineCamId || deviceId}:${detectedAt.toISOString()}`,
       cooldownSeconds: 0,
     }).catch(err => console.error('[ALERT OFFLINE RECORDING]', err));
 
-    res.json({ message: 'Enregistrement reçu', filename: req.file.filename });
+    res.json({ message: 'Enregistrement reçu', filename: finalFilename, url: recordingUrl });
   } catch (err) {
     console.error('[UPLOAD RECORDING]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la reception de l\'enregistrement' });
   }
 });
 
-// GET /:deviceId/config — lu par le Pi à chaque démarrage/annonce (pas d'auth requis)
+// GET /api/camera-nodes/:deviceId/config — lu par le Pi (pas d'auth requis)
 router.get('/:deviceId/config', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
@@ -539,8 +519,8 @@ router.get('/:deviceId/config', async (req, res) => {
   }
 });
 
-// PATCH /:deviceId/config — modifié depuis l'interface admin
-router.patch('/:deviceId/config', async (req, res) => {
+// PATCH /api/camera-nodes/:deviceId/config — modifié depuis l'interface admin
+router.patch('/:deviceId/config', requireAuth, requireAdmin, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
 
@@ -560,13 +540,13 @@ router.patch('/:deviceId/config', async (req, res) => {
        RETURNING *`,
       [
         deviceId,
-        name        != null ? String(name).trim()        : null,
-        location    != null ? String(location).trim()    : null,
-        clipDuration    != null ? Number(clipDuration)    : null,
-        maxStorageMb    != null ? Number(maxStorageMb)    : null,
+        name         != null ? String(name).trim()         : null,
+        location     != null ? String(location).trim()     : null,
+        clipDuration != null ? Number(clipDuration)         : null,
+        maxStorageMb != null ? Number(maxStorageMb)         : null,
         announceInterval != null ? Number(announceInterval) : null,
-        rtspPort    != null ? Number(rtspPort)    : null,
-        rtspPath    != null ? String(rtspPath).trim()    : null,
+        rtspPort     != null ? Number(rtspPort)             : null,
+        rtspPath     != null ? String(rtspPath).trim()      : null,
       ]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Noeud introuvable' });
@@ -577,8 +557,8 @@ router.patch('/:deviceId/config', async (req, res) => {
   }
 });
 
-// DELETE /:deviceId — supprime un noeud
-router.delete('/:deviceId', async (req, res) => {
+// DELETE /api/camera-nodes/:deviceId — supprime un noeud
+router.delete('/:deviceId', requireAuth, requireAdmin, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
   try {
