@@ -1,0 +1,1806 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{parskip}
+
+\geometry{margin=2.5cm}
+
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{keywordcolor}{RGB}{0,0,180}
+\definecolor{stringcolor}{RGB}{0,130,0}
+\definecolor{commentcolor}{RGB}{130,130,130}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  breakatwhitespace=true,
+  keywordstyle=\color{keywordcolor},
+  stringstyle=\color{stringcolor},
+  commentstyle=\color{commentcolor}\itshape,
+  showstringspaces=false,
+  tabsize=2,
+  captionpos=b,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Sentys} — Documentation technique}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+}
+
+\title{
+  \vspace{2cm}
+  {\Huge \textbf{SENTYS}} \\[0.5em]
+  {\large Documentation technique complète} \\[2em]
+  {\normalsize Système de vidéosurveillance résidentiel self-hosted}
+  \vspace{2cm}
+}
+\author{}
+\date{Mai 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\newpage
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Vue d'ensemble du système}
+% ============================================================
+
+Sentys est un système de vidéosurveillance hébergé localement (\emph{self-hosted}).
+Il se compose d'un serveur central Node.js, d'un dashboard React PWA, d'une base de
+données PostgreSQL, et d'agents Python autonomes déployés sur des Raspberry Pi Zero 2W.
+La communication temps réel entre le serveur et les clients web est assurée par Socket.IO.
+
+\subsection{Architecture générale}
+
+\begin{lstlisting}[caption={Schéma d'ensemble}]
++----------------------------------------------------------+
+|                    Internet / LAN                         |
++------------------+---------------------+-----------------+
+                   |                     |
+          +--------v--------+   +--------v--------+
+          |   Navigateur    |   |  Pi Zero 2W     |
+          |  (PWA React)    |   |  MediaMTX RTSP  |
+          |  HLS / WebRTC   |   |  sentys_agent   |
+          +--------+--------+   +--------+--------+
+                   | Socket.IO / HTTP    | HTTP announce
+                   |                     | upload offline clips
+          +--------v---------------------v--------+
+          |          Serveur Host (Linux)          |
+          |                                        |
+          |  Express (Node.js) + Socket.IO :4000   |
+          |  FFmpeg  -->  HLS  /hls/{id}/          |
+          |  go2rtc  -->  WebRTC :1984             |
+          |  Python  -->  YOLOv8 + OpenCV          |
+          |  PM2     -->  process manager          |
+          +-------------------+--------------------+
+                              |
+                     +--------v--------+
+                     |   PostgreSQL    |
+                     |     :5432       |
+                     +-----------------+
+\end{lstlisting}
+
+\subsection{Stack technique complète}
+
+\begin{longtable}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Couche} & \textbf{Technologie} & \textbf{Version} & \textbf{Rôle} \\
+\hline
+\endhead
+\hline
+\endfoot
+Frontend & React + TypeScript & 19.2.0 & Dashboard temps réel \\
+Bundler & Vite & 8.0.0 & Build et dev server \\
+Routing & React Router DOM & 7.13.1 & Navigation SPA \\
+Streaming client & hls.js & 1.6.16 & Lecture HLS dans le navigateur \\
+Temps réel & Socket.IO & 4.8.3 & Alertes et statuts live \\
+PWA & vite-plugin-pwa & 1.2.0 & Installable, mode standalone \\
+Serveur & Node.js + Express & 4.18.2 & API REST + gestion des flux \\
+WebSocket & Socket.IO (serveur) & 4.8.3 & Émission d'événements clients \\
+Base de données & PostgreSQL & 12+ & Données persistantes \\
+Driver DB & pg (node-postgres) & 8.11.3 & Connexion PostgreSQL \\
+Auth & jsonwebtoken & 9.0.0 & Tokens JWT signés \\
+Hash & bcryptjs & 2.4.3 & Hachage des mots de passe \\
+Upload & Multer & 2.0.0 & Réception clips hors ligne \\
+Notifications & web-push & 3.6.7 & Notifications Web Push VAPID \\
+Rate limiting & express-rate-limit & 8.2.1 & Protection brute-force \\
+Streaming HLS & FFmpeg & 4.2+ & Segmentation RTSP → fMP4 \\
+Streaming WebRTC & go2rtc & latest & Proxy RTSP → WebRTC \\
+IA détection & YOLOv8n (ultralytics) & latest & Classification d'objets \\
+Vision & OpenCV (cv2) & latest & Soustraction de fond MOG2 \\
+IoT messaging & MQTT & 5.3.0 & Messagerie IoT \\
+Découverte & multicast-dns & 7.2.5 & Détection caméras sur le LAN \\
+Process manager & PM2 & latest & Supervision du serveur \\
+Réseau & Tailscale (WireGuard) & latest & Accès distant sécurisé \\
+Agent IoT & Python 3 & 3.8+ & Agent autonome Pi Zero \\
+RTSP sur Pi & MediaMTX & 1.9.1 & Serveur RTSP embarqué \\
+Capture Pi & rpicam-vid / rpicam-jpeg & latest & Capture caméra OV5647 \\
+\hline
+\end{longtable}
+
+\subsection{Flux wake/sleep (clic utilisateur)}
+
+\begin{lstlisting}
+Interface [START] --> serveur status=reconnecting + signal wake
+  --> Pi demarre MediaMTX --> attend RTSP pret --> notify_motion(True)
+  --> serveur demarre FFmpeg --> flux visible en ~4s
+  --> Socket.IO emet {status: 'running'} --> dashboard mis a jour en temps reel
+
+Interface [STOP] --> serveur arrete FFmpeg + signal sleep
+  --> Pi arrete MediaMTX --> retour snapshots
+  --> Socket.IO emet {status: 'stopped'}
+\end{lstlisting}
+
+\subsection{Flux mouvement automatique}
+
+\begin{lstlisting}
+Pi detecte difference entre 2 snapshots (toutes les 1s)
+  --> MediaMTX demarre --> notify_motion(True) --> FFmpeg demarre
+  --> 60s sans nouveau mouvement --> MediaMTX s'arrete --> FFmpeg s'arrete
+  --> Socket.IO emet alerte MOTION_DETECTED --> notification push navigateur
+\end{lstlisting}
+
+\subsection{Composants frontend principaux}
+
+\begin{longtable}{|l|p{10cm}|}
+\hline
+\textbf{Composant} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{LoginPage} & Auth JWT + mode kiosque sans mot de passe (réseau local) \\
+\texttt{CameraFeed} & Flux live HLS/WebRTC + historique mouvements + badge \textbf{HORS LIGNE} \\
+\texttt{AlertsPage} & Alertes temps réel via Socket.IO, niveaux critical/warning, acquittement \\
+\texttt{SystemInfo} & Métriques CPU, RAM, disque, réseau, état de la batterie \\
+\texttt{Settings} & Configuration admin : nom app, langue, densité UI, alertes push \\
+\texttt{WebRTCPlayer} & Lecteur WebRTC avec bascule automatique vers HLS si échec \\
+\hline
+\end{longtable}
+
+\textbf{Fonctionnalités transversales :}
+\begin{itemize}
+  \item \textbf{PWA} : installable sur tablette ou kiosque (icône, mode standalone, service worker)
+  \item \textbf{Socket.IO} : mises à jour en temps réel sans rechargement (alertes, statut caméras)
+  \item \textbf{Mode kiosque} : timeout d'inactivité 5 min, clavier virtuel pour écrans tactiles,
+    connexion sans mot de passe depuis le réseau local (\texttt{192.168.*}, \texttt{10.*})
+  \item \textbf{Thème} : clair / sombre
+  \item \textbf{Rôles} : admin vs utilisateur (paramètres réservés aux admins)
+\end{itemize}
+
+\subsection{Routes API complètes}
+
+\subsubsection{Authentification}
+
+\begin{longtable}{|l|l|l|}
+\hline
+\textbf{Méthode} & \textbf{Route} & \textbf{Accès} \\
+\hline
+\endhead
+\hline
+\endfoot
+POST & \texttt{/auth/register} & Public (premier utilisateur = admin) \\
+POST & \texttt{/auth/login} & Public \\
+GET & \texttt{/auth/me} & Authentifié \\
+\hline
+\end{longtable}
+
+\subsubsection{Routes publiques (Pi Zero — pas de JWT)}
+
+\begin{longtable}{|l|p{9cm}|}
+\hline
+\textbf{Route} & \textbf{Rôle} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{POST /api/camera-nodes/announce} & Pi s'annonce au démarrage \\
+\texttt{POST /api/camera-nodes/motion} & Pi signale un mouvement \\
+\texttt{GET /api/camera-nodes/:id/wake} & Pi poll le signal de démarrage \\
+\texttt{GET /api/camera-nodes/:id/sleep} & Pi poll le signal d'arrêt \\
+\texttt{GET /api/camera-nodes/:id/config} & Pi lit sa configuration distante \\
+\texttt{POST /api/camera-nodes/:id/upload-recording} & Pi upload les clips offline \\
+\texttt{POST /api/cameras/announce} & ESP32-CAM s'annonce \\
+\texttt{GET /api/cameras} & Liste des caméras (kiosk) \\
+\texttt{GET /api/agent/sentys\_agent.py} & Sert le script Pi pour auto-update \\
+\texttt{GET /health} & Health check \\
+\hline
+\end{longtable}
+
+\subsubsection{Routes protégées (\texttt{requireAuth})}
+
+\begin{lstlisting}
+GET  /api/cameras/discover
+GET  /api/cameras/scan
+POST /api/cameras/:id/start
+POST /api/cameras/:id/stop
+POST /api/cameras/:id/pause
+POST /api/cameras/:id/resume
+POST /api/cameras/:id/stream/heartbeat
+GET  /api/cameras/:id/history
+GET  /api/cameras/archives
+GET  /api/camera-nodes/
+GET  /api/camera-nodes/:id/motion-history
+GET  /api/alerts
+GET  /api/system
+\end{lstlisting}
+
+\subsubsection{Routes admin (\texttt{requireAuth} + \texttt{requireAdmin})}
+
+\begin{lstlisting}
+POST   /api/cameras/                    (ajouter une camera)
+PATCH  /api/cameras/:id                 (renommer)
+DELETE /api/cameras/:id                 (supprimer)
+DELETE /api/cameras/:id/history         (vider l'historique)
+DELETE /api/cameras/:id/history/:file   (supprimer un enregistrement)
+DELETE /api/cameras/archives/:id        (purger archives)
+POST   /api/camera-nodes/:id/connect    (connecter un noeud Pi)
+PATCH  /api/camera-nodes/:id/config     (configurer un noeud Pi)
+DELETE /api/camera-nodes/:id            (supprimer un noeud)
+GET    /api/audit-logs                  (journaux d'audit)
+PATCH  /api/app-config                  (configuration globale)
+GET    /api/system/reset                (reinitialisation)
+\end{lstlisting}
+
+\subsection{Gestionnaire caméras (\texttt{camera/manager.js})}
+
+Gère le cycle de vie complet de chaque caméra en mémoire :
+
+\begin{enumerate}
+  \item \textbf{Démarrage} → sonde l'URL RTSP/HTTP, lance FFmpeg vers HLS, lance le détecteur Python YOLOv8
+  \item \textbf{Streaming HLS} → segments fMP4 de 1s, buffer 3 segments, sortie \texttt{/hls/\{id\}/}
+  \item \textbf{Détection mouvement} → processus Python YOLOv8 par caméra
+  \item \textbf{Enregistrement} → clips MP4 30s dans \texttt{/recordings/\{id\}/} déclenchés par mouvement
+  \item \textbf{Nettoyage} → suppression automatique après 30 jours (\texttt{RECORDINGS\_RETENTION\_DAYS})
+\end{enumerate}
+
+\textbf{Scan réseau automatique :}
+\begin{itemize}
+  \item Scanne les sous-réseaux configurés (\texttt{CAMERA\_SCAN\_SUBNETS}, ex: \texttt{192.168.0.0/24})
+  \item Teste les ports RTSP standards et endpoints HTTP courants
+  \item 30 connexions parallèles (\texttt{CAMERA\_SCAN\_CONCURRENCY}), timeout 700 ms par test
+\end{itemize}
+
+\subsection{Déploiement CI/CD}
+
+\textbf{Déclencheur :} push sur la branche \texttt{main} \\
+\textbf{Runner :} self-hosted Linux x64 (le serveur host)
+
+\begin{longtable}{|l|p{9cm}|}
+\hline
+\textbf{Étape} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+Checkout & Clone le code au commit exact \\
+Validate path & Vérifie que \texttt{DEPLOY\_PATH} est défini \\
+Prepare repo & \texttt{git fetch} + \texttt{reset --hard} (préserve \texttt{.env}, \texttt{hls/}, \texttt{recordings/}) \\
+Stop PM2 & \texttt{pm2 stop sentys} pour libérer la RAM \\
+Build client & \texttt{npm ci} + \texttt{npm run build} (Vite) \\
+Record version & Écrit commit SHA + timestamp dans \texttt{deploy-info.json} \\
+Install server deps & \texttt{npm ci -{}-omit=dev} (prod uniquement) \\
+Setup Python venv & Crée \texttt{venv/} si absent, installe ultralytics/opencv/psycopg2 \\
+Restart & \texttt{pm2 delete} + \texttt{pm2 start} + \texttt{pm2 save} \\
+\hline
+\end{longtable}
+
+Fichiers préservés lors du déploiement : \texttt{.env}, \texttt{hls/}, \texttt{recordings/}.
+
+\subsection{Variables d'environnement serveur (\texttt{server/.env})}
+
+\begin{lstlisting}[language=bash]
+# Base de donnees
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=sentys
+DB_USER=postgres
+DB_PASSWORD=mot_de_passe
+
+# Serveur
+PORT=4000
+NODE_ENV=production
+JWT_SECRET=une_chaine_aleatoire_longue_et_unique   # OBLIGATOIRE en prod
+JWT_EXPIRES_IN=1h
+
+# Video
+RECORDINGS_DIR=../recordings
+HLS_DIR=../hls
+FFMPEG_PATH=                                        # auto-detecte si vide
+RTSP_TRANSPORT=tcp
+RECORDINGS_RETENTION_DAYS=30
+
+# Scan reseau
+CAMERA_SCAN_SUBNETS=192.168.0.0/24
+CAMERA_SCAN_CONCURRENCY=30
+CAMERA_RTSP_TIMEOUT=1000
+CAMERA_SCAN_TIMEOUT=700
+
+# WebRTC (optionnel)
+GO2RTC_URL=http://127.0.0.1:1984
+GO2RTC_BIN=/usr/local/bin/go2rtc
+STREAM_INACTIVE_TIMEOUT_MS=300000
+
+# Notifications push Web Push VAPID (optionnel)
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:admin@example.com
+\end{lstlisting}
+
+Générer une paire de clés VAPID :
+\begin{lstlisting}[language=bash]
+node -e "const wp = require('web-push'); const keys = wp.generateVAPIDKeys(); console.log(keys);"
+\end{lstlisting}
+
+Générer un \texttt{JWT\_SECRET} solide :
+\begin{lstlisting}[language=bash]
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+\end{lstlisting}
+
+\subsection{Variables d'environnement client (\texttt{client/.env})}
+
+\begin{lstlisting}[language=bash]
+VITE_API_URL=              # URL base complete (prioritaire si defini)
+VITE_API_PORT=4000         # Port dev (defaut : 4000)
+\end{lstlisting}
+
+% ============================================================
+\section{Temps réel — Socket.IO}
+% ============================================================
+
+Socket.IO est utilisé pour pousser les mises à jour vers tous les clients connectés
+sans qu'ils aient à interroger l'API (polling). La connexion WebSocket est authentifiée
+par JWT.
+
+\subsection{Authentification Socket.IO}
+
+\begin{lstlisting}[language=javascript]
+// Cote client — connexion avec token
+const socket = io(serverUrl, {
+  auth: { token: localStorage.getItem('token') }
+});
+
+// Cote serveur — validation JWT sur chaque connexion
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return next(new Error('Unauthorized'));
+    socket.user = user;
+    next();
+  });
+});
+\end{lstlisting}
+
+\subsection{Événements émis par le serveur}
+
+\begin{longtable}{|l|p{8cm}|}
+\hline
+\textbf{Événement} & \textbf{Payload / Déclencheur} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{camera:status} & \texttt{\{ id, status \}} — changement d'état d'une caméra \\
+\texttt{alert:new} & Nouvelle alerte créée (mouvement, déconnexion, batterie) \\
+\texttt{alert:acknowledged} & Alerte acquittée par un admin \\
+\texttt{motion:detected} & \texttt{\{ deviceId, cameraId \}} — mouvement Pi \\
+\texttt{node:online} & Pi Zero vient de s'annoncer \\
+\texttt{node:offline} & Pi Zero n'a plus envoyé d'annonce depuis > 2 min \\
+\texttt{system:metrics} & CPU, RAM, disque — émis toutes les 5s \\
+\hline
+\end{longtable}
+
+\subsection{Utilisation côté client}
+
+\begin{lstlisting}[language=typescript]
+// AlertsPage.tsx
+useEffect(() => {
+  socket.on('alert:new', (alert) => {
+    setAlerts(prev => [alert, ...prev]);
+    if (soundEnabled) playAlertSound();
+  });
+  return () => { socket.off('alert:new'); };
+}, []);
+
+// Dashboard camera
+socket.on('camera:status', ({ id, status }) => {
+  setCameras(prev => prev.map(c =>
+    c.id === id ? { ...c, status } : c
+  ));
+});
+\end{lstlisting}
+
+% ============================================================
+\section{Notifications Web Push (VAPID)}
+% ============================================================
+
+Les notifications push permettent d'alerter l'utilisateur même lorsque l'onglet
+est fermé, via le protocole Web Push avec authentification VAPID.
+
+\subsection{Flux d'abonnement}
+
+\begin{lstlisting}
+Utilisateur clique "Activer les notifications"
+        |
+        v
+navigator.serviceWorker.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: VAPID_PUBLIC_KEY
+})
+        |
+        v  (navigateur retourne un objet PushSubscription)
+POST /api/push/subscribe { endpoint, p256dh, auth }
+        |
+        v
+INSERT dans push_subscriptions (lie a l'user connecte)
+\end{lstlisting}
+
+\subsection{Envoi d'une notification}
+
+\begin{lstlisting}[language=javascript]
+// Cote serveur — envoye automatiquement lors d'une alerte critique
+webpush.sendNotification(subscription, JSON.stringify({
+  title: 'Sentys — Mouvement detecte',
+  body:  'Camera Salon — 14:32',
+  icon:  '/icons/icon-192.png',
+  badge: '/icons/badge-72.png',
+}));
+\end{lstlisting}
+
+Un utilisateur peut avoir plusieurs abonnements actifs (téléphone + tablette + PC).
+Chaque appareil/navigateur génère un \texttt{endpoint} unique stocké dans
+\texttt{push\_subscriptions}.
+
+% ============================================================
+\section{Détection IA — YOLOv8}
+% ============================================================
+
+La détection par intelligence artificielle est assurée par un script Python
+(\texttt{server/detector.py}) utilisant YOLOv8n (version nano, optimisée pour
+les machines modestes) couplé à OpenCV pour la soustraction de fond.
+
+\subsection{Pipeline de traitement}
+
+\begin{lstlisting}
+Flux RTSP
+    |
+    v
+OpenCV VideoCapture
+    |
+    v
+Redimensionnement 640x360
+    |
+    v
+Soustraction de fond MOG2 (history=500, threshold=50)
+    |
+    v
+Operations morphologiques (open + close)
+    |
+    v
+Detection de contours valides (aire min 1800 px2)
+    |
+    v
+Classification YOLOv8n sur la frame
+    |
+    v
+Objet reconnu ?
+    |-- Oui --> label + confiance (ex: "Humain detecte 78%")
+    |-- Non --> "Mouvement detecte" (fallback)
+    |
+    v
+POST /api/cameras/:id/motion (webhook vers le serveur)
+    |
+    v
+Alerte creee + notification push + Socket.IO emit
+\end{lstlisting}
+
+\subsection{Classes d'objets détectées}
+
+\begin{longtable}{|l|l|l|}
+\hline
+\textbf{Classe YOLO} & \textbf{Label affiché} & \textbf{Confiance min} \\
+\hline
+\endhead
+\hline
+\endfoot
+0 — person & Humain détecté & 45\% \\
+15 — cat & Chat détecté & 50\% \\
+16 — dog & Chien détecté & 50\% \\
+14 — bird & Oiseau détecté & 50\% \\
+2 — car & Véhicule détecté & 52\% \\
+3 — motorcycle & Véhicule détecté & 52\% \\
+5 — bus & Véhicule détecté & 52\% \\
+7 — truck & Véhicule détecté & 52\% \\
+\hline
+\end{longtable}
+
+Si aucun objet reconnu au-dessus du seuil → \emph{``Mouvement détecté''} (fallback).
+
+\subsection{Modes d'exécution}
+
+\begin{longtable}{|l|l|p{7cm}|}
+\hline
+\textbf{Mode} & \textbf{Déclencheur} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+\textbf{Par caméra} & \texttt{CAMERA\_ID} + \texttt{RTSP\_URL} (env) & Boucle continue, détection temps réel \\
+\textbf{One-shot} (\texttt{-{}-analyze}) & Pi signale un mouvement & Lit jusqu'à 10 frames, retourne JSON \\
+\textbf{Autonome} & Aucune env définie & Interroge la DB, thread par caméra active \\
+\hline
+\end{longtable}
+
+\subsection{Paramètres de détection}
+
+\begin{lstlisting}[language=python]
+COOLDOWN_SECONDS = 30    # delai min entre deux declenchements
+CONFIRM_FRAMES   = 2     # frames a confirmer avant alerte
+MIN_CONTOUR_AREA = 1800  # taille min du blob de mouvement (px2)
+\end{lstlisting}
+
+\subsection{Intégration avec le Pi Zero}
+
+En mode \texttt{--analyze}, le détecteur est invoqué directement par le serveur
+lorsqu'un Pi signale un mouvement via \texttt{POST /api/camera-nodes/motion}.
+Le serveur passe l'URL RTSP du Pi au script Python, qui retourne un JSON :
+
+\begin{lstlisting}[language=json]
+{
+  "detected": true,
+  "label": "Humain detecte",
+  "confidence": 0.78,
+  "class_id": 0
+}
+\end{lstlisting}
+
+Ce résultat est utilisé pour enrichir le titre de l'alerte générée.
+
+\subsection{Environnement Python (venv)}
+
+\begin{lstlisting}[language=bash]
+# Cree automatiquement par le pipeline CI/CD
+python3 -m venv venv
+venv/bin/pip install ultralytics opencv-python psycopg2-binary requests
+\end{lstlisting}
+
+Le modèle \texttt{yolov8n.pt} est téléchargé automatiquement par ultralytics
+au premier lancement.
+
+% ============================================================
+\section{Base de données PostgreSQL}
+% ============================================================
+
+La base de données est initialisée automatiquement au premier démarrage
+(\texttt{initDB()} dans \texttt{server/src/db/index.js}).
+Toutes les tables sont créées via \texttt{CREATE TABLE IF NOT EXISTS}.
+
+Deux principes de conception :
+\begin{itemize}
+  \item \textbf{Séparation staging/persistant} : les appareils découverts passent par une
+    table temporaire avant d'être validés.
+  \item \textbf{Intégrité référentielle} : clés étrangères avec \texttt{ON DELETE SET NULL}
+    ou \texttt{CASCADE} selon le cas.
+\end{itemize}
+
+\subsection{Vue d'ensemble des tables}
+
+\begin{longtable}{|l|p{10cm}|}
+\hline
+\textbf{Table} & \textbf{Rôle} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{users} & Comptes utilisateurs (rôle admin / user) \\
+\texttt{app\_settings} & Configuration globale (singleton, 1 seule ligne) \\
+\texttt{cameras} & Caméras RTSP fixes définies manuellement \\
+\texttt{camera\_discoveries} & Caméras découvertes automatiquement (staging, TTL 10 min) \\
+\texttt{camera\_nodes} & Nœuds Pi Zero validés par l'admin \\
+\texttt{camera\_node\_motion\_events} & Événements mouvement + clips hors ligne \\
+\texttt{alerts} & Alertes centralisées avec déduplication \\
+\texttt{audit\_logs} & Journal de toutes les actions admin \\
+\texttt{push\_subscriptions} & Abonnements Web Push par navigateur/appareil \\
+\hline
+\end{longtable}
+
+\subsection{Table \texttt{users}}
+
+Comptes humains ayant accès au dashboard.
+
+\begin{longtable}{|l|l|l|p{5cm}|}
+\hline
+\textbf{Colonne} & \textbf{Type} & \textbf{Contraintes} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{id} & SERIAL & PK & Identifiant auto-incrémenté \\
+\texttt{username} & VARCHAR(255) & UNIQUE NOT NULL & Identifiant de connexion \\
+\texttt{password} & VARCHAR(255) & NOT NULL & Hash bcrypt (coût 12) \\
+\texttt{role} & VARCHAR(20) & DEFAULT \texttt{'user'} & \texttt{'admin'} ou \texttt{'user'} \\
+\texttt{created\_at} & TIMESTAMP & DEFAULT NOW() & Date de création \\
+\hline
+\end{longtable}
+
+Les mots de passe sont hachés via \texttt{bcrypt.hash(password, 12)} avant tout INSERT/UPDATE.
+Le coût 12 ($= 2^{12}$ itérations) rend le brute-force prohibitif.
+
+\paragraph{Pourquoi bcryptjs et pas une autre bibliothèque ?}
+
+Trois algorithmes de hachage de mots de passe ont été considérés :
+
+\begin{itemize}[label=\textbullet]
+    \item \textbf{argon2} : vainqueur de la Password Hashing Competition (2015), résistant aux attaques GPU et FPGA grâce à sa consommation mémoire configurable. Techniquement supérieur à bcrypt. Écarté car il nécessite une compilation native (module C++), ce qui complique le déploiement sur des architectures différentes (CI/CD, Raspberry Pi) et introduit un risque de dépendance système.
+    \item \textbf{scrypt} : inclus nativement dans Node.js (\texttt{crypto.scrypt}), également résistant aux attaques mémoire. Écarté car son API asynchrone est moins bien documentée dans l'écosystème Express, et son paramétrage (N, r, p) est plus complexe à calibrer correctement.
+    \item \textbf{bcryptjs} : implémentation pure JavaScript de bcrypt, sans dépendance native. Moins performant qu'argon2 contre des attaques GPU modernes, mais largement suffisant pour un usage résidentiel avec un faible volume d'utilisateurs. Son intégration dans l'écosystème Node.js/Express est éprouvée, et un coût de 12 rend chaque tentative de brute-force prohibitivement lente (\textasciitilde 300ms par vérification).
+\end{itemize}
+
+\textbf{Conclusion :} bcryptjs a été retenu pour sa simplicité de déploiement (zéro dépendance native), sa compatibilité universelle avec toutes les architectures cibles du projet, et son niveau de sécurité largement suffisant dans ce contexte.
+
+Au premier démarrage (table vide), un compte \texttt{root/root} admin est créé automatiquement.
+Dès qu'un nouvel admin est créé via le panneau de gestion, le compte root est supprimé automatiquement
+et \texttt{default\_admin\_active} passe à \texttt{false}.
+
+\subsection{Table \texttt{app\_settings}}
+
+Singleton (une seule ligne, \texttt{id = 1}) contenant toute la configuration de l'application.
+La contrainte \texttt{CHECK (id = 1)} empêche toute insertion parasite.
+
+Paramètres notables :
+\begin{itemize}
+  \item \texttt{surveillance\_mode} — activer/désactiver la surveillance globalement
+  \item \texttt{kiosk\_pin} — code PIN 4-8 chiffres pour le boîtier physique (non haché)
+  \item \texttt{alerts\_realtime\_enabled} — notifications Web Push temps réel
+  \item \texttt{camera\_autostart\_enabled} — démarrage automatique des caméras au démarrage du serveur
+  \item \texttt{camera\_refresh\_seconds} — intervalle de rafraîchissement du statut (défaut 3s)
+\end{itemize}
+
+\subsection{Table \texttt{cameras}}
+
+Caméras IP fixes configurées dans le système (RTSP fixe).
+Le statut temps réel (running, paused, stopped, reconnecting) est géré \textbf{en mémoire}
+par le \texttt{cameraManager} Node.js — la base ne stocke que la configuration persistante.
+
+\subsection{Table \texttt{camera\_discoveries}}
+
+\textbf{Table de staging temporaire.} Contient les appareils annoncés sur le réseau local
+mais pas encore validés par l'admin. TTL : 10 minutes (purge automatique via
+\texttt{scheduleDiscoveryCleanup}).
+
+Flux complet :
+\begin{lstlisting}
+Pi demarre --> POST /api/camera-nodes/announce
+                    |
+         UPSERT dans camera_discoveries
+         (mise a jour de last_seen_at si device_id deja connu)
+                    |
+         Visible dans l'interface "Annonces reseau"
+                    |
+         Admin clique "Connecter"
+                    |
+         INSERT dans camera_nodes (permanent)
+         + DELETE de camera_discoveries
+\end{lstlisting}
+
+\subsection{Table \texttt{camera\_nodes}}
+
+Nœuds Pi Zero 2W validés et actifs. Les colonnes \texttt{cfg\_*} sont lues par le Pi
+via \texttt{GET /api/camera-nodes/:id/config} et appliquées dynamiquement à l'agent
+sans redéploiement.
+
+\begin{longtable}{|l|l|p{7cm}|}
+\hline
+\textbf{Colonne} & \textbf{Défaut} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{cfg\_clip\_duration} & 30s & Durée des clips hors ligne \\
+\texttt{cfg\_max\_storage\_mb} & 500 Mo & Limite stockage offline \\
+\texttt{cfg\_announce\_interval} & 30s & Intervalle d'annonce du Pi \\
+\texttt{cfg\_rtsp\_port} & 8554 & Port RTSP de MediaMTX \\
+\texttt{cfg\_rtsp\_path} & \texttt{cam1} & Chemin RTSP de MediaMTX \\
+\hline
+\end{longtable}
+
+\subsection{Table \texttt{camera\_node\_motion\_events}}
+
+Événements de mouvement détectés par les nœuds Pi, incluant les clips hors ligne.
+Le champ \texttt{offline\_recording = true} identifie les clips uploadés après une
+coupure réseau (affichés avec le badge \textbf{HORS LIGNE} dans l'interface).
+
+\begin{lstlisting}[language=sql]
+id                SERIAL PRIMARY KEY
+device_id         VARCHAR(120)  -- FK vers camera_nodes.device_id
+motion            BOOLEAN       -- true = mouvement, false = fin
+offline_recording BOOLEAN       -- clip enregistre hors ligne ?
+recording_path    VARCHAR(255)  -- /recordings/{cameraId}/rec_{ts}.mp4
+detected_at       TIMESTAMP
+created_at        TIMESTAMP
+\end{lstlisting}
+
+\subsection{Table \texttt{alerts}}
+
+Historique centralisé des événements de sécurité avec déduplication.
+Le champ \texttt{metadata} (JSONB) stocke des données variables sans modifier le schéma.
+La déduplication via \texttt{dedupe\_key} (index partiel unique) évite les doublons
+lors d'événements répétitifs.
+
+\begin{itemize}
+  \item \textbf{Niveaux :} \texttt{info}, \texttt{warning}, \texttt{critical}
+  \item \textbf{Statuts :} \texttt{new}, \texttt{viewed}, \texttt{acknowledged}
+  \item \textbf{Types :} \texttt{CAMERA\_OFFLINE}, \texttt{MOTION\_DETECTED}, \texttt{BATTERY\_LOW}, \ldots
+\end{itemize}
+
+Exemple de \texttt{metadata} :
+\begin{lstlisting}[language=json]
+{ "battery_level": 12, "device_id": "pi-salon" }
+{ "clip_url": "/recordings/69/rec_1234.mp4", "duration": 30 }
+{ "label": "Humain detecte", "confidence": 0.78 }
+\end{lstlisting}
+
+\subsection{Table \texttt{push\_subscriptions}}
+
+Abonnements Web Push (protocole VAPID). Un utilisateur peut avoir plusieurs abonnements
+actifs (téléphone + tablette + PC). Chaque appareil génère un \texttt{endpoint} unique.
+
+\subsection{Table \texttt{audit\_logs}}
+
+Journal des actions sensibles. Actions tracées : connexions, créations/suppressions
+d'utilisateurs, toute action admin. Consultable via \textbf{Paramètres → Journaux d'audit}.
+
+\subsection{Données gérées en mémoire (hors base)}
+
+\begin{longtable}{|l|p{4cm}|p{5cm}|}
+\hline
+\textbf{Donnée} & \textbf{Emplacement} & \textbf{Raison} \\
+\hline
+\endhead
+\hline
+\endfoot
+Statut temps réel des caméras & Map dans \texttt{cameraManager} & Mis à jour plusieurs fois/s \\
+Processus FFmpeg actifs & Map en mémoire & Handles OS non sérialisables \\
+État de go2rtc & Détecté via HTTP & Processus externe \\
+Heartbeats clients & Timer en mémoire & Données éphémères \\
+\hline
+\end{longtable}
+
+Au redémarrage PM2, ces états sont réinitialisés. Les caméras \texttt{active = true}
+sont redémarrées automatiquement.
+
+\subsection{Décisions d'architecture}
+
+\subsubsection{Pourquoi trois tables pour les caméras ?}
+
+\texttt{cameras}, \texttt{camera\_discoveries} et \texttt{camera\_nodes} ont des cycles
+de vie totalement différents. Les fusionner aurait introduit des colonnes nullables selon
+le type et exposé des données de staging aux routes de production. C'est un pattern
+reconnu dans les architectures IoT (\emph{device provisioning} → \emph{device registry}).
+
+\subsubsection{Pourquoi \texttt{device\_id} (varchar) comme clé étrangère ?}
+
+Dette technique connue et assumée : le \texttt{device\_id} est l'identifiant métier naturel
+du Pi (ex: \texttt{pi-salon}), présent dans toutes les requêtes de l'agent.
+Une migration vers \texttt{camera\_node\_id integer} est prévue en V2.
+
+\subsubsection{Pourquoi le PIN kiosk n'est pas haché ?}
+
+Le PIN contrôle uniquement l'écran tactile physique, derrière le LAN et Tailscale.
+Il ne donne pas accès à l'API. Quiconque a accès à la base a déjà compromis le système entier.
+
+\subsubsection{Pourquoi pas de soft delete ?}
+
+La suppression physique est conforme au droit à l'effacement du RGPD (Art. 17).
+Un \texttt{deleted\_at} aurait compliqué toutes les requêtes et créé un risque de fuite
+si un filtre \texttt{WHERE deleted\_at IS NULL} était oublié.
+
+\subsubsection{Pourquoi pas de table \texttt{recordings} dédiée ?}
+
+Les enregistrements sont tracés via \texttt{camera\_node\_motion\_events.recording\_path},
+liant chaque clip à l'événement qui l'a déclenché. En V2, si la détection IA produit des
+clips non liés à un mouvement Pi, une table dédiée deviendra pertinente.
+
+% ============================================================
+\section{Architecture de streaming vidéo}
+% ============================================================
+
+Sentys utilise deux protocoles en parallèle selon la disponibilité :
+
+\begin{lstlisting}
+Camera RTSP
+     |
+     +---> go2rtc ---> WebRTC ---> Navigateur   (latence ~200ms)
+     |
+     +---> FFmpeg  ---> HLS   ---> Navigateur   (latence ~3-6s, fallback)
+\end{lstlisting}
+
+Le client essaie toujours \textbf{WebRTC en premier}. Si go2rtc est indisponible ou si la
+négociation échoue, il bascule automatiquement sur \textbf{HLS}.
+
+\subsection{go2rtc + WebRTC}
+
+go2rtc est un proxy RTSP→WebRTC. Il reçoit le flux RTSP et le retransmet au navigateur
+via WebRTC (latence sous-seconde).
+
+\begin{lstlisting}[language=bash, caption={Installation go2rtc}]
+sudo curl -L https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_amd64 \
+  -o /tmp/go2rtc && sudo chmod +x /tmp/go2rtc && sudo mv /tmp/go2rtc /usr/local/bin/go2rtc
+\end{lstlisting}
+
+\begin{lstlisting}[language=yaml, caption={server/go2rtc.yaml}]
+api:
+  listen: :1984      # API REST go2rtc (locale uniquement)
+log:
+  level: warn
+# Les streams sont enregistres dynamiquement via l'API REST
+\end{lstlisting}
+
+go2rtc est démarré comme processus enfant de Node.js (pas de service systemd séparé).
+Si le binaire est absent, le serveur log :
+\begin{lstlisting}
+[go2rtc] Binaire introuvable -- WebRTC desactive, HLS actif en fallback.
+\end{lstlisting}
+
+\textbf{Flux de négociation WebRTC (protocole WHEP) :}
+\begin{lstlisting}
+Navigateur            Node.js               go2rtc
+    |                     |                    |
+    |-- GET /api/webrtc/status -->|             |
+    |<- { available: true } ------|             |
+    |                             |             |
+    |  createOffer() (SDP)        |             |
+    |-- POST /api/webrtc/69 ----->|             |
+    |   body: SDP offer           |-- POST ---->|
+    |                             |<- SDP answer|
+    |<- SDP answer ---------------|             |
+    |                             |             |
+    |<======= flux video UDP =====================|
+\end{lstlisting}
+
+\subsection{FFmpeg + HLS}
+
+FFmpeg lit le flux RTSP et le segmente en fragments fMP4 (1 seconde chacun), compatibles
+avec tous les navigateurs modernes sans plugin.
+
+\begin{lstlisting}
+RTSP source
+    |
+    +--> FFmpeg
+           |  -rtsp_transport tcp
+           |  -c:v copy          (pas de transcodage -- copie directe)
+           |  -hls_time 1        (segments de 1s)
+           |  -hls_list_size 3   (fenetre glissante = ~3s)
+           |  -hls_flags delete_segments+append_list
+           |  -hls_segment_type fmp4
+           |
+           +--> /hls/{cameraId}/index.m3u8
+                /hls/{cameraId}/init_{ts}.mp4
+                /hls/{cameraId}/seg_{ts}_00001.m4s
+                /hls/{cameraId}/seg_{ts}_00002.m4s
+                /hls/{cameraId}/seg_{ts}_00003.m4s
+\end{lstlisting}
+
+\begin{longtable}{|l|p{9cm}|}
+\hline
+\textbf{État} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{watching} & FFmpeg démarré, en attente du premier segment \\
+\texttt{running} & Manifeste HLS prêt, flux visible \\
+\texttt{reconnecting} & FFmpeg a planté, tentative de reconnexion (max 4) \\
+\texttt{paused} & FFmpeg stoppé manuellement \\
+\texttt{stopped} & En veille, aucun processus FFmpeg \\
+\hline
+\end{longtable}
+
+Reconnexion automatique : 4 tentatives avec délai croissant (5s, 5s, 10s, 20s).
+
+Timeout d'inactivité : si aucun heartbeat client pendant 5 minutes
+(\texttt{STREAM\_INACTIVE\_TIMEOUT\_MS}), FFmpeg est arrêté automatiquement.
+Le client envoie un heartbeat toutes les 60s via
+\texttt{POST /api/cameras/:id/stream/heartbeat}.
+
+\subsection{Logique de sélection côté client}
+
+\begin{lstlisting}[language=jsx, caption={CameraFeed.tsx — bascule WebRTC/HLS}]
+{useWebRTC ? (
+  <WebRTCPlayer
+    cameraId={camera.id}
+    onError={() => setUseWebRTC(false)}   // bascule HLS si echec
+  />
+) : (
+  <video ref={videoRef} />   // hls.js attache ici
+)}
+\end{lstlisting}
+
+WebRTC ne fonctionne pas (bascule HLS automatique) dans les cas suivants :
+\begin{itemize}
+  \item go2rtc non installé → \texttt{\{ available: false \}}
+  \item Caméra Pi en veille → RTSP refusé → \texttt{502}
+  \item Réseau NAT strict (hors LAN/Tailscale) → ICE gathering timeout
+\end{itemize}
+
+\subsection{Dépannage streaming}
+
+\begin{lstlisting}[language=bash]
+# Verifier go2rtc
+curl http://localhost:1984/api/streams
+
+# Verifier les segments HLS
+ls -la ~/hls/69/
+
+# Logs FFmpeg
+pm2 logs sentys --lines 50 | grep "CAM 69"
+
+# Redemarrer si go2rtc vient d'etre installe
+pm2 restart sentys
+\end{lstlisting}
+
+% ============================================================
+\section{Client API (\texttt{client/src/lib/api.ts})}
+% ============================================================
+
+\subsection{\texttt{apiUrl(path)}}
+
+Construit l'URL complète d'un endpoint selon l'environnement.
+
+\begin{longtable}{|l|l|}
+\hline
+\textbf{Environnement} & \textbf{Résultat} \\
+\hline
+\endhead
+\hline
+\endfoot
+Dev (\texttt{npm run dev}) & \texttt{http://192.168.0.47:4000/api/cameras} \\
+Production (build servi par Express) & \texttt{/api/cameras} \\
+\hline
+\end{longtable}
+
+En production, le frontend est servi par le même serveur Express — les appels sont relatifs.
+
+\subsection{\texttt{apiFetch(url, options?)}}
+
+Wrapper autour de \texttt{fetch} qui injecte automatiquement le token JWT depuis
+\texttt{localStorage}.
+
+Comportement :
+\begin{itemize}
+  \item Lit \texttt{localStorage.getItem('token')}
+  \item Si token présent → ajoute \texttt{Authorization: Bearer \{token\}}
+  \item Retourne la \texttt{Promise<Response>} native
+\end{itemize}
+
+\textbf{Toujours utiliser \texttt{apiFetch} à la place de \texttt{fetch} pour les appels API.}
+\texttt{fetch} nu ne joint pas le token → \texttt{401 Unauthorized}.
+
+Exceptions où \texttt{fetch} seul est correct :
+\begin{itemize}
+  \item \texttt{POST /auth/login} — pas encore de token à ce stade
+  \item \texttt{GET /auth/me} — géré manuellement dans \texttt{useAuth.tsx}
+\end{itemize}
+
+\subsection{\texttt{readJsonResponse<T>(response)}}
+
+Parse la réponse d'un fetch en JSON avec gestion d'erreur.
+Vérifie que le \texttt{Content-Type} est \texttt{application/json} avant de parser.
+
+\subsection{Utilisation type}
+
+\begin{lstlisting}[language=typescript]
+import { apiUrl, apiFetch, readJsonResponse } from '../lib/api';
+
+// GET
+const res  = await apiFetch(apiUrl('/api/cameras'));
+const data = await readJsonResponse<Camera[]>(res);
+
+// POST avec corps JSON
+const res = await apiFetch(apiUrl('/api/cameras'), {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Salon', rtsp_url: 'rtsp://...' }),
+});
+
+// DELETE
+await apiFetch(apiUrl(`/api/cameras/${id}`), { method: 'DELETE' });
+
+// PATCH
+const res = await apiFetch(apiUrl(`/api/cameras/${id}`), {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Nouveau nom' }),
+});
+\end{lstlisting}
+
+\subsection{Gestion des 401}
+
+Si le token a expiré (durée de vie 1h), le serveur retourne \texttt{401}.
+\texttt{useAuth.tsx} gère l'expiration automatiquement via un timer sur le \texttt{exp}
+du JWT décodé — le logout est déclenché avant même que le serveur rejette la requête.
+En cas de \texttt{401} inattendu malgré un token valide : vérifier que
+\texttt{JWT\_SECRET} est identique entre les redémarrages du serveur.
+
+% ============================================================
+\section{Architecture de sécurité}
+% ============================================================
+
+\subsection{Vue d'ensemble — double couche}
+
+Sentys est un système hébergé localement. La sécurité repose sur deux couches
+complémentaires et indépendantes :
+
+\begin{lstlisting}
+Internet
+   |
+   +--> Tailscale VPN --> PC hote (192.168.0.47:4000)
+        [Couche 1 : reseau]      |
+                          +------+------+
+                          |  Express.js |
+                          |  + JWT Auth |  [Couche 2 : applicatif]
+                          +------+------+
+                                 |
+                     +-----------+-----------+
+                     |           |           |
+                PostgreSQL    FFmpeg      Pi Zero 2W
+\end{lstlisting}
+
+\subsection{Tailscale (couche réseau)}
+
+\begin{itemize}
+  \item Seuls les appareils enrôlés dans le réseau Tailscale peuvent atteindre le serveur
+  \item Authentification mutuelle via certificats (WireGuard sous le capot)
+  \item Le Pi Zero et le PC hôte sont sur le même réseau Tailscale + LAN local
+  \item Aucune configuration côté application — Tailscale gère le réseau de façon transparente
+\end{itemize}
+
+\subsection{JWT (couche applicative)}
+
+Sessions utilisateur gérées via des JSON Web Tokens signés avec \texttt{JWT\_SECRET}.
+
+\begin{lstlisting}
+POST /auth/login  -->  { token: "eyJ..." }
+                            |
+                      Stocke dans localStorage
+                            |
+              Authorization: Bearer eyJ...
+                            |
+               Verifie par requireAuth middleware
+\end{lstlisting}
+
+\textbf{Durée de vie :} 1 heure (configurable via \texttt{JWT\_EXPIRES\_IN})
+
+Vérification au démarrage :
+\begin{lstlisting}[language=javascript]
+// server/src/config/auth.js
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET must be set'); // Refuse de demarrer
+}
+\end{lstlisting}
+
+\subsection{Rôles utilisateur (RBAC)}
+
+\begin{longtable}{|l|p{10cm}|}
+\hline
+\textbf{Rôle} & \textbf{Permissions} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{admin} & Tout : ajouter/supprimer caméras, modifier config, voir les logs, gérer les utilisateurs \\
+\texttt{user} & Lecture : voir les flux, alertes, historique (pas de modifications) \\
+\hline
+\end{longtable}
+
+\subsection{Rate limiting}
+
+\begin{longtable}{|l|l|}
+\hline
+\textbf{Endpoint} & \textbf{Limite} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{/auth/login} & 10 req / 15 min (50 en dev) \\
+Toutes les routes API & 200 req / min \\
+\hline
+\end{longtable}
+
+\subsection{Audit}
+
+Chaque action admin est tracée dans la table \texttt{audit\_logs} :
+
+\begin{longtable}{|l|l|}
+\hline
+\textbf{Champ} & \textbf{Exemple} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{username} & root \\
+\texttt{action} & LOGIN\_SUCCESS \\
+\texttt{details} & Connexion réussie \\
+\texttt{ip\_address} & 100.64.0.1 (Tailscale IP) \\
+\texttt{created\_at} & 2026-05-27 14:32:01 \\
+\hline
+\end{longtable}
+
+Consultable via \textbf{Paramètres → Journaux d'audit} (admin uniquement).
+
+\subsection{Sécurité du Pi Zero}
+
+Le Pi n'utilise pas de token JWT. Il s'authentifie implicitement via :
+\begin{itemize}
+  \item Son appartenance au réseau LAN / Tailscale
+  \item Son \texttt{DEVICE\_ID} unique défini dans \texttt{\textasciitilde/device.conf}
+\end{itemize}
+
+Cette approche est volontaire : le Pi est un dispositif embarqué sans interface sécurisée
+pour stocker des secrets. La sécurité repose sur le réseau (Tailscale) plutôt que sur des
+credentials applicatifs.
+
+\begin{lstlisting}[caption={~/device.conf}]
+DEVICE_ID=pi-salon
+DEVICE_NAME=Camera Salon
+DEVICE_LOCATION=Salon
+\end{lstlisting}
+
+% ============================================================
+\section{Installation du Pi Zero 2W}
+% ============================================================
+
+\subsection{Prérequis matériel}
+
+\begin{itemize}
+  \item Raspberry Pi Zero 2W
+  \item Module caméra OV5647 (ou compatible)
+  \item Câble nappe \textbf{15 broches 1mm des deux côtés} (spécifique Pi Zero, pas le câble Pi 3/4)
+\end{itemize}
+
+\subsection{Étape 1 — Brancher et activer la caméra}
+
+Contacts dorés \textbf{face vers le bas} côté Pi Zero, \textbf{face vers le haut} côté module.
+
+\begin{lstlisting}[language=bash]
+# Activer l'overlay OV5647
+sudo nano /boot/firmware/config.txt
+# Verifier/ajouter :
+#   camera_auto_detect=1
+#   dtoverlay=ov5647
+sudo reboot
+
+# Verifier la detection
+rpicam-hello --list-cameras
+# Attendu : 0 : ov5647 [2592x1944 ...]
+
+# Si la commande n'existe pas :
+sudo apt update && sudo apt install -y libcamera-apps
+
+# Diagnostic si camera non detectee
+dmesg | grep -i -E "csi|ov5647"
+\end{lstlisting}
+
+\subsection{Étape 2 — Installer les dépendances Python}
+
+\begin{lstlisting}[language=bash]
+sudo apt install -y python3-requests
+\end{lstlisting}
+
+\subsection{Étape 3 — Installer MediaMTX}
+
+\begin{lstlisting}[language=bash]
+wget https://github.com/bluenviron/mediamtx/releases/download/v1.9.1/mediamtx_v1.9.1_linux_arm64v8.tar.gz
+tar -xzf mediamtx_v1.9.1_linux_arm64v8.tar.gz
+sudo mv mediamtx /usr/local/bin/
+sudo mv mediamtx.yml /usr/local/etc/
+rm mediamtx_v1.9.1_linux_arm64v8.tar.gz
+\end{lstlisting}
+
+Configuration MediaMTX :
+\begin{lstlisting}[language=yaml]
+api: yes   # OBLIGATOIRE pour que l'agent verifie si RTSP est pret
+
+paths:
+  cam1:
+    source: rpiCamera
+    rpiCameraWidth: 1280
+    rpiCameraHeight: 720
+    rpiCameraFPS: 15
+    rpiCameraBitrate: 500000
+\end{lstlisting}
+
+\textbf{Service systemd MediaMTX} (sans \texttt{enable} — l'agent le contrôle à la demande) :
+
+\begin{lstlisting}[caption={/etc/systemd/system/mediamtx.service}]
+[Unit]
+Description=MediaMTX
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/mediamtx /usr/local/etc/mediamtx.yml
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+\end{lstlisting}
+\begin{lstlisting}[language=bash]
+sudo systemctl daemon-reload
+# Ne PAS faire systemctl enable -- l'agent gere le demarrage a la demande
+\end{lstlisting}
+
+\textbf{Autoriser le contrôle sans mot de passe} (remplacer \texttt{picam2} par le bon utilisateur) :
+
+\begin{lstlisting}[language=bash]
+sudo visudo
+# Ajouter a la fin :
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl start mediamtx
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl stop mediamtx
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl restart mediamtx
+picam2 ALL=(ALL) NOPASSWD: /usr/bin/pkill
+picam2 ALL=(ALL) NOPASSWD: /bin/kill
+picam2 ALL=(ALL) NOPASSWD: /usr/bin/fuser
+picam2 ALL=(ALL) NOPASSWD: /bin/rm
+\end{lstlisting}
+
+\subsection{Étape 4 — Créer le fichier d'identité}
+
+Ce fichier n'est \textbf{jamais} écrasé par les mises à jour automatiques :
+
+\begin{lstlisting}[language=bash]
+cat > ~/device.conf << 'EOF'
+DEVICE_ID=pi-zero-02
+DEVICE_NAME=Pi Zero 2W - Cam2
+DEVICE_LOCATION=Entree
+EOF
+\end{lstlisting}
+
+\subsection{Étape 5 — Installer l'agent et le script de mise à jour}
+
+\begin{lstlisting}[language=bash]
+# Telecharger l'agent depuis le serveur
+curl http://192.168.0.47:4000/api/agent/sentys_agent.py -o ~/sentys_agent.py
+
+# Copier le script de mise a jour depuis le PC
+scp pi/auto_update.sh picam2@<IP_PI>:~/auto_update.sh
+chmod +x ~/auto_update.sh
+\end{lstlisting}
+
+\subsection{Étape 6 — Créer le service sentys-agent}
+
+\begin{lstlisting}[caption={/etc/systemd/system/sentys-agent.service}]
+[Unit]
+Description=Sentys Camera Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=picam2
+WorkingDirectory=/home/picam2
+ExecStart=/usr/bin/python3 /home/picam2/sentys_agent.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+\end{lstlisting}
+\begin{lstlisting}[language=bash]
+sudo systemctl daemon-reload
+sudo systemctl enable sentys-agent
+sudo systemctl start sentys-agent
+sudo systemctl status sentys-agent
+\end{lstlisting}
+
+\subsection{Étape 7 — Mise à jour automatique (cron)}
+
+\begin{lstlisting}[language=bash]
+crontab -e
+# Ajouter :
+*/5 * * * * /home/picam2/auto_update.sh >> /home/picam2/update.log 2>&1
+\end{lstlisting}
+
+Toutes les 5 minutes, le Pi télécharge la dernière version de \texttt{sentys\_agent.py}
+depuis le serveur. Si le checksum a changé, il remplace l'ancien et redémarre le service.
+Le fichier \texttt{device.conf} n'est jamais touché.
+
+\subsection{Étape 8 — Ajouter la caméra dans l'interface}
+
+Dans l'interface Sentys, ajouter une caméra avec l'URL RTSP :
+\begin{lstlisting}
+rtsp://<IP_PI>:8554/cam1
+\end{lstlisting}
+
+Le Pi annonce automatiquement son existence au serveur toutes les 30 secondes —
+il apparaît aussi dans l'onglet \textbf{Annonces réseau} pour connexion en un clic.
+
+\subsection{Configuration multi-Pi}
+
+Chaque Pi doit avoir un \texttt{DEVICE\_ID} et un \texttt{RTSP\_PATH} uniques.
+Le reste de la configuration est identique :
+
+\begin{longtable}{|l|l|l|l|}
+\hline
+\textbf{Pi} & \textbf{Utilisateur} & \textbf{DEVICE\_ID} & \textbf{RTSP\_PATH} \\
+\hline
+\endhead
+\hline
+\endfoot
+Pi Zero 2W \#1 & \texttt{picam} & \texttt{pi-zero-01} & \texttt{cam1} \\
+Pi Zero 2W \#2 & \texttt{picam2} & \texttt{pi-zero-02} & \texttt{cam2} \\
+Pi Zero 2W \#3 & \texttt{picam3} & \texttt{pi-zero-03} & \texttt{cam3} \\
+\hline
+\end{longtable}
+
+\textbf{Points d'attention multi-Pi :}
+\begin{itemize}
+  \item Adapter \textbf{tous les chemins} (\texttt{/home/picamX/}), le \texttt{User=} dans
+    les services systemd, et les lignes visudo
+  \item Chaque Pi doit être enrôlé dans le réseau Tailscale s'il doit être accessible hors LAN
+  \item L'URL RTSP ajoutée dans l'interface doit correspondre au \texttt{RTSP\_PATH} du Pi :
+    \texttt{rtsp://<IP>:8554/cam2} pour le Pi \#2
+\end{itemize}
+
+\subsection{Variables de configuration de l'agent}
+
+\begin{longtable}{|l|l|p{7cm}|}
+\hline
+\textbf{Variable} & \textbf{Défaut} & \textbf{Description} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{SERVER\_URL} & \texttt{http://192.168.0.47:4000} & IP du serveur host \\
+\texttt{RTSP\_PORT} & \texttt{8554} & Port MediaMTX \\
+\texttt{RTSP\_PATH} & \texttt{cam1} & Chemin du flux RTSP (unique par Pi) \\
+\texttt{ANNOUNCE\_INTERVAL} & 30s & Secondes entre chaque annonce \\
+\texttt{MOTION\_SNAPSHOT\_INTERVAL} & 1s & Intervalle snapshots en veille \\
+\texttt{MOTION\_THRESHOLD} & 25 & Différence par pixel pour détecter un changement \\
+\texttt{MOTION\_MIN\_PIXELS} & 300 & Pixels différents minimum pour déclencher \\
+\texttt{STREAM\_IDLE\_TIMEOUT} & 60s & Avant d'arrêter MediaMTX (sans mouvement) \\
+\texttt{CLIP\_DURATION\_SEC} & 30s & Durée d'un clip hors ligne \\
+\texttt{MAX\_STORAGE\_MB} & 500 Mo & Stockage max clips hors ligne \\
+\hline
+\end{longtable}
+
+\texttt{DEVICE\_ID}, \texttt{DEVICE\_NAME} et \texttt{DEVICE\_LOCATION} sont lus depuis
+\texttt{device.conf} et ne sont jamais écrasés par les mises à jour automatiques.
+Ces valeurs peuvent aussi être overridées depuis l'interface serveur (config distante via
+\texttt{GET /api/camera-nodes/:id/config}).
+
+\subsection{Mode hors ligne}
+
+Quand le serveur est inaccessible :
+\begin{itemize}
+  \item MediaMTX est arrêté (libère la caméra)
+  \item Des clips MP4 de 30s sont enregistrés localement dans
+    \texttt{/home/picam/offline\_recordings/}
+  \item Stockage limité à 500 Mo (les plus anciens clips supprimés en premier)
+  \item Clips invalides (< 50 Ko) ignorés
+\end{itemize}
+
+Au retour en ligne :
+\begin{itemize}
+  \item MediaMTX est redémarré (flux RTSP de nouveau disponible)
+  \item Tous les clips en attente sont uploadés via
+    \texttt{POST /api/camera-nodes/:id/upload-recording}
+  \item Apparaissent dans l'historique avec le badge \textbf{HORS LIGNE}
+  \item Supprimés localement après upload réussi
+\end{itemize}
+
+% ============================================================
+\section{Dépannage}
+% ============================================================
+
+\subsection{Commandes de diagnostic}
+
+\begin{lstlisting}[language=bash]
+# Logs de l'agent en direct (Pi)
+sudo journalctl -u sentys-agent -f
+
+# Logs MediaMTX en direct (Pi)
+sudo journalctl -u mediamtx -f
+
+# Logs serveur (serveur host)
+pm2 logs sentys --lines 0
+
+# Statut PM2
+pm2 list
+
+# Version deployee
+cat $DEPLOY_PATH/.deploy-commit
+cat $DEPLOY_PATH/.deploy-time
+
+# Statut des services Pi
+sudo systemctl status sentys-agent
+sudo systemctl status mediamtx
+
+# Verifier que le RTSP est pret (quand MediaMTX tourne)
+curl -s http://localhost:9997/v3/paths/get/cam1 | python3 -m json.tool | grep ready
+
+# Verifier l'espace /dev/shm
+df -h /dev/shm && ls /dev/shm/
+
+# Nettoyer /dev/shm manuellement
+sudo rm -rf /dev/shm/mediamtx-rpicamera-*
+
+# Verifier la camera
+rpicam-hello --list-cameras
+
+# Forcer une mise a jour immediate de l'agent
+~/auto_update.sh
+
+# Logs des mises a jour automatiques
+cat ~/update.log
+\end{lstlisting}
+
+\subsection{Caméra non détectée (\texttt{No cameras available!})}
+
+\begin{enumerate}
+  \item Vérifier le câblage (loquet bien fermé des deux côtés, contacts dans le bon sens)
+  \item Vérifier que \texttt{dtoverlay=ov5647} est dans \texttt{/boot/firmware/config.txt}
+  \item Rebooter et relancer \texttt{dmesg | grep -i ov5647}
+\end{enumerate}
+
+\subsection{Stream en reconnexion permanente}
+
+MediaMTX ne publie pas le flux. Vérifier :
+\begin{lstlisting}[language=bash]
+sudo systemctl status mediamtx
+sudo journalctl -u mediamtx -n 50
+\end{lstlisting}
+
+\textbf{\texttt{no space left on device} sur \texttt{/dev/shm}} — MediaMTX ne peut pas
+extraire \texttt{libcamera.so} :
+\begin{lstlisting}[language=bash]
+df -h /dev/shm
+sudo rm -rf /dev/shm/mediamtx-rpicamera-*
+sudo systemctl restart mediamtx
+\end{lstlisting}
+
+\textbf{\texttt{api: no} dans mediamtx.yml} — l'agent ne peut pas vérifier si RTSP est prêt :
+\begin{lstlisting}[language=bash]
+sudo sed -i 's/^api: no/api: yes/' /usr/local/etc/mediamtx.yml
+sudo systemctl restart mediamtx
+\end{lstlisting}
+
+\textbf{Caméra déjà utilisée par un autre processus} :
+\begin{lstlisting}[language=bash]
+sudo fuser /dev/media0 /dev/media1 /dev/video0
+sudo pkill -9 -f rpicam
+sudo systemctl restart sentys-agent
+\end{lstlisting}
+
+\subsection{MediaMTX path jamais ready}
+
+\begin{lstlisting}[language=bash]
+sudo systemctl start mediamtx && sleep 3
+curl -s http://localhost:9997/v3/paths/get/cam1
+# "ready": true attendu
+\end{lstlisting}
+
+\subsection{\texttt{sudo: a terminal is required} dans les logs}
+
+Les lignes visudo sont manquantes. Vérifier via \texttt{sudo visudo} que toutes les lignes
+\texttt{NOPASSWD} sont présentes (voir étape 3).
+
+Si l'erreur concerne le restart du service sentys-agent, ajouter :
+\begin{lstlisting}
+picam2 ALL=(ALL) NOPASSWD: /bin/systemctl restart sentys-agent
+\end{lstlisting}
+
+\subsection{Pipeline CI/CD — runner self-hosted}
+
+Le runner GitHub Actions doit être actif sur le serveur host avec les labels
+\texttt{self-hosted}, \texttt{linux}, \texttt{x64}.
+
+Les imports TypeScript sont sensibles à la casse sur Linux — vérifier que les imports
+correspondent exactement au nom des fichiers (différent de Windows).
+
+% ============================================================
+\section{Optimisations autonomie (batterie 18650)}
+% ============================================================
+
+\begin{lstlisting}[caption={/boot/firmware/config.txt}]
+arm_freq=800         # CPU limite a 800MHz
+#arm_boost=1         # boost CPU desactive
+dtoverlay=disable-bt # Bluetooth desactive
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+# Services inutiles a desactiver
+sudo systemctl disable avahi-daemon avahi-daemon.socket
+sudo systemctl disable serial-getty@ttyAMA0
+\end{lstlisting}
+
+\textbf{À ne jamais faire :} ne pas ajouter \texttt{gpu\_mem=16} dans
+\texttt{/boot/firmware/config.txt} — libcamera nécessite minimum 64 Mo de mémoire GPU.
+Symptôme : \texttt{camera\_create(): selected camera is not available}.
+
+\begin{longtable}{|l|l|}
+\hline
+\textbf{Optimisation} & \textbf{Gain estimé} \\
+\hline
+\endhead
+\hline
+\endfoot
+CPU 800MHz + arm\_boost off & $\sim$150 mA \\
+Bluetooth désactivé & $\sim$10 mA \\
+Stream 720p15 vs 1080p30 & $\sim$100 mA \\
+MediaMTX on-demand (pas 24/7) & $\sim$200 mA en veille \\
+\hline
+\textbf{Autonomie estimée (2000 mAh)} & \textbf{$\sim$4h streaming, >12h veille} \\
+\hline
+\end{longtable}
+
+% ============================================================
+\section{Script d'enregistrement hors ligne (\texttt{offline\_recorder.py})}
+% ============================================================
+
+Ce script est distinct de \texttt{sentys\_agent.py}. Il tourne en parallèle comme
+service systemd séparé et gère exclusivement la détection de perte de connexion,
+l'enregistrement local et la synchronisation.
+
+\subsection{Architecture}
+
+\begin{lstlisting}
+Pi Zero 2W
+ +-- MediaMTX              --> stream RTSP vers le serveur (quand connecte)
+ +-- sentys_agent.py       --> annonce, detection mouvement, wake/sleep
+ +-- offline_recorder.py   --> detecte perte connexion, enregistre, sync
+
+Serveur hote (<SERVER_IP>:4000)
+ +-- POST /api/camera-nodes/:deviceId/upload-recording
+       --> recoit les clips, cree un event "offline_recording"
+       --> genere une alerte avec le badge "HORS LIGNE"
+\end{lstlisting}
+
+\subsection{Code source (\texttt{/home/picam/offline\_recorder.py})}
+
+\begin{lstlisting}[language=python]
+#!/usr/bin/env python3
+import os, time, subprocess, glob, json
+from pathlib import Path
+from datetime import datetime
+
+try:
+    import requests
+except ImportError:
+    subprocess.run(["pip3", "install", "requests"], check=True)
+    import requests
+
+SERVER_URL = os.environ.get("SERVER_URL", "http://<SERVER_IP>:4000")
+DEVICE_ID  = os.environ.get("DEVICE_ID",  "picam")
+RECORD_DIR = Path("/home/picam/offline_recordings")
+RECORD_DIR.mkdir(exist_ok=True)
+
+CLIP_DURATION_SEC = 30
+CHECK_INTERVAL    = 10
+
+def server_reachable():
+    try:
+        r = requests.get(f"{SERVER_URL}/api/health", timeout=3)
+        return r.status_code < 500
+    except Exception:
+        return False
+
+def record_clip():
+    ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = RECORD_DIR / f"{ts}.mp4"
+    subprocess.run([
+        "libcamera-vid",
+        "-t", str(CLIP_DURATION_SEC * 1000),
+        "--codec", "h264",
+        "--width",  "1280",
+        "--height", "720",
+        "-o", str(out),
+    ], check=True, timeout=CLIP_DURATION_SEC + 10)
+    return out
+
+def upload_pending():
+    files = sorted(RECORD_DIR.glob("*.mp4"))
+    if not files:
+        return
+    print(f"[SYNC] {len(files)} fichier(s) a envoyer")
+    for f in files:
+        try:
+            detected_at = datetime.strptime(f.stem, "%Y%m%d_%H%M%S").isoformat()
+        except Exception:
+            detected_at = datetime.now().isoformat()
+        try:
+            with open(f, "rb") as video:
+                r = requests.post(
+                    f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/upload-recording",
+                    files={"recording": (f.name, video, "video/mp4")},
+                    data={"detectedAt": detected_at, "offlineRecording": "true"},
+                    timeout=120,
+                )
+            if r.status_code in (200, 201):
+                print(f"[SYNC] OK {f.name}")
+                f.unlink()
+            else:
+                print(f"[SYNC] ERR {f.name} -- HTTP {r.status_code}")
+                break
+        except Exception as e:
+            print(f"[SYNC] ERR {f.name} -- {e}")
+            break
+
+def main():
+    print(f"[OFFLINE-REC] Demarre | serveur={SERVER_URL} | device={DEVICE_ID}")
+    was_offline = False
+
+    while True:
+        if server_reachable():
+            if was_offline:
+                print("[OFFLINE-REC] Connexion retablie -- synchronisation")
+                upload_pending()
+                was_offline = False
+            time.sleep(CHECK_INTERVAL)
+        else:
+            if not was_offline:
+                print("[OFFLINE-REC] Serveur inaccessible -- passage en mode local")
+            was_offline = True
+            try:
+                out = record_clip()
+                print(f"[OFFLINE-REC] Clip enregistre : {out.name}")
+            except Exception as e:
+                print(f"[OFFLINE-REC] Erreur recording : {e}")
+                time.sleep(5)
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\subsection{Fichier de configuration}
+
+\begin{lstlisting}[language=bash]
+echo 'SERVER_URL=http://<SERVER_IP>:4000' > /home/picam/.env
+echo 'DEVICE_ID=picam' >> /home/picam/.env
+# Verifier le DEVICE_ID exact :
+grep -i device_id /home/picam/sentys_agent.py
+\end{lstlisting}
+
+\subsection{Service systemd}
+
+\begin{lstlisting}[caption={/etc/systemd/system/offline-recorder.service}]
+[Unit]
+Description=Offline Camera Recorder
+After=network.target
+
+[Service]
+User=picam
+WorkingDirectory=/home/picam
+EnvironmentFile=/home/picam/.env
+ExecStart=/usr/bin/python3 /home/picam/offline_recorder.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+sudo systemctl daemon-reload
+sudo systemctl enable offline-recorder
+sudo systemctl start offline-recorder
+
+# Verifier les logs
+journalctl -u offline-recorder -f
+\end{lstlisting}
+
+Sortie attendue au démarrage :
+\begin{lstlisting}
+[OFFLINE-REC] Demarre | serveur=http://<SERVER_IP>:4000 | device=picam
+\end{lstlisting}
+
+Sortie lors d'une déconnexion :
+\begin{lstlisting}
+[OFFLINE-REC] Serveur inaccessible -- passage en mode local
+[OFFLINE-REC] Clip enregistre : 20240501_143022.mp4
+\end{lstlisting}
+
+Sortie lors de la reconnexion :
+\begin{lstlisting}
+[OFFLINE-REC] Connexion retablie -- synchronisation
+[SYNC] 3 fichier(s) a envoyer
+[SYNC] OK 20240501_143022.mp4
+[SYNC] OK 20240501_143052.mp4
+[SYNC] OK 20240501_143122.mp4
+\end{lstlisting}
+
+\subsection{Fichiers serveur concernés}
+
+\begin{longtable}{|l|p{9cm}|}
+\hline
+\textbf{Fichier} & \textbf{Modification} \\
+\hline
+\endhead
+\hline
+\endfoot
+\texttt{server/src/routes/cameraNodes.js} & Endpoint \texttt{POST /:deviceId/upload-recording} avec Multer \\
+\texttt{server/src/db/index.js} & Colonnes \texttt{offline\_recording} et \texttt{recording\_path} sur \texttt{camera\_node\_motion\_events} \\
+\texttt{client/src/components/CameraFeed.tsx} & Badge ``HORS LIGNE'' dans l'historique mouvement \\
+\texttt{client/src/App.css} & Style du badge et bordure orange sur les events hors ligne \\
+\hline
+\end{longtable}
+
+Les clips uploadés sont stockés dans \texttt{recordings/offline/} sur le serveur.
+
+\subsection{Dépannage offline recorder}
+
+\begin{lstlisting}[language=bash]
+# libcamera-vid absent
+sudo apt install libcamera-apps
+
+# module requests absent
+pip3 install requests
+
+# Verifier les clips en attente sur le Pi
+ls -lh /home/picam/offline_recordings/
+
+# Forcer une synchronisation manuelle
+SERVER_URL=http://<SERVER_IP>:4000 DEVICE_ID=picam \
+  python3 /home/picam/offline_recorder.py
+
+# Tester l'endpoint depuis le serveur
+curl -F "recording=@test.mp4" \
+     -F "detectedAt=2024-05-01T14:30:00" \
+     http://localhost:4000/api/camera-nodes/picam/upload-recording
+\end{lstlisting}
+
+% ============================================================
+\section{Maintenance de la base de données}
+% ============================================================
+
+\begin{lstlisting}[language=bash]
+# Sauvegarde
+pg_dump sentys > backup_$(date +%Y%m%d).sql
+
+# Connexion directe
+psql -U postgres -d sentys
+\end{lstlisting}
+
+Purge automatique des découvertes réseau :
+\begin{lstlisting}[language=javascript]
+scheduleDiscoveryCleanup(10, 5 * 60 * 1000)
+// TTL: 10 min -- verifie toutes les 5 min
+\end{lstlisting}
+
+Les enregistrements vidéo sont purgés automatiquement selon la durée de rétention configurée
+(défaut : 30 jours, paramètre \texttt{RECORDINGS\_RETENTION\_DAYS}). Les fichiers MP4 sont
+supprimés du disque et les entrées \texttt{camera\_node\_motion\_events} correspondantes
+sont nettoyées.
+
+\end{document}

@@ -22,6 +22,8 @@
 \usepackage{tabularx}
 \usepackage{makecell}
 \usepackage{colortbl}  % pour \rowcolor
+\newcommand{\rref}[1]{\textsuperscript{\normalfont[#1]}}
+
 
 % ── Liens ─────────────────────────────────────────────────
 \hypersetup{
@@ -44,7 +46,7 @@
 % ── En-tête / pied de page ────────────────────────────────
 \pagestyle{fancy}
 \fancyhf{}
-\rhead{HE202204 EPHEC}
+\rhead{Mertens Théo EPHEC}
 \lhead{Sentys}
 \cfoot{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -86,13 +88,11 @@
 \newpage
 \thispagestyle{empty}
 
-% ── Table des matières ────────────────────────────────────
-\tableofcontents
-
 \newpage
 
 % ==========================================================
-\section{Remerciements}
+\section*{Remerciements}
+\addcontentsline{toc}{section}{Remerciements}
 % ==========================================================
 
 Je tiens en premier lieu à remercier ma famille pour son soutien constant et ses précieux conseils tout au long de ces années d'études.
@@ -104,8 +104,37 @@ sa disponibilité et les orientations et remarques qu'il m'a apportées lors de 
 
 Je souhaite enfin exprimer ma gratitude à l'ensemble du corps professoral de l'EPHEC Louvain-la-Neuve, dont l'enseignement m'a fourni les fondements techniques et méthodologiques nécessaires à la réalisation de ce projet.
 
+\newpage
+% ── Table des matières ────────────────────────────────────
+\tableofcontents
+
 
 \newpage
+% ==========================================================
+\section*{Déclaration sur l'usage de l'intelligence artificielle}
+\addcontentsline{toc}{section}{Déclaration sur l'usage de l'intelligence artificielle}
+% ==========================================================
+
+Par souci de transparence, je précise ici comment j'ai utilisé les outils d'intelligence artificielle générative dans la préparation des livrables associés à ce TFE.
+
+\paragraph{Les outils utilisés}
+Je me suis appuyé sur plusieurs outils, chacun pour un usage distinct :
+\begin{itemize}[label=\textbullet]
+    \item \textbf{Claude Code (ligne de commande) :} assistance au développement du système SENTYS --- débogage, révision de code, cohérence architecturale.
+    \item \textbf{Claude (application de bureau) :} partenaire de réflexion sur les choix techniques et méthodologiques, et accompagnement lors de la rédaction de ce rapport (mise en forme \LaTeX{}, reformulation, structuration).
+    \item \textbf{ChatGPT (OpenAI) :} consultation ponctuelle pour des questions techniques ou des doutes lors du développement.
+    \item \textbf{Gemini (Google) :} recherches d'informations complémentaires et vérification de concepts.
+\end{itemize}
+
+
+\paragraph{Comment je m'en suis servi}
+Je ne suis jamais parti d'une page blanche confiée à une IA. La base de travail était toujours personnelle : mes notes, mes décisions techniques déjà prises, les échanges avec mon rapporteur. L'IA est intervenue ensuite pour regrouper cette matière, la reformuler ou la corriger, dans l'objectif d'arriver à un résultat plus soigné et plus cohérent.
+
+\paragraph{Validation et responsabilité}
+Tout ce qu'un outil d'IA a produit --- du code intégré au système comme des paragraphes de ce rapport --- est passé par ma relecture et a été validé par moi avant d'être conservé. Je reste le seul responsable du contenu livré. Les analyses, les choix techniques et les positions exprimées dans ce document viennent de mon propre travail et de ma propre réflexion.
+
+\newpage
+
 
 % ==========================================================
 \section{Introduction}
@@ -147,7 +176,9 @@ Ce rapport est structuré en neuf sections. Après la présentation du cahier de
 
 \subsection{Approche de travail}
 
-Le projet a été conduit selon une approche itérative, organisée en grandes phases successives. Chaque phase a donné lieu à un livrable intermédiaire discuté avec le promoteur, permettant de valider les choix effectués avant de passer à l'étape suivante. Cette méthode a permis de détecter tôt les écarts entre les besoins exprimés et la solution en cours de construction, notamment lors de la transition matérielle vers une architecture distribuée de nœuds sous Linux.
+Le projet SENTYS n'est pas le premier sujet de TFE envisagé. Un premier projet, portant sur un gestionnaire de tournois de football, avait été initié en début d'année. Ce sujet a été abandonné en cours de route, principalement par manque de motivation : le périmètre fonctionnel apparaissait insuffisamment conséquent pour constituer un TFE de Bachelier à part entière. Le passage au projet SENTYS, décidé mi-février 2026 lors de la première rencontre avec le client, a permis de repartir sur une problématique technique nettement plus ambitieuse, ancrée dans un besoin réel.
+
+Le projet a ensuite été conduit selon une approche itérative, organisée en grandes phases successives. Chaque phase a donné lieu à un livrable intermédiaire discuté avec le promoteur, permettant de valider les choix effectués avant de passer à l'étape suivante. Cette méthode a permis de détecter tôt les écarts entre les besoins exprimés et la solution en cours de construction, notamment lors de la transition matérielle vers une architecture distribuée de nœuds sous Linux.
 
 \subsection{Calendrier de travail}
 
@@ -159,19 +190,17 @@ Le projet a été conduit selon une approche itérative, organisée en grandes p
 \hline
 \textbf{Période} & \textbf{Phase} & \textbf{Activités principales} \\
 \hline
-Septembre -- Octobre 2025 & Cadrage & Définition des besoins avec le client, rédaction du cahier des charges, premiers choix technologiques \\
+Mi-février 2026 & Cadrage & Première rencontre client, définition des besoins, contraintes et périmètre du projet \\
 \hline
-Octobre -- Novembre 2025 & Analyse & Architecture système, modélisation de la base de données, comparaison des solutions matérielles et logicielles \\
+Fin février -- Mars 2026 & Analyse \& Architecture & Architecture système, modélisation de la base de données, comparaison des solutions \\
 \hline
-Novembre -- Décembre 2025 & Développement (Phase 1) & Mise en place du serveur central, authentification JWT, pipeline de streaming vidéo, dashboard \\
+Mars -- Avril 2026 & Développement & Serveur central, authentification, streaming, dashboard, nœud Pi, mode hors ligne, boîtier, PWA, CI/CD \\
 \hline
-Janvier 2026 & Développement (Phase 2) & Agent nœud caméra, mode hors ligne, synchronisation des clips, notifications push \\
+Mai 2026 & Tests et validation & Tests de résilience (coupures WiFi/secteur), tests de sécurité, déploiement chez le client \\
 \hline
-Février 2026 & Développement (Phase 3) & Boîtier de contrôle physique, PWA, CI/CD, accès distant sécurisé \\
+Mai 2026 & Rédaction & Finalisation du rapport TFE, corrections suite aux relectures \\
 \hline
-Mars 2026 & Tests et validation & Tests de résilience (coupures WiFi/secteur), tests de sécurité, déploiement chez le client \\
-\hline
-Avril -- Mai 2026 & Rédaction & Finalisation du rapport TFE, corrections suite aux relectures \\
+1\textsuperscript{er} juin 2026 & \textbf{Remise} & Dépôt du rapport et du code source \\
 \hline
 \end{tabular}
 \caption{Calendrier de réalisation du projet SENTYS}
@@ -179,10 +208,10 @@ Avril -- Mai 2026 & Rédaction & Finalisation du rapport TFE, corrections suite 
 
 \subsection{Échanges avec le client}
 
-Le suivi du projet a été assuré par des échanges réguliers avec le client tout au long de l'année académique :
+Le suivi du projet a été assuré par des échanges réguliers avec le client sur la durée du TFE :
 
 \begin{itemize}[label=\textbullet]
-    \item \textbf{Réunion de cadrage (février 2025) :} première rencontre formelle pour identifier les besoins, les contraintes (zone semi-isolée, instabilité réseau, refus du cloud) et définir le périmètre du projet.
+    \item \textbf{Réunion de cadrage (mi-février 2026) :} première rencontre formelle pour identifier les besoins, les contraintes (zone semi-isolée, instabilité réseau, refus du cloud) et définir le périmètre du projet.
     \item \textbf{Points d'avancement mensuels :} présentation des développements en cours, recueil du feedback sur l'interface et les fonctionnalités, ajustement des priorités.
     \item \textbf{Validation du dashboard (Mi Avril 2026) :} démonstration en direct de l'interface web et du flux vidéo en temps réel. Le client a validé l'ergonomie générale et demandé l'ajout du boîtier de contrôle physique comme point d'entrée principal.
     \item \textbf{Déploiement de test (Fin avril 2026) :} installation du système complet sur site pendant plusieurs jours pour valider le comportement en conditions réelles (coupures réseau, autonomie batterie, qualité vidéo). Les résultats sont détaillés en section~\ref{sec:validation-terrain}.
@@ -273,26 +302,26 @@ Le tableau suivant présente une comparaison objective entre les leaders du marc
 \centering
 \small
 \renewcommand{\arraystretch}{1.3}
-\begin{tabular}{|l|p{3.8cm}|p{3.8cm}|}
+\begin{tabular}{|l|p{2.8cm}|p{2.8cm}|p{3.8cm}|}
 \hline
-\textbf{Critère} & \textbf{Solutions Cloud (Ring, Nest)} & \textbf{Solution Proposée} \\
+\textbf{Critère} & \textbf{Solutions Cloud (Ring, Nest)} & \textbf{TP-Link Tapo} & \textbf{Solution Proposée} \\
 \hline
-\textbf{Dépendance Internet} & Totale --- inopérant sans connexion & Nulle --- fonctionnement local complet \\
+\textbf{Dépendance Internet} & Totale --- inopérant sans connexion & Partielle --- fonctions réduites hors ligne & Nulle --- fonctionnement local complet \\
 \hline
-\textbf{Coût récurrent} & Ring Protect : \textasciitilde 3--10 €/mois ; Nest Aware : \textasciitilde 6--12 €/mois & \textbf{0 € / mois} \\
+\textbf{Coût récurrent} & Ring Protect : \textasciitilde 3--10 €/mois ; Nest Aware : \textasciitilde 6--12 €/mois & Gratuit (stockage SD) ou Tapo Care : \textasciitilde 3 €/mois & \textbf{0 € / mois} \\
 \hline
-\textbf{Souveraineté des données} & Flux et clips stockés sur serveurs Amazon AWS ou Google Cloud & \textbf{Stockage 100\% local}, aucun transit externe \\
+\textbf{Souveraineté des données} & Flux et clips stockés sur serveurs Amazon AWS ou Google Cloud & Serveurs TP-Link (Singapour / UE selon région) & \textbf{Stockage 100\% local}, aucun transit externe \\
 \hline
-\textbf{Complexité UX} & Applications mobiles imposant la création d'un compte en ligne, mises à jour imposées, notifications gérées par la plateforme & Interface physique centralisée, un seul point d'accès, pas de compte tiers requis \\
+\textbf{Complexité UX} & Applications mobiles imposant la création d'un compte en ligne & Application Tapo, compte obligatoire, alertes cloud & Interface physique centralisée, un seul point d'accès, pas de compte tiers requis \\
 \hline
-\textbf{Centralisation} & Plusieurs applications distinctes selon les marques de capteurs & \textbf{Interface unique} regroupant caméras, capteurs et alertes \\
+\textbf{Centralisation} & Plusieurs applications distinctes selon les marques de capteurs & Application unique Tapo, mais limitée à l'écosystème TP-Link & \textbf{Interface unique} regroupant caméras, infomartions systemes et alertes \\
 \hline
-\textbf{Résilience électrique} & Dépend du matériel du fabricant (souvent non fourni) & Alimentation sur batterie intégrée aux nœuds caméras \\
+\textbf{Résilience électrique} & Dépend du matériel du fabricant (souvent non fourni) & Non fourni & Alimentation sur batterie intégrée aux nœuds caméras \\
 \hline
-\textbf{Personnalisation} & Paramétrage limité aux options du fabricant & Entièrement configurable (seuils d'alerte, durée de rétention, rôles) \\
+\textbf{Personnalisation} & Paramétrage limité aux options du fabricant & Paramétrage limité (zones de détection, plannings) & Entièrement configurable (seuils d'alerte, durée de rétention, rôles) \\
 \hline
 \end{tabular}
-\caption{Comparatif entre les solutions cloud du marché et le projet SENTYS}
+\caption{Comparatif entre les solutions du marché et le projet SENTYS}
 \end{table}
 
 \subsection{Justification du Choix d'une Solution Interne}
@@ -332,26 +361,28 @@ Les user stories sont organisées en 4 epics fonctionnels et classées par prior
 \subsubsection{Epic 1 --- Nœud de Capture Autonome}
 % Anciennement : "Agent Pi Zero 2W" — renommé pour rester technologie-agnostique à ce stade.
 
-\begin{longtable}{|c|p{4cm}|p{7cm}|c|}
+\begin{longtable}{|c|p{3.8cm}|p{6.3cm}|c|c|}
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endfirsthead
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endhead
-US-01 & En tant que \textbf{système}, le nœud de capture doit basculer en enregistrement local lorsque le serveur est inaccessible. & Bascule en moins de 5s, clips de 30s enregistrés localement, reconnexion tentée toutes les 30s & \textbf{P1} \\
+US-01 & En tant que \textbf{propriétaire}, je veux que le nœud de capture bascule en enregistrement local lorsque le serveur est inaccessible. & Bascule en moins de 5s, clips de 30s enregistrés localement, reconnexion tentée toutes les 30s & \textbf{P1} & L \\
 \hline
-US-02 & En tant que \textbf{système}, le nœud de capture doit s'annoncer automatiquement au serveur. & Annonce périodique avec IP, URL de flux et identifiant unique, visible dans l'interface d'administration & \textbf{P1} \\
+US-02 & En tant que \textbf{propriétaire}, je veux que le nœud de capture s'annonce automatiquement au serveur. & Annonce périodique avec IP, URL de flux et identifiant unique, visible dans l'interface d'administration & \textbf{P1} & M \\
 \hline
-US-03 & En tant que \textbf{système}, le stockage local hors ligne doit être limité par rotation automatique. & Suppression automatique des clips les plus anciens si stockage $>$ 500 Mo ; clips $<$ 50 Ko ignorés & \textbf{P1} \\
+US-03 & En tant que \textbf{propriétaire}, je veux que le stockage local hors ligne soit limité par rotation automatique. & Suppression automatique des clips les plus anciens si stockage $>$ 500 Mo ; clips $<$ 50 Ko ignorés & \textbf{P1} & M \\
 \hline
-US-05 & En tant que \textbf{propriétaire}, je veux que les clips enregistrés hors ligne soient automatiquement transférés au serveur dès le retour du réseau. & Upload automatique, clips supprimés localement après confirmation, badge HORS LIGNE visible dans l'historique & \textbf{P1} \\
+US-04 & En tant que \textbf{propriétaire}, je veux que le nœud détecte les mouvements et notifie le serveur. & Signal envoyé au serveur dans les 2s, horodatage enregistré, déclenchement de l'enregistrement local & \textbf{P1} & M \\
 \hline
-US-06 & En tant que \textbf{système}, le nœud doit continuer à fonctionner en cas de coupure électrique. & Autonomie sur batterie d'au moins 8h, bascule transparente sans redémarrage & \textbf{P1} \\
+US-05 & En tant que \textbf{propriétaire}, je veux que les clips enregistrés hors ligne soient automatiquement transférés au serveur dès le retour du réseau. & Upload automatique, clips supprimés localement après confirmation, badge HORS LIGNE visible dans l'historique & \textbf{P1} & L \\
 \hline
-US-07 & En tant que \textbf{propriétaire}, je veux que les nœuds se mettent à jour automatiquement sans intervention manuelle. & Vérification toutes les 5 min, redémarrage automatique si une nouvelle version est détectée & \textbf{P2} \\
+US-06 & En tant que \textbf{propriétaire}, je veux que le nœud continue à fonctionner en cas de coupure électrique. & Autonomie sur batterie d'au moins 8h, bascule transparente sans redémarrage & \textbf{P1} & S \\
+\hline
+US-07 & En tant que \textbf{propriétaire}, je veux que les nœuds se mettent à jour automatiquement sans intervention manuelle. & Vérification toutes les 5 min, redémarrage automatique si une nouvelle version est détectée & \textbf{P2} & M \\
 \hline
 \caption{Epic 1 --- Nœud de Capture Autonome}
 \end{longtable}
@@ -359,24 +390,24 @@ US-07 & En tant que \textbf{propriétaire}, je veux que les nœuds se mettent à
 \subsubsection{Epic 2 --- Serveur Central}
 % Anciennement : "Serveur Node.js" — renommé pour rester technologie-agnostique.
 
-\begin{longtable}{|c|p{4cm}|p{7cm}|c|}
+\begin{longtable}{|c|p{3.8cm}|p{6.3cm}|c|c|}
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endfirsthead
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endhead
-US-08 & En tant que \textbf{utilisateur}, je veux que le serveur reçoive et relaie les flux vidéo de chaque caméra. & Flux accessible depuis le dashboard, reconnexion auto si la caméra se déconnecte & \textbf{P1} \\
+US-08 & En tant que \textbf{utilisateur}, je veux que le serveur reçoive et relaie les flux vidéo de chaque caméra. & Flux accessible depuis le dashboard, reconnexion auto si la caméra se déconnecte & \textbf{P1} & M \\
 \hline
-US-09 & En tant que \textbf{propriétaire}, je veux que le serveur reçoive et stocke les fichiers vidéo envoyés après une coupure. & Fichier + métadonnées acceptés et enregistrés, visibles dans l'historique & \textbf{P1} \\
+US-09 & En tant que \textbf{propriétaire}, je veux que le serveur reçoive et stocke les fichiers vidéo envoyés après une coupure. & Fichier + métadonnées acceptés et enregistrés, visibles dans l'historique & \textbf{P1} & M \\
 \hline
-US-10 & En tant que \textbf{système}, le serveur doit enregistrer les flux caméra en continu. & Segments vidéo horodatés, redémarrage automatique de l'enregistrement si le flux est interrompu & \textbf{P1} \\
+US-10 & En tant que \textbf{propriétaire}, je veux que le serveur enregistre les flux caméra en continu. & Segments vidéo horodatés, redémarrage automatique de l'enregistrement si le flux est interrompu & \textbf{P1} & L \\
 \hline
-US-11 & En tant que \textbf{propriétaire}, je veux être averti automatiquement si une caméra passe hors ligne ou si la batterie est faible. & Alerte envoyée si caméra offline ou batterie $<$ 15\%, notification push reçue en temps réel & \textbf{P1} \\
+US-11 & En tant que \textbf{propriétaire}, je veux être averti automatiquement si une caméra passe hors ligne ou si la batterie est faible. & Alerte envoyée si caméra offline ou batterie $<$ 15\%, notification push reçue en temps réel & \textbf{P1} & M \\
 \hline
-US-12 & En tant que \textbf{propriétaire}, je veux que le serveur redémarre automatiquement en cas de crash. & Redémarrage en moins de 30s sans intervention manuelle & \textbf{P2} \\
+US-12 & En tant que \textbf{propriétaire}, je veux que le serveur redémarre automatiquement en cas de crash. & Redémarrage en moins de 30s sans intervention manuelle & \textbf{P2} & S \\
 \hline
 \caption{Epic 2 --- Serveur Central}
 \end{longtable}
@@ -384,53 +415,53 @@ US-12 & En tant que \textbf{propriétaire}, je veux que le serveur redémarre au
 \subsubsection{Epic 3 --- Interface Utilisateur}
 % Anciennement : "Dashboard React" — renommé pour rester technologie-agnostique.
 
-\begin{longtable}{|c|p{4cm}|p{7cm}|c|}
+\begin{longtable}{|c|p{3.8cm}|p{6.3cm}|c|c|}
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endfirsthead
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endhead
-US-13 & En tant qu'\textbf{utilisateur}, je veux m'authentifier de manière sécurisée. & Connexion par identifiant/mot de passe, session expirante, verrouillage après plusieurs échecs & \textbf{P1} \\
+US-13 & En tant qu'\textbf{utilisateur}, je veux m'authentifier de manière sécurisée. & Connexion par identifiant/mot de passe, session expirante, verrouillage après plusieurs échecs & \textbf{P1} & M \\
 \hline
-US-14 & En tant qu'\textbf{utilisateur}, je veux visualiser les flux vidéo en direct dans une grille. & Grille adaptative, badge HORS LIGNE si caméra offline, indicateur d'enregistrement actif visible & \textbf{P1} \\
+US-14 & En tant qu'\textbf{utilisateur}, je veux visualiser les flux vidéo en direct dans une grille. & Grille adaptative, badge HORS LIGNE si caméra offline, indicateur d'enregistrement actif visible & \textbf{P1} & L \\
 \hline
-US-16 & En tant qu'\textbf{utilisateur}, je veux recevoir des notifications push sur mon téléphone. & Abonnement sauvegardé, notification reçue même lorsque le dashboard n'est pas ouvert & \textbf{P1} \\
+US-15 & En tant que \textbf{propriétaire}, je veux accéder aux clips vidéo enregistrés. & Clips listés par caméra et par date, téléchargement possible, clips hors ligne identifiés & \textbf{P1} & M \\
 \hline
-US-17 & En tant qu'\textbf{utilisateur}, je veux que l'interface reste consultable même sans réseau. & Assets mis en cache, données déjà chargées consultables hors ligne, bandeau MODE OFFLINE visible & \textbf{P1} \\
+US-16 & En tant qu'\textbf{utilisateur}, je veux recevoir des notifications push sur mon téléphone. & Abonnement sauvegardé, notification reçue même lorsque le dashboard n'est pas ouvert & \textbf{P1} & M \\
 \hline
-US-18 & En tant que \textbf{propriétaire}, je veux consulter l'historique des événements. & Historique filtrable par date et criticité, clips hors ligne identifiés & \textbf{P1} \\
+US-17 & En tant qu'\textbf{utilisateur}, je veux que l'interface reste consultable même sans réseau. & Assets mis en cache, données déjà chargées consultables hors ligne, bandeau MODE OFFLINE visible & \textbf{P1} & M \\
 \hline
-US-19 & En tant que \textbf{propriétaire}, je veux gérer les comptes utilisateurs depuis le dashboard. & Ajout, modification de rôle, suppression avec confirmation, données conformes RGPD & \textbf{P2} \\
+US-18 & En tant que \textbf{propriétaire}, je veux consulter l'historique des événements. & Historique filtrable par date et criticité, clips hors ligne identifiés & \textbf{P1} & M \\
+\hline
+US-19 & En tant que \textbf{propriétaire}, je veux gérer les comptes utilisateurs depuis le dashboard. & Ajout, modification de rôle, suppression avec confirmation, données conformes RGPD & \textbf{P2} & S \\
 \hline
 \caption{Epic 3 --- Interface Utilisateur}
 \end{longtable}
 
 \subsubsection{Epic 4 --- Boîtier de Contrôle Physique}
 
-\begin{longtable}{|c|p{4cm}|p{7cm}|c|}
+\begin{longtable}{|c|p{3.8cm}|p{6.3cm}|c|c|}
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endfirsthead
 \hline
-\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} \\
+\textbf{ID} & \textbf{User Story} & \textbf{Critères d'acceptance} & \textbf{Prio} & \textbf{Complexité} \\
 \hline
 \endhead
-US-20 & En tant que \textbf{propriétaire}, je veux accéder au panneau de contrôle physique via un code PIN. & Blocage après 3 tentatives incorrectes, verrouillage automatique après 5 minutes d'inactivité & \textbf{P1} \\
+US-20 & En tant que \textbf{propriétaire}, je veux accéder au panneau de contrôle physique via un code PIN. & Blocage après 3 tentatives incorrectes, verrouillage automatique après 5 minutes d'inactivité & \textbf{P1} & S \\
 \hline
-US-21 & En tant que \textbf{propriétaire}, je veux activer ou désactiver le mode surveillance en un clic. & Toggle ON/OFF, état synchronisé avec le serveur en temps réel & \textbf{P1} \\
+US-21 & En tant que \textbf{propriétaire}, je veux activer ou désactiver le mode surveillance en un clic. & Toggle ON/OFF, état synchronisé avec le serveur en temps réel & \textbf{P1} & S \\
 \hline
-US-22 & En tant que \textbf{propriétaire}, je veux voir les alertes critiques en temps réel avec possibilité de confirmation. & Badge de comptage, mise à jour instantanée, bouton d'acquittement & \textbf{P1} \\
+US-22 & En tant que \textbf{propriétaire}, je veux voir les alertes critiques en temps réel avec possibilité de confirmation. & Badge de comptage, mise à jour instantanée, bouton d'acquittement & \textbf{P1} & S \\
 \hline
 \caption{Epic 4 --- Boîtier de Contrôle Physique}
 \end{longtable}
-
 \subsection{Définition du MVP (Minimum Viable Product)}
 % CORRECTION : le MVP doit référencer explicitement les US qui le composent.
-% L'authentification (anciennement hors US) est maintenant couverte par US-13.
 
 Le MVP du projet SENTYS a été défini en accord avec le client lors de la réunion de janvier 2026. Il regroupe les user stories suivantes, considérées comme indispensables à un premier déploiement opérationnel :
 
@@ -586,6 +617,9 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 
 \textbf{Justification :} React avec TypeScript a été retenu pour son écosystème mature autour de la gestion vidéo (\texttt{hls.js}), son intégration Vite + PWA clé en main, et la maîtrise préalable du framework, facteur déterminant dans le contexte d'un TFE à réaliser en une année.
 
+\textbf{Limites identifiées :} l'écosystème React évolue rapidement, ce qui implique des mises à jour régulières des dépendances (breaking changes entre versions majeures). hls.js ne supporte pas nativement le DRM, ce qui ne pose pas de problème dans ce contexte 100\% local.
+
+
 \subsubsection{Backend}
 % CORRECTION : idem, Node.js sans candidats comparés.
 
@@ -615,6 +649,9 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 \caption{Comparaison des environnements backend candidats}
 \end{table}
 
+\textbf{Limites identifiées :} Node.js n'est pas adapté aux tâches CPU-intensives (transcodage vidéo). C'est pourquoi FFmpeg est délégué en processus enfant plutôt qu'intégré dans la boucle événementielle.
+
+
 \subsubsection{Base de données}
 % CORRECTION : PostgreSQL sans candidats comparés.
 
@@ -643,6 +680,9 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 \end{table}
 
 \textbf{Justification :} SQLite a été écarté en raison de risques de corruption lors de coupures électriques (verrous au niveau fichier), incompatibles avec les exigences de fiabilité d'un système de sécurité. PostgreSQL a été préféré à MySQL pour son support natif du JSONB, permettant de stocker les métadonnées variables des événements IoT sans modifier le schéma.
+
+\textbf{Limites identifiées :} PostgreSQL requiert un dimensionnement mémoire approprié (\texttt{shared\_buffers}, \texttt{work\_mem}) pour des charges élevées. Dans le contexte actuel (moins de 10 caméras, faible volume transactionnel), la configuration par défaut est suffisante.
+
 
 \subsubsection{Streaming vidéo}
 
@@ -697,7 +737,7 @@ Le système s'articule en trois couches : la capture distribuée, le serveur de 
 % du serveur, du boîtier de contrôle, des appareils clients et des liaisons réseau.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\textwidth]{img/architecture_sentys.png}
+    \includegraphics[width=0.95\textwidth]{img/flux.png}
     \caption{Architecture globale du système SENTYS --- liaisons réseau, nœuds caméras, serveur et interfaces}
     \label{fig:architecture}
 \end{figure}
@@ -705,6 +745,7 @@ Le système s'articule en trois couches : la capture distribuée, le serveur de 
 \begin{table}[H]
 \centering
 \small
+\renewcommand{\arraystretch}{1.6}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{|l|l|l|l|}
 \hline
@@ -746,29 +787,43 @@ Le modèle de données a été optimisé pour PostgreSQL. Les tables sont créé
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{img/DBSurveillance.png}
-    \caption{Schéma entité-association de la base de données SENTYS}
+    \caption{Schéma entité-association de la base de données SENTYS, modélisé avec dbdiagram.io
+    (\url{https://dbdiagram.io/home})}
     \label{fig:db-schema}
 \end{figure}
 
+
 \begin{description}[leftmargin=2.5cm, style=nextline]
     \item[\texttt{users}]
-    Comptes permettant l'accès au tableau de bord. Champs : \texttt{id}, \texttt{username} (unique), \texttt{password\_hash} (bcrypt), \texttt{role} (admin/user), \texttt{created\_at}. Conformément au RGPD, un utilisateur peut demander la suppression ou l'anonymisation de son compte via l'interface d'administration (US-19).
+    Comptes permettant l'accès au tableau de bord. Champs : \texttt{id}, \texttt{username} (unique), \texttt{password} (hash bcrypt), \texttt{role} (admin/user), \texttt{created\_at}. Conformément au RGPD, un utilisateur peut demander la suppression ou l'anonymisation de son compte via l'interface d'administration (US-19).
 
     \item[\texttt{cameras}]
-    Caméras configurées dans le système. Champs : \texttt{id}, \texttt{name}, \texttt{rtsp\_url}, \texttt{location}, \texttt{status}, \texttt{recording}, \texttt{node\_device\_id} (FK \texttt{camera\_nodes}), \texttt{started\_at}, \texttt{created\_at}.
+    Caméras fixes configurées dans le système. Champs : \texttt{id}, \texttt{name}, \texttt{rtsp\_url}, \texttt{location}, \texttt{active} (booléen), \texttt{created\_at}.
 
     \item[\texttt{camera\_nodes}]
-    Parc de nœuds Pi Zero 2W s'annonçant toutes les 30 secondes. Champs : \texttt{id}, \texttt{device\_id} (unique), \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{motion\_detected}, \texttt{last\_motion\_at}, \texttt{last\_seen\_at}, \texttt{created\_at}.
+    Parc de nœuds Pi Zero 2W validés et actifs dans le système. Champs : \texttt{id}, \texttt{device\_id} (unique), \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{motion\_detected}, \texttt{last\_motion\_at}, \texttt{last\_seen\_at}, \texttt{created\_at}.
 
     \item[\texttt{camera\_node\_motion\_events}]
-    Événements de mouvement détectés par les nœuds caméras. Champs : \texttt{id}, \texttt{camera\_node\_id} (FK \texttt{camera\_nodes}), \texttt{motion}, \texttt{offline\_recording} (booléen), \texttt{recording\_path}, \texttt{detected\_at}, \texttt{created\_at}.
+    Événements de mouvement détectés par les nœuds caméras. Champs : \texttt{id}, \texttt{device\_id} (FK \texttt{camera\_nodes.device\_id}), \texttt{motion}, \texttt{offline\_recording} (booléen), \texttt{recording\_path}, \texttt{detected\_at}, \texttt{created\_at}.
 
     \item[\texttt{alerts}]
-    Historique des événements de sécurité avec déduplication. Niveaux : \texttt{info}, \texttt{warning}, \texttt{critical}. Champs : \texttt{id}, \texttt{source\_type}, \texttt{source\_id}, \texttt{camera\_id} (FK \texttt{cameras}), \texttt{alert\_type}, \texttt{level}, \texttt{title}, \texttt{message}, \texttt{metadata} (JSONB), \texttt{status}, \texttt{acknowledged\_by} (FK \texttt{users}), \texttt{acknowledged\_at}, \texttt{created\_at}.
+    Historique des événements de sécurité avec déduplication. Niveaux : \texttt{info}, \texttt{warning}, \texttt{critical}. Champs : \texttt{id}, \texttt{source\_type}, \texttt{source\_id}, \texttt{camera\_id} (FK \texttt{cameras}), \texttt{alert\_type}, \texttt{level}, \texttt{title}, \texttt{message}, \texttt{metadata} (JSONB), \texttt{dedupe\_key}, \texttt{status}, \texttt{acknowledged\_by} (FK \texttt{users}), \texttt{acknowledged\_at}, \texttt{created\_at}.
+
+    \item[\texttt{audit\_logs}]
+    Journal immuable des actions sensibles. Champs : \texttt{id}, \texttt{username} (texte brut, pas de FK — intentionnel pour préserver l'historique après suppression d'un compte), \texttt{action}, \texttt{details}, \texttt{ip\_address}, \texttt{created\_at}.
+
+    \item[\texttt{push\_subscriptions}]
+    Abonnements Web Push des utilisateurs pour les notifications. Champs : \texttt{id}, \texttt{endpoint} (URL unique de l'abonnement), \texttt{p256dh} (clé publique du client), \texttt{auth} (secret d'authentification), \texttt{user\_id} (FK \texttt{users}), \texttt{created\_at}. Chaque abonnement correspond à un navigateur sur un appareil.
+
+    \item[\texttt{camera\_discoveries}]
+    Nœuds caméras détectés sur le réseau mais pas encore validés dans \texttt{camera\_nodes}. Champs : \texttt{id}, \texttt{device\_id}, \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{last\_seen\_at}, \texttt{created\_at}. Permet à l'administrateur de valider manuellement un nœud avant qu'il soit intégré au système actif.
+
+    \item[\texttt{app\_settings}]
+    Singleton de configuration globale de l'application (une seule ligne, contrainte \texttt{CHECK (id = 1)}). Regroupe les paramètres d'interface (thème, densité, format d'heure), les seuils d'alerte (temps de reconnexion caméra, intervalle de découverte), les options de notification (alertes temps réel, résumé quotidien, son), le mode surveillance, et les paramètres du boîtier kiosque (PIN, utilisateur admin par défaut).
 \end{description}
 
 \paragraph{Relations et contraintes}
-Le schéma garantit l'intégrité des données via des clés étrangères entre \texttt{alerts} et \texttt{cameras}, entre \texttt{alerts} et \texttt{users} (acquittement), et entre \texttt{camera\_node\_motion\_events} et \texttt{camera\_nodes}.
+Le schéma garantit l'intégrité des données via des clés étrangères entre \texttt{alerts} et \texttt{cameras}, entre \texttt{alerts} et \texttt{users} (acquittement), entre \texttt{camera\_node\_motion\_events} et \texttt{camera\_nodes}, et entre \texttt{push\_subscriptions} et \texttt{users}. La table \texttt{audit\_logs} ne référence intentionnellement aucune entité par clé étrangère afin de garantir la permanence des traces même après suppression d'un utilisateur. La table \texttt{app\_settings} est protégée par une contrainte \texttt{CHECK (id = 1)} garantissant l'unicité de la configuration.
 
 \subsection{RGPD et Protection des Données}
 
@@ -834,13 +889,13 @@ Un workflow GitHub Actions exécute automatiquement à chaque push :
 \hline
 \textbf{Niveau} & \textbf{Outils} & \textbf{Périmètre} \\
 \hline
-Tests API & Postman & Contrats d'interface REST : auth, caméras, capteurs, utilisateurs. \\
+Tests API & Postman & Contrats d'interface REST : auth, caméras, capteurs, utilisateurs (voir annexe~\ref{annexe:tests-api}). \\
 \hline
 Tests d'intégration & Scénarios réels & Flux complet : nœud caméra $\rightarrow$ serveur $\rightarrow$ dashboard. \\
 \hline
 Tests de résilience & Simulation & Coupure WiFi, perte secteur, crash processus serveur. \\
 \hline
-Tests de sécurité & curl & Injection, contournement RBAC, robustesse rate limiting. \\
+Tests de sécurité & curl & Injection, contournement RBAC, robustesse rate limiting (voir annexe~\ref{annexe:tests-secu}). \\
 \hline
 Tests terrain & Déploiement sur site & Validation en conditions réelles chez le client. \\
 \hline
@@ -888,6 +943,31 @@ Boîtier de contrôle lent au démarrage & Carte microSD lente (Classe 6) & Remp
 
 \subsubsection{Résultats}
 À l'issue de la semaine de déploiement, le système a fonctionné de manière satisfaisante. Deux coupures WiFi naturelles ont été absorbées sans perte de données. Le client a validé l'ergonomie du boîtier de contrôle et des notifications push. Aucune corruption de données n'a été observée sur PostgreSQL.
+
+\subsection{Analyse critique de la stratégie de validation}
+
+\subsubsection{Bilan de la couverture}
+
+La stratégie de validation adoptée a permis de couvrir les scénarios les plus critiques du cahier des charges : résilience réseau, résilience électrique, redémarrage automatique et déploiement terrain. Les user stories P1 du MVP ont toutes été validées avant le déploiement chez le client.
+
+Cependant, plusieurs zones n'ont pas été testées de manière systématique :
+
+\begin{itemize}[label=\textbullet]
+    \item \textbf{Tests de charge :} le comportement du système avec plus de 3 caméras simultanées n'a pas été mesuré. Le goulot d'étranglement probable se situe au niveau du décodage HLS par FFmpeg, dont la charge CPU n'a pas été benchmarkée au-delà de 3 flux.
+    \item \textbf{Tests de sécurité formels :} aucun pentest structuré n'a été réalisé. Les vérifications effectuées (injection, RBAC, rate limiting) ont été menées manuellement via \texttt{curl}, sans outil automatisé de type OWASP ZAP ou Burp Suite.
+    \item \textbf{Tests unitaires insuffisants :} la couverture de code côté serveur est faible. Les fonctions critiques (parsing des annonces Pi, logique de déduplication des alertes) ne disposent pas de tests automatisés.
+    \item \textbf{Test de longue durée :} le déploiement terrain d'une semaine a validé le comportement nominal, mais n'a pas permis de détecter d'éventuelles fuites mémoire ou dégradations progressives de performance sur des semaines de fonctionnement continu.
+\end{itemize}
+
+\subsubsection{Pistes d'amélioration}
+
+\begin{itemize}[label=\textbullet]
+    \item Mettre en place une suite de tests d'intégration automatisés (Jest + Supertest) couvrant les routes API critiques, déclenchée à chaque push via le pipeline CI/CD.
+    \item Intégrer un outil de monitoring de performance (ex: \texttt{pm2 monit} enrichi, ou Prometheus + Grafana) pour détecter les dérives progressives en production.
+    \item Réaliser un test de charge avec simulation de 6 à 10 caméras simultanées pour identifier les limites réelles du serveur hôte.
+    \item Effectuer un pentest minimal avec OWASP ZAP avant toute extension du système à d'autres utilisateurs.
+\end{itemize}
+
 
 % ==========================================================
 \section{Développement et Réalisation}
@@ -1016,7 +1096,7 @@ Authentification JWT & Tokens signés HS256, expiration 1h & OK \\
 \hline
 Hachage mots de passe & bcryptjs, coût 12 & OK \\
 \hline
-Limitation de débit & 10 req/15min (login), 200 req/min (API) & OK \\
+Limitation de débit & 8 req/15min (login), 200 req/min (API) & OK \\
 \hline
 RBAC & Rôles admin/user, routes protégées & OK \\
 \hline
@@ -1031,6 +1111,44 @@ Logs d'accès & Journalisation des actions sensibles en BDD & OK \\
 \end{tabular}
 \caption{Mesures de sécurité du système SENTYS}
 \end{table}
+
+\subsubsection{Maintenance de la sécurité à long terme}
+
+La sécurité d'un système déployé en production ne se limite pas à sa configuration initiale. Les actions suivantes sont à planifier pour garantir le niveau de sécurité dans le temps :
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|p{4.5cm}|p{4.5cm}|}
+\hline
+\textbf{Action} & \textbf{Fréquence} & \textbf{Justification} \\
+\hline
+Rotation du \texttt{JWT\_SECRET} & Tous les 6 mois & Limite l'exposition en cas de fuite silencieuse \\
+\hline
+\texttt{npm audit} + mise à jour des dépendances & Mensuelle & Correction des vulnérabilités connues (CVE) \\
+\hline
+Sauvegarde PostgreSQL (\texttt{pg\_dump}) & Quotidienne & Protection contre la corruption ou la perte de données \\
+\hline
+Révision des comptes utilisateurs & Trimestrielle & Suppression des comptes inactifs ou compromis \\
+\hline
+Vérification des logs d'audit & Mensuelle & Détection d'activités anormales ou de tentatives d'intrusion \\
+\hline
+Mise à jour de l'OS du serveur & Mensuelle & Correction des failles noyau et système \\
+\hline
+Renouvellement du certificat Tailscale & Automatique & Géré par Tailscale, aucune intervention requise \\
+\hline
+\end{tabular}
+\caption{Plan de maintenance sécurité du système SENTYS}
+\end{table}
+
+Les sauvegardes PostgreSQL sont stockées localement dans \texttt{/var/backups/sentys/} avec rotation sur 30 jours. La commande de sauvegarde est planifiée via \texttt{cron} :
+
+\begin{lstlisting}[language=bash]
+# /etc/cron.daily/sentys-backup
+pg_dump sentys | gzip > /var/backups/sentys/$(date +%Y%m%d).sql.gz
+find /var/backups/sentys/ -mtime +30 -delete
+\end{lstlisting}
 
 \subsection{Défis techniques rencontrés}
 % CORRECTION : les problèmes étaient en tête de section. Ils sont maintenant en fin de section 7.
@@ -1069,6 +1187,8 @@ CI/CD & GitHub Actions & Build + déploiement automatique sur push \\
 Éditeur & VS Code & Développement React, Node.js \\
 \hline
 Base de données & PostgreSQL 16 & Stockage persistant \\
+\hline
+Modélisation BDD & dbdiagram.io & Schéma entité-association de la base de données \\
 \hline
 Gestion processus & PM2 & Démarrage auto + monitoring Node.js \\
 \hline
@@ -1148,7 +1268,6 @@ Droits d'accès/suppression & Interface d'administration (US-19) & \checkmark \\
 % ==========================================================
 
 Le projet SENTYS constitue un système de surveillance résidentiel complet, entièrement local et résilient, répondant aux besoins identifiés dans le cahier des charges.
-
 \subsection{Points forts}
 
 \begin{itemize}[label=\textbullet]
@@ -1158,8 +1277,28 @@ Le projet SENTYS constitue un système de surveillance résidentiel complet, ent
     \item \textbf{PWA :} application installable sur smartphone, consultable hors ligne.
     \item \textbf{Conformité légale et RGPD :} privacy by design, conservation limitée à 30 jours, conformité à la loi belge sur les caméras, aucun cloud.
     \item \textbf{Coût maîtrisé :} moins de 250 euros de matériel, 0 € récurrent mensuel.
-    \item \textbf{Stack moderne et éprouvé :} React/TypeScript, Node.js ESM, PostgreSQL, ffmpeg, PM2, nginx.
+    \item \textbf{Stack moderne et éprouvé :} React/TypeScript, Node.js ESM, PostgreSQL, FFmpeg, PM2.
 \end{itemize}
+
+\subsection{Réflexion sur la méthodologie}
+
+L'approche itérative adoptée s'est révélée adaptée à la nature incertaine du projet. La décision de transition de l'ESP32-CAM vers le Raspberry Pi Zero 2W, prise en cours de développement, illustre bien l'intérêt de cette méthode : les limitations matérielles ont été détectées lors d'une itération de test, avant que l'architecture complète ne soit figée.
+
+La rédaction de la documentation en parallèle du développement — plutôt qu'en fin de projet — a également constitué un choix bénéfique : elle a forcé à formaliser les décisions techniques au moment où elles étaient prises, et a servi de base de référence lors des échanges avec le client.
+
+En revanche, l'absence d'un outil de suivi de backlog formel (Trello, GitHub Projects) a rendu la gestion des priorités moins rigoureuse qu'elle aurait pu l'être. Dans un projet impliquant plusieurs développeurs, cela aurait constitué un risque réel de désorganisation. Pour un futur projet similaire, la mise en place d'un backlog structuré dès le début serait une amélioration méthodologique significative.
+
+\subsection{Pérennité et maintenance}
+
+La pérennité du système repose sur trois piliers :
+
+\begin{itemize}[label=\textbullet]
+    \item \textbf{Mises à jour automatiques :} le pipeline CI/CD déploie automatiquement chaque nouvelle version sur le serveur. Les nœuds Pi se mettent à jour dans les 5 minutes suivant un déploiement. Aucune intervention manuelle n'est requise pour la maintenance courante.
+    \item \textbf{Sauvegardes :} une sauvegarde quotidienne de PostgreSQL est planifiée via \texttt{cron}, avec rotation sur 30 jours. Les enregistrements vidéo sont purgés automatiquement au-delà de 30 jours, conformément à la loi belge.
+    \item \textbf{Monitoring :} PM2 surveille l'état du processus Node.js et redémarre automatiquement en cas de crash. Les alertes système (caméra hors ligne, batterie faible) sont remontées en temps réel via le dashboard et les notifications push.
+\end{itemize}
+
+La principale dépendance externe est Tailscale, dont la version gratuite est suffisante pour l'usage résidentiel actuel. En cas d'arrêt du service, le système resterait accessible sur le LAN local — seul l'accès distant serait impacté.
 
 \subsection{Perspectives d'évolution}
 
@@ -1168,7 +1307,9 @@ Le projet SENTYS constitue un système de surveillance résidentiel complet, ent
     \item Extension à d'autres capteurs (température, fumée, inondation).
     \item Interface multilingue (français / néerlandais / anglais).
     \item Tableau de bord analytique : statistiques d'activité par caméra et par période.
+    \item Tests de charge et pentest pour valider le passage à l'échelle.
 \end{itemize}
+
 
 % ==========================================================
 \section{Bibliographie}
@@ -1243,5 +1384,94 @@ pm2 logs SENTYS
 # Redemarrer
 pm2 restart SENTYS
 \end{lstlisting}
+
+\subsection{Résultats des tests de sécurité}
+\label{annexe:tests-secu}
+
+Les tests suivants ont été exécutés via \texttt{curl} en SSH sur le serveur hôte. Les captures d'écran ci-dessous constituent les preuves de validation.
+
+\subsubsection*{Test 1 --- Accès sans token (401)}
+\begin{lstlisting}[language=bash]
+curl -s http://localhost:4000/api/users
+# Résultat attendu : {"error":"Non authentifié"}
+\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_secu_1_no_token.png}
+    \caption{Test 1 : accès à une route protégée sans token --- retour 401}
+\end{figure}
+
+\subsubsection*{Test 2 --- Token falsifié (401)}
+\begin{lstlisting}[language=bash]
+curl -s http://localhost:4000/api/users \
+  -H "Authorization: Bearer tokencompletementfaux"
+# Résultat attendu : {"error":"Non authentifié"}
+\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_secu_2_fake_token.png}
+    \caption{Test 2 : token JWT falsifié rejeté par le serveur}
+\end{figure}
+
+\subsubsection*{Test 3 --- Injection SQL (rejetée)}
+\begin{lstlisting}[language=bash]
+curl -s -X POST http://localhost:4000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin'\'' OR 1=1--","password":"x"}'
+# Résultat attendu : {"error":"Identifiant ou mot de passe incorrect"}
+\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_secu_3_sql_injection.png}
+    \caption{Test 3 : tentative d'injection SQL --- rejetée, aucun accès obtenu}
+\end{figure}
+
+\subsubsection*{Test 4 --- Accès authentifié (200)}
+\begin{lstlisting}[language=bash]
+curl -s http://localhost:4000/api/users \
+  -H "Authorization: Bearer <TOKEN_VALIDE>"
+# Résultat attendu : liste des utilisateurs en JSON
+\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_secu_4_auth_ok.png}
+    \caption{Test 4 : accès avec token valide --- liste des utilisateurs retournée}
+\end{figure}
+
+\subsubsection*{Test 5 --- Rate limiting (bloqué à la 8\textsuperscript{e} tentative)}
+\begin{lstlisting}[language=bash]
+for i in {1..11}; do
+  curl -s -X POST http://localhost:4000/auth/login \
+    -H "Content-Type: application/json" \
+    -d '{"username":"x","password":"x"}'
+done
+# Résultat attendu : 429 "Trop de tentatives" à partir de la 8e
+\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_secu_5_rate_limit.png}
+    \caption{Test 5 : rate limiting actif --- blocage à partir de la 8\textsuperscript{e} tentative}
+\end{figure}
+
+\subsection{Résultats des tests API}
+\label{annexe:tests-api}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_api_cameras.png}
+    \caption{Test API : \texttt{GET /api/cameras} --- liste des caméras configurées}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_api_nodes.png}
+    \caption{Test API : \texttt{GET /api/camera-nodes} --- liste des nœuds actifs}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/test_api_alerts.png}
+    \caption{Test API : \texttt{GET /api/alerts} --- historique des alertes}
+\end{figure}
 
 \end{document}
