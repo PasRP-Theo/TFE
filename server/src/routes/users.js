@@ -46,6 +46,16 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       [username.toLowerCase().trim(), hash, role]
     );
     await logAudit(req.user?.username || 'admin', 'USER_CREATE', `Création de l'utilisateur ${username} (Rôle: ${role})`, req.ip);
+
+    if (role === 'admin') {
+      const settings = await getAppSettings();
+      if (settings.default_admin_active && settings.bootstrap_admin_user_id) {
+        await pool.query('DELETE FROM users WHERE id = $1', [settings.bootstrap_admin_user_id]);
+        await pool.query(`UPDATE app_settings SET default_admin_active = false, bootstrap_admin_user_id = NULL, updated_at = NOW() WHERE id = 1`);
+        await logAudit(req.user?.username || 'admin', 'USER_DELETE', 'Suppression automatique du compte administrateur initial (root)', req.ip);
+      }
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Identifiant deja utilise' });
