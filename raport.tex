@@ -95,7 +95,15 @@
 \section{Remerciements}
 % ==========================================================
 
-% [À compléter]
+Je tiens en premier lieu à remercier ma famille pour son soutien constant et ses précieux conseils tout au long de ces années d'études.
+
+Mes remerciements vont également à mes amis de classe pour leurs échanges enrichissants, leur solidarité et les nombreux moments de partage qui ont jalonné ce parcours.
+
+Je remercie ensuite Monsieur Dewulf, mon rapporteur de TFE, pour son suivi attentif,
+sa disponibilité et les orientations et remarques qu'il m'a apportées lors de l'élaboration de ce travail.
+
+Je souhaite enfin exprimer ma gratitude à l'ensemble du corps professoral de l'EPHEC Louvain-la-Neuve, dont l'enseignement m'a fourni les fondements techniques et méthodologiques nécessaires à la réalisation de ce projet.
+
 
 \newpage
 
@@ -123,7 +131,9 @@ Le marché de la vidéosurveillance résidentielle est aujourd'hui largement dom
     \item \textbf{Souveraineté des données :} les images captées dans un domicile privé sont confiées à des entreprises dont les conditions d'utilisation peuvent évoluer, être piratées, ou être soumises à des injonctions légales étrangères.
     \item \textbf{Dépendance opérationnelle :} en l'absence de connexion Internet, ces systèmes deviennent totalement inopérants, ce qui est particulièrement problématique en zone à connectivité instable.
     \item \textbf{Coût récurrent :} l'accès aux fonctionnalités essentielles (archivage, détection de mouvement) est généralement conditionné à un abonnement mensuel, représentant une charge financière permanente.
+    \item \textbf{Accessibilité en cas de coupure secteur :} une coupure électrique met hors ligne le routeur Internet du domicile, rendant tout accès distant impossible même si le système de surveillance dispose d'une alimentation de secours. Pour garantir la continuité de l'accès à distance, une connexion 4G de secours est nécessaire, représentant un coût matériel et d'abonnement supplémentaire.
 \end{enumerate}
+
 
 SENTYS s'inscrit dans une démarche alternative et citoyenne : concevoir un système où l'intégralité des traitements, des données et du stockage reste sous le contrôle exclusif de l'utilisateur, sans aucun intermédiaire cloud.
 
@@ -639,7 +649,11 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 Le système supporte deux protocoles complémentaires :
 
 \paragraph{HLS via FFmpeg (fallback)}
-Le flux RTSP de chaque caméra est transcodé par FFmpeg en segments fMP4 servis via nginx. La latence est de 3 à 5 secondes. Ce protocole est utilisé pour l'enregistrement continu et comme fallback universel.
+Le flux RTSP de chaque caméra est segmenté par FFmpeg en fragments fMP4 d'une seconde,
+servis statiquement par le serveur Express via le chemin \texttt{/hls/\{cameraId\}/}.
+La latence est de 3 à 5 secondes. Ce protocole est utilisé comme fallback universel et
+pour l'enregistrement continu sur disque.
+
 
 \paragraph{WebRTC via go2rtc (protocole principal)}
 Pour une latence inférieure à la seconde, go2rtc expose les flux via le protocole WHEP. Le client bascule automatiquement en fallback HLS si go2rtc est indisponible.
@@ -698,7 +712,9 @@ Le système s'articule en trois couches : la capture distribuée, le serveur de 
 \hline
 Nœuds caméras (x3) & RPi Zero 2W + OV5647 & Capture + stream WebRTC & Enregistrement SD + UPS X306 \\
 \hline
-Streaming & MediaMTX (RTSP/WebRTC) & Serveur de flux local & Redémarrage Systemd \\
+Streaming RTSP (nœud) & MediaMTX & Serveur RTSP local sur le Pi & Redémarrage systemd \\
+\hline
+Streaming WebRTC (serveur) & go2rtc & Proxy RTSP→WebRTC sur le serveur hôte & Processus enfant Node.js \\
 \hline
 Alimentation nœuds & Shield UPS X306 & Batterie Li-ion intégrée & 8h autonomie \\
 \hline
@@ -744,15 +760,15 @@ Le modèle de données a été optimisé pour PostgreSQL. Les tables sont créé
     \item[\texttt{camera\_nodes}]
     Parc de nœuds Pi Zero 2W s'annonçant toutes les 30 secondes. Champs : \texttt{id}, \texttt{device\_id} (unique), \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{motion\_detected}, \texttt{last\_motion\_at}, \texttt{last\_seen\_at}, \texttt{created\_at}.
 
-    \item[\texttt{motion\_events}]
-    Événements de mouvement détectés. Champs : \texttt{id}, \texttt{device\_id} (FK \texttt{camera\_nodes}), \texttt{motion}, \texttt{offline\_recording} (booléen), \texttt{recording\_path}, \texttt{detected\_at}, \texttt{created\_at}.
+    \item[\texttt{camera\_node\_motion\_events}]
+    Événements de mouvement détectés par les nœuds caméras. Champs : \texttt{id}, \texttt{camera\_node\_id} (FK \texttt{camera\_nodes}), \texttt{motion}, \texttt{offline\_recording} (booléen), \texttt{recording\_path}, \texttt{detected\_at}, \texttt{created\_at}.
 
     \item[\texttt{alerts}]
     Historique des événements de sécurité avec déduplication. Niveaux : \texttt{info}, \texttt{warning}, \texttt{critical}. Champs : \texttt{id}, \texttt{source\_type}, \texttt{source\_id}, \texttt{camera\_id} (FK \texttt{cameras}), \texttt{alert\_type}, \texttt{level}, \texttt{title}, \texttt{message}, \texttt{metadata} (JSONB), \texttt{status}, \texttt{acknowledged\_by} (FK \texttt{users}), \texttt{acknowledged\_at}, \texttt{created\_at}.
 \end{description}
 
 \paragraph{Relations et contraintes}
-Le schéma garantit l'intégrité des données via des clés étrangères entre \texttt{alerts} et \texttt{cameras}, entre \texttt{alerts} et \texttt{users} (acquittement), et entre \texttt{motion\_events} et \texttt{camera\_nodes}.
+Le schéma garantit l'intégrité des données via des clés étrangères entre \texttt{alerts} et \texttt{cameras}, entre \texttt{alerts} et \texttt{users} (acquittement), et entre \texttt{camera\_node\_motion\_events} et \texttt{camera\_nodes}.
 
 \subsection{RGPD et Protection des Données}
 
@@ -889,6 +905,12 @@ L'installation de SENTYS a été guidée par une documentation rédigée en para
 \subsubsection{Authentification et gestion des utilisateurs}
 
 Le système d'authentification repose sur des tokens JWT signés (expiration 1h), avec hashage bcrypt (coût 12) des mots de passe. Un système RBAC distingue les rôles \texttt{admin} et \texttt{user}. Le rate limiting (10 tentatives par 15 minutes) protège contre les attaques par force brute.
+
+Au premier démarrage, si aucun utilisateur n'existe en base, un compte administrateur
+initial \texttt{root} est créé automatiquement. Ce compte est \textbf{supprimé
+automatiquement} dès qu'un nouvel administrateur est créé via le panneau de gestion
+des utilisateurs.
+
 
 \begin{figure}[H]
     \centering
@@ -1166,6 +1188,7 @@ Le projet SENTYS constitue un système de surveillance résidentiel complet, ent
     \item Autorité de Protection des Données (Belgique). \textit{Loi du 21 mars 2007 réglant l'installation et l'utilisation de caméras de surveillance}. Disponible sur : \url{https://www.autoriteprotectiondonnees.be/}
     \item OpenAI. \textit{GPT Models Documentation}. Disponible sur : \url{https://platform.openai.com/docs/}
     \item Anthropic. \textit{Claude AI Documentation}. Disponible sur : \url{https://docs.anthropic.com/}
+    \item AlexxIT. \textit{go2rtc --- Stream application with multi-protocol support}. disponible sur : \url{https://github.com/AlexxIT/go2rtc}
 \end{enumerate}
 
 % ==========================================================

@@ -255,21 +255,76 @@ Un utilisateur peut avoir plusieurs abonnements actifs (téléphone + tablette +
 
 ---
 
+### `audit_logs`
+
+Journal d'audit des actions sensibles effectuées dans le système. Créée dans `server.js` (et non dans `initDB()`) car elle est initialisée après le démarrage du serveur Express.
+
+| Colonne | Type | Contraintes | Description |
+|---------|------|-------------|-------------|
+| `id` | SERIAL | PK | Identifiant |
+| `username` | VARCHAR(255) | | Utilisateur ayant effectué l'action |
+| `action` | VARCHAR(255) | NOT NULL | Code de l'action (`LOGIN_SUCCESS`, `USER_CREATE`, `USER_DELETE`, ...) |
+| `details` | TEXT | | Description lisible de l'action |
+| `ip_address` | VARCHAR(45) | | IP de la requête (IPv4 ou IPv6) |
+| `created_at` | TIMESTAMP | DEFAULT NOW() | Horodatage |
+
+**Actions tracées :** connexion réussie, échec de connexion, création/modification/suppression d'utilisateur, suppression du compte root initial, toute action admin sensible.
+
+**Index :**
+- `idx_audit_logs_username_created` sur `(username, created_at DESC)` — historique par utilisateur
+- `idx_audit_logs_action_created` sur `(action, created_at DESC)` — filtrage par type d'action
+
+Consultable via **Paramètres → Journaux d'audit** (admin uniquement).
+
+---
+
 ## Relations entre tables
 
 ```
-users ──────────────────────────────────┐
-  │                                     │ acknowledged_by
-  │ bootstrap_admin_user_id             ↓
-  └──────────────► app_settings    alerts ◄──── cameras
-                                     ↑
-push_subscriptions ──► users         │ source_id (logique, pas FK)
-                                     │
-camera_nodes ◄── camera_node_motion_events
-     ▲
-     │ (staging → permanent)
-camera_discoveries
+users ──────────────────────────────────────┐
+  │                                         │ acknowledged_by
+  │ bootstrap_admin_user_id                 ↓
+  └──────────────► app_settings        alerts ◄──── cameras
+                                           ↑
+push_subscriptions ──► users               │ source_id (logique, pas FK)
+                                           │
+audit_logs (username, pas FK)         camera_nodes ◄── camera_node_motion_events
+                                           ▲
+                                           │ (staging → permanent)
+                                      camera_discoveries
 ```
+
+---
+
+## Décisions d'architecture et justifications
+
+### Pourquoi trois tables pour les caméras ?
+
+`cameras`, `camera_discoveries` et `camera_nodes` ont des **cycles de vie totalement différents** — les fusionner en une seule table aurait introduit plus de complexité qu'elle n'en aurait supprimé.
+
+| Table | Cycle de vie | Qui écrit | Qui lit |
+|-------|-------------|-----------|---------|
+| `camera_discoveries` | TTL 10 min, purgée automatiquement | Pi (annonce) | Interface admin (onglet découverte) |
+| `camera_nodes` | Permanent, modifiable par l'admin | Admin (validation) | Agent Pi, API, dashboard |
+| `cameras` | Permanent, pour les caméras IP fixes | Admin | Manager FFmpeg/go2rtc |
+
+Une table unique avec un champ `status` aurait nécessité de filtrer à chaque requête, d'ajouter des colonnes nullable selon le type, et d'exposer des données de staging aux routes de production. La séparation est un pattern reconnu dans les architectures IoT (device provisioning → device registry).
+
+### Pourquoi `device_id` (varchar) comme clé étrangère dans `camera_node_motion_events` ?
+
+Utiliser un `integer` serait techniquement plus performant pour les jointures. Ce choix est une **dette technique connue** et assumée : le `device_id` est l'identifiant métier naturel du Pi (ex: `pi-salon`), présent dans toutes les requêtes de l'agent et dans les logs. Utiliser l'`id` entier aurait nécessité une requête supplémentaire à chaque événement de mouvement pour résoudre l'identifiant. Dans le contexte d'un système résidentiel à faible volume (quelques dizaines d'événements par jour), l'impact est négligeable. Une migration vers `camera_node_id integer` est prévue en V2.
+
+### Pourquoi `kiosk_pin` n'est pas haché ?
+
+Le PIN kiosk contrôle l'accès au **boîtier physique local**, derrière le réseau LAN et le VPN Tailscale. Il ne donne pas accès à l'API ni aux données — il verrouille uniquement l'écran tactile. Le hacher avec bcrypt rendrait la comparaison asynchrone dans un contexte où la latence UI est critique, sans gain de sécurité significatif : quiconque a accès à la base de données a déjà compromis l'ensemble du système. Ce choix est documenté et assumé.
+
+### Pourquoi pas de table `recordings` dédiée ?
+
+Les enregistrements sont tracés via `camera_node_motion_events.recording_path`. Ce choix lie intentionnellement chaque clip à l'événement de mouvement qui l'a déclenché — la donnée et son contexte sont colocalisés. Une table `recordings` séparée aurait nécessité une jointure supplémentaire pour reconstituer le contexte de chaque clip. En V2, si la détection IA produit des clips non liés à un mouvement Pi, une table dédiée deviendra pertinente.
+
+### Pourquoi pas de soft delete ?
+
+La suppression physique est conforme au **droit à l'effacement** du RGPD (Art. 17) : quand un utilisateur demande la suppression de son compte, les données sont réellement effacées, pas masquées. Un `deleted_at` nullable aurait compliqué toutes les requêtes et créé un risque de fuite de données si un filtre `WHERE deleted_at IS NULL` était oublié. Pour un système de sécurité, la simplicité et la fiabilité priment.
 
 ---
 
