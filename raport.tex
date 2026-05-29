@@ -379,7 +379,7 @@ US-03 & En tant que \textbf{propriétaire}, je veux que le stockage local hors l
 \hline
 US-04 & En tant que \textbf{propriétaire}, je veux que le nœud détecte les mouvements et notifie le serveur. & Signal envoyé au serveur dans les 2s, horodatage enregistré, déclenchement de l'enregistrement local & \textbf{P1} & M \\
 \hline
-US-05 & En tant que \textbf{propriétaire}, je veux que les clips enregistrés hors ligne soient automatiquement transférés au serveur dès le retour du réseau. & Upload automatique, clips supprimés localement après confirmation, badge HORS LIGNE visible dans l'historique & \textbf{P1} & L \\
+US-05 & En tant que \textbf{propriétaire}, je veux que les clips enregistrés hors ligne soient automatiquement transférés au serveur dès le retour du réseau. & Upload automatique, clips supprimés localement après confirmation, badge SYNC visible dans l'historique & \textbf{P1} & L \\
 \hline
 US-06 & En tant que \textbf{propriétaire}, je veux que le nœud continue à fonctionner en cas de coupure électrique. & Autonomie sur batterie d'au moins 8h, bascule transparente sans redémarrage & \textbf{P1} & S \\
 \hline
@@ -875,7 +875,7 @@ Tests terrain & Déploiement sur site & Validation en conditions réelles chez l
 
 \subsection{Tests de résilience (simulation)}
 
-Les scénarios suivants ont été testés en laboratoire avant le déploiement terrain :
+Les scénarios suivants ont été testés en laboratoire avant le déploiement terrain (captures en annexe~\ref{annexe:resilience-captures}) :
 
 \begin{itemize}[label=\textbullet]
     \item \textbf{Coupure WiFi :} désactivation du point d'accès pendant 10 minutes. Le nœud Pi a basculé en mode hors ligne en moins de 5 secondes, enregistré les clips localement, puis les a uploadés intégralement au retour de la connexion, sans perte de données.
@@ -994,7 +994,7 @@ L'agent de supervision exécuté sur chaque nœud surveille en permanence la dis
 \end{itemize}
 
 \paragraph{Synchronisation à la reconnexion}
-Dès que le serveur redevient accessible, les clips sont uploadés séquentiellement. Chaque clip est supprimé localement après confirmation du succès. Les événements correspondants apparaissent dans l'historique avec le badge \textbf{HORS LIGNE}.
+Dès que le serveur redevient accessible, les clips sont uploadés séquentiellement. Chaque clip est supprimé localement après confirmation du succès. Les événements correspondants apparaissent dans l'historique avec le badge \textbf{SYNC} et le libellé « Récupération après coupure Wi-Fi ».
 
 \subsubsection{Configuration des nœuds caméras}
 
@@ -1335,7 +1335,7 @@ Batterie Li-ion & Connecteur PH2.0 & Entrée BAT (Shield X306) \\
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|l|l|l|l|}
+\begin{tabular}{|p{2.8cm}|p{3.2cm}|p{5.5cm}|p{3.2cm}|}
 \hline
 \textbf{État} & \textbf{Réseau} & \textbf{Comportement caméra} & \textbf{Déclencheur} \\
 \hline
@@ -1427,6 +1427,26 @@ pm2 restart sentys
         \includegraphics[width=\textwidth]{img/annexe/notifications.jpg}
         \caption{Réception d'une notification push SENTYS sur appareil mobile}
         \label{fig:notifications}
+    \end{minipage}
+\end{figure}
+
+\subsection{Captures du mode hors-ligne}
+\label{annexe:resilience-captures}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/annexe/offlineDash.png}
+        \caption{Dashboard SENTYS affichant les clips synchronisés après reconnexion (badge SYNC)}
+        \label{fig:offline-dash}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/annexe/offlinepi.png}
+        \caption{Dossier \texttt{offline\_recordings/} sur le Pi pendant la coupure réseau}
+        \label{fig:offline-pi}
     \end{minipage}
 \end{figure}
 

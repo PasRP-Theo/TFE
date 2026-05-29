@@ -374,22 +374,23 @@ function getCameraStatusText(cam: Camera) {
 }
 
 // ── Contrôles ─────────────────────────────────────────────
-function CameraControls({ cam, onAction }: {
+function CameraControls({ cam, onAction, surveillanceActive }: {
   cam: Camera;
   onAction: (id: number, action: "start" | "pause" | "resume" | "stop") => void;
+  surveillanceActive: boolean;
 }) {
   const { id, status } = cam;
   return (
     <div className="cam-footer" onClick={e => e.stopPropagation()}>
       <span className="cam-footer-status">
-        {getCameraStatusText(cam)}
+        {!surveillanceActive ? 'Système désarmé' : getCameraStatusText(cam)}
       </span>
       {(status === 'stopped' || status === 'watching') &&
-        <button type="button" className="cam-btn-start" onClick={() => onAction(id, 'start')}>▶ START</button>}
+        <button type="button" className="cam-btn-start" disabled={!surveillanceActive} onClick={() => onAction(id, 'start')}>▶ START</button>}
       {/* {status === 'running'      && <button className="cam-btn-pause" onClick={() => onAction(id, 'pause')}>⏸ PAUSE</button>} */}
       {/* {status === 'paused'       && <button className="cam-btn-start" onClick={() => onAction(id, 'resume')}>▶ REPRENDRE</button>} */}
       {(status === 'running' || status === 'paused' || status === 'reconnecting') &&
-        <button className="cam-btn-stop" onClick={() => onAction(id, 'stop')}>⏹ STOP</button>}
+        <button className="cam-btn-stop" disabled={!surveillanceActive} onClick={() => onAction(id, 'stop')}>⏹ STOP</button>}
     </div>
   );
 }
@@ -1038,7 +1039,7 @@ export default function CameraFeed({ onStatusChange }: {
             <div className="cam-screen-shell cam-screen-shell--focus-mode">
               <CameraScreen cam={focusedCam} time={time} openKey={focusOpenCountRef.current} />
             </div>
-            <CameraControls cam={focusedCam} onAction={handleAction} />
+            <CameraControls cam={focusedCam} onAction={handleAction} surveillanceActive={config.surveillanceMode} />
           </div>
           {isAdmin && (
             <button 
@@ -1086,7 +1087,7 @@ export default function CameraFeed({ onStatusChange }: {
                 </div>
               </div>
               <CameraScreen cam={cam} time={time} />
-              <CameraControls cam={cam} onAction={handleAction} />
+              <CameraControls cam={cam} onAction={handleAction} surveillanceActive={config.surveillanceMode} />
             </div>
           ))}
         </div>
