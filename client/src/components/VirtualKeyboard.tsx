@@ -5,7 +5,9 @@ import { KeyboardContext } from '../hooks/useVirtualKeyboard';
 import './VirtualKeyboard.css';
 
 // Chargement asynchrone (Lazy Load) pour optimiser les performances et isoler les erreurs
-const Keyboard = React.lazy(() => import('react-simple-keyboard'));
+const Keyboard = React.lazy(() =>
+  import('react-simple-keyboard').then(mod => ({ default: mod.default }))
+);
 
 export const VirtualKeyboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isVisible, setIsVisible] = useState(false);

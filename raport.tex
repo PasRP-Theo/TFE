@@ -229,7 +229,7 @@ Le suivi du projet a été assuré par des échanges réguliers avec le client s
 \begin{itemize}[label=\textbullet]
     \item \textbf{Réunion de cadrage (mi-février 2026) :} première rencontre formelle pour identifier les besoins, les contraintes (zone semi-isolée, instabilité réseau, refus du cloud) et définir le périmètre du projet.
     \item \textbf{Points d'avancement mensuels :} présentation des développements en cours, recueil du feedback sur l'interface et les fonctionnalités, ajustement des priorités.
-    \item \textbf{Validation du dashboard (Mi Avril 2026) :} démonstration en direct de l'interface web et du flux vidéo en temps réel. Le client a validé l'ergonomie générale et demandé l'ajout du boîtier de contrôle physique comme point d'entrée principal.
+    \item \textbf{Validation du dashboard (Fin Avril 2026) :} démonstration en direct de l'interface web et du flux vidéo en temps réel. Le client a validé l'ergonomie générale et demandé l'ajout du boîtier de contrôle physique comme point d'entrée principal.
     \item \textbf{Déploiement de test (Fin avril 2026) :} installation du système complet sur site pendant plusieurs jours pour valider le comportement en conditions réelles (coupures réseau, autonomie batterie, qualité vidéo). Les résultats sont détaillés en section~\ref{sec:validation-terrain}.
 \end{itemize}
 
@@ -1410,7 +1410,7 @@ Le schéma entité-association est présenté à la figure~\ref{fig:db-schema}.
     Nœuds caméras détectés sur le réseau mais pas encore validés dans \texttt{camera\_nodes}. Champs : \texttt{id}, \texttt{device\_id}, \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{last\_seen\_at}, \texttt{created\_at}. Permet à l'administrateur de valider manuellement un nœud avant qu'il soit intégré au système actif.
 
     \item[\texttt{app\_settings}]
-    Singleton de configuration globale de l'application (une seule ligne, contrainte \texttt{CHECK (id = 1)}). Regroupe les paramètres d'interface (thème, densité, format d'heure), les seuils d'alerte (temps de reconnexion caméra, intervalle de découverte), les options de notification (alertes temps réel, résumé quotidien, son), le mode surveillance, et les paramètres du boîtier kiosque (PIN, utilisateur admin par défaut).
+    Singleton de configuration globale de l'application (une seule ligne, contrainte \texttt{CHECK (id = 1)}). Regroupe les paramètres d'interface (thème, format d'heure), les options de notification (alertes temps réel, résumé quotidien), le mode surveillance, et les paramètres du boîtier kiosque (PIN, utilisateur admin par défaut). Certains champs techniques (intervalles de découverte, taille des cartes, alerte sonore) sont présents en base mais gérés avec leurs valeurs par défaut, sans exposition dans l'interface de configuration.
 \end{description}
 
 \subsection{Commandes de gestion du serveur}

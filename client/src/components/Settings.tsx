@@ -116,9 +116,6 @@ function TabSettings() {
   const [applicationError, setApplicationError] = useState('');
   const [applicationSuccess, setApplicationSuccess] = useState('');
   const [applicationSaving, setApplicationSaving] = useState(false);
-  const [displayError, setDisplayError] = useState('');
-  const [displaySuccess, setDisplaySuccess] = useState('');
-  const [displaySaving, setDisplaySaving] = useState(false);
   const [alertsError, setAlertsError] = useState('');
   const [alertsSuccess, setAlertsSuccess] = useState('');
   const [alertsSaving, setAlertsSaving] = useState(false);
@@ -211,26 +208,6 @@ function TabSettings() {
       setApplicationError(err instanceof Error ? err.message : 'Erreur serveur');
     } finally {
       setApplicationSaving(false);
-    }
-  }
-
-  async function saveDisplaySettings() {
-    if (!token) return;
-    setDisplayError('');
-    setDisplaySuccess('');
-    setDisplaySaving(true);
-    try {
-      const nextConfig = await updateConfig(token, {
-        uiDensity: draftConfig.uiDensity,
-        cameraCardSize: draftConfig.cameraCardSize,
-        showStatusPanel: draftConfig.showStatusPanel,
-      });
-      setDraftConfig(nextConfig);
-      setDisplaySuccess('Réglages d’affichage enregistrés.');
-    } catch (err: unknown) {
-      setDisplayError(err instanceof Error ? err.message : 'Erreur serveur');
-    } finally {
-      setDisplaySaving(false);
     }
   }
 
@@ -384,6 +361,22 @@ function TabSettings() {
             <input type="range" min="40" max="64" step="4" value={settings.touchTarget} onChange={event => updateSettings({ touchTarget: Number(event.target.value) })} />
           </label>
 
+        </div>
+
+        <div className="settings-toggle-list">
+          <SettingToggle
+            label="Clavier virtuel à l'écran"
+            description="Affiche un clavier pour les champs de saisie. Utile pour les écrans tactiles."
+            checked={isKeyboardEnabled}
+            onChange={(checked) => {
+              if (checked) {
+                window.localStorage.setItem('sentys:virtual_keyboard', 'true');
+              } else {
+                window.localStorage.removeItem('sentys:virtual_keyboard');
+              }
+              window.location.reload();
+            }}
+          />
         </div>
 
         <div className="settings-msg settings-msg--success">
