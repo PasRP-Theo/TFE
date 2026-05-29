@@ -7,6 +7,7 @@
 \usepackage{geometry}
 \geometry{margin=2.5cm}
 \usepackage{graphicx}
+\usepackage{grffile}
 \usepackage{float}
 \usepackage{enumitem}
 \usepackage{textcomp}
@@ -314,7 +315,7 @@ Le tableau suivant présente une comparaison objective entre les leaders du marc
 \hline
 \textbf{Complexité UX} & Applications mobiles imposant la création d'un compte en ligne & Application Tapo, compte obligatoire, alertes cloud & Interface physique centralisée, un seul point d'accès, pas de compte tiers requis \\
 \hline
-\textbf{Centralisation} & Plusieurs applications distinctes selon les marques de capteurs & Application unique Tapo, mais limitée à l'écosystème TP-Link & \textbf{Interface unique} regroupant caméras, infomartions systemes et alertes \\
+\textbf{Centralisation} & Plusieurs applications distinctes selon les marques de capteurs & Application unique Tapo, mais limitée à l'écosystème TP-Link & \textbf{Interface unique} regroupant caméras, informations systèmes et alertes \\
 \hline
 \textbf{Résilience électrique} & Dépend du matériel du fabricant (souvent non fourni) & Non fourni & Alimentation sur batterie intégrée aux nœuds caméras \\
 \hline
@@ -574,17 +575,13 @@ Trois solutions d'alimentation continue ont été étudiées pour les nœuds Pi 
 
 \textbf{Conclusion :} le shield \textbf{Geekworm X306 V1.3} a été retenu pour sa bascule instantanée (aucun redémarrage du Pi), son monitoring de batterie via I2C (permettant des alertes automatiques sous 15\%) et sa parfaite compatibilité mécanique avec le Pi Zero 2W.
 
-\subsubsection{Alimentation sans coupure du serveur hôte}
-% CORRECTION : la résilience électrique du serveur hôte n'était pas traitée.
+\subsubsection{Résilience électrique et réseau du serveur hôte}
 
-Le serveur hôte (PC Linux) constitue le nœud central du système. Sa mise hors tension entraînerait la perte du dashboard, de l'API et de l'enregistrement centralisé. Deux approches ont été considérées :
+Le serveur hôte est un PC portable sous Ubuntu 24 LTS. Ce choix matériel présente un avantage naturel pour la résilience électrique : la batterie intégrée joue le rôle d'onduleur sans configuration supplémentaire. En cas de coupure secteur, le système continue de fonctionner sans interruption ni redémarrage, le temps que la batterie se décharge — éliminant tout risque de corruption de la base de données PostgreSQL par arrêt brutal.
 
-\begin{itemize}[label=\textbullet]
-    \item \textbf{UPS secteur (onduleur) :} un onduleur de type APC Back-UPS 600VA a été installé. Il assure une autonomie de 20 à 30 minutes, suffisante pour absorber les micro-coupures et les coupures de courte durée fréquentes en zone semi-isolée. En cas de coupure prolongée, il permet un arrêt propre du serveur via le protocole NUT (Network UPS Tools), évitant toute corruption de la base de données PostgreSQL.
-    \item \textbf{Arrêt propre automatique :} le démon \texttt{nut-client} est configuré pour déclencher un \texttt{poweroff} systémique au bout de 10 minutes sur batterie, préservant l'intégrité des données avant l'épuisement de la batterie.
-\end{itemize}
+Pour la continuité de l'accès au dashboard en cas de panne de la box Internet, une clé 4G est connectée en permanence au laptop. Elle assure uniquement l'accessibilité du dashboard pour les appareils clients distants (via Tailscale). Le traitement vidéo, l'enregistrement et la détection de mouvement restent entièrement locaux, indépendamment de cette connexion.
 
-Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que le serveur devient inaccessible (US-01), garantissant la continuité de la surveillance même pendant l'arrêt du serveur.
+Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que le serveur devient inaccessible (US-01), garantissant la continuité de la surveillance même en cas d'indisponibilité temporaire du serveur.
 
 \subsubsection{Frontend}
 % CORRECTION : choix React présenté sans candidats alternatifs ni critères de comparaison.
@@ -726,7 +723,7 @@ Le serveur hôte est un PC sous Ubuntu 24 LTS, retenu pour les raisons suivantes
     \item Cohérence avec l'objectif zéro cloud.
     \item Accessibilité distante via VPN sans exposition de ports publics.
     \item CI/CD via GitHub Actions avec runner auto-hébergé.
-    \item Protection contre les coupures électriques via onduleur (section~5.1.3).
+    \item Résilience électrique naturelle : la batterie intégrée du PC portable assure la continuité du service en cas de coupure secteur (section~5.1.3).
 \end{itemize}
 
 \subsection{Architecture générale}
@@ -761,7 +758,7 @@ Alimentation nœuds & Shield UPS X306 & Batterie Li-ion intégrée & 8h autonomi
 \hline
 Serveur hôte & Node.js + Express & API REST + Gestion flux & PM2 auto-restart \\
 \hline
-Alimentation serveur & Onduleur APC 600VA + NUT & Protection coupure secteur & 20--30 min autonomie + arrêt propre \\
+Alimentation serveur & Batterie intégrée (PC portable) & Résilience électrique naturelle & Autonomie batterie, sans configuration \\
 \hline
 Base de données & PostgreSQL 16 & Logs événements + alertes & Transactions ACID \\
 \hline
@@ -793,34 +790,7 @@ Le modèle de données a été optimisé pour PostgreSQL. Les tables sont créé
 \end{figure}
 
 
-\begin{description}[leftmargin=2.5cm, style=nextline]
-    \item[\texttt{users}]
-    Comptes permettant l'accès au tableau de bord. Champs : \texttt{id}, \texttt{username} (unique), \texttt{password} (hash bcrypt), \texttt{role} (admin/user), \texttt{created\_at}. Conformément au RGPD, un utilisateur peut demander la suppression ou l'anonymisation de son compte via l'interface d'administration (US-19).
-
-    \item[\texttt{cameras}]
-    Caméras fixes configurées dans le système. Champs : \texttt{id}, \texttt{name}, \texttt{rtsp\_url}, \texttt{location}, \texttt{active} (booléen), \texttt{created\_at}.
-
-    \item[\texttt{camera\_nodes}]
-    Parc de nœuds Pi Zero 2W validés et actifs dans le système. Champs : \texttt{id}, \texttt{device\_id} (unique), \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{motion\_detected}, \texttt{last\_motion\_at}, \texttt{last\_seen\_at}, \texttt{created\_at}.
-
-    \item[\texttt{camera\_node\_motion\_events}]
-    Événements de mouvement détectés par les nœuds caméras. Champs : \texttt{id}, \texttt{device\_id} (FK \texttt{camera\_nodes.device\_id}), \texttt{motion}, \texttt{offline\_recording} (booléen), \texttt{recording\_path}, \texttt{detected\_at}, \texttt{created\_at}.
-
-    \item[\texttt{alerts}]
-    Historique des événements de sécurité avec déduplication. Niveaux : \texttt{info}, \texttt{warning}, \texttt{critical}. Champs : \texttt{id}, \texttt{source\_type}, \texttt{source\_id}, \texttt{camera\_id} (FK \texttt{cameras}), \texttt{alert\_type}, \texttt{level}, \texttt{title}, \texttt{message}, \texttt{metadata} (JSONB), \texttt{dedupe\_key}, \texttt{status}, \texttt{acknowledged\_by} (FK \texttt{users}), \texttt{acknowledged\_at}, \texttt{created\_at}.
-
-    \item[\texttt{audit\_logs}]
-    Journal immuable des actions sensibles. Champs : \texttt{id}, \texttt{username} (texte brut, pas de FK — intentionnel pour préserver l'historique après suppression d'un compte), \texttt{action}, \texttt{details}, \texttt{ip\_address}, \texttt{created\_at}.
-
-    \item[\texttt{push\_subscriptions}]
-    Abonnements Web Push des utilisateurs pour les notifications. Champs : \texttt{id}, \texttt{endpoint} (URL unique de l'abonnement), \texttt{p256dh} (clé publique du client), \texttt{auth} (secret d'authentification), \texttt{user\_id} (FK \texttt{users}), \texttt{created\_at}. Chaque abonnement correspond à un navigateur sur un appareil.
-
-    \item[\texttt{camera\_discoveries}]
-    Nœuds caméras détectés sur le réseau mais pas encore validés dans \texttt{camera\_nodes}. Champs : \texttt{id}, \texttt{device\_id}, \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{last\_seen\_at}, \texttt{created\_at}. Permet à l'administrateur de valider manuellement un nœud avant qu'il soit intégré au système actif.
-
-    \item[\texttt{app\_settings}]
-    Singleton de configuration globale de l'application (une seule ligne, contrainte \texttt{CHECK (id = 1)}). Regroupe les paramètres d'interface (thème, densité, format d'heure), les seuils d'alerte (temps de reconnexion caméra, intervalle de découverte), les options de notification (alertes temps réel, résumé quotidien, son), le mode surveillance, et les paramètres du boîtier kiosque (PIN, utilisateur admin par défaut).
-\end{description}
+Le détail de chaque table (champs, types, contraintes) est présenté en annexe~\ref{annexe:db-tables}.
 
 \paragraph{Relations et contraintes}
 Le schéma garantit l'intégrité des données via des clés étrangères entre \texttt{alerts} et \texttt{cameras}, entre \texttt{alerts} et \texttt{users} (acquittement), entre \texttt{camera\_node\_motion\_events} et \texttt{camera\_nodes}, et entre \texttt{push\_subscriptions} et \texttt{users}. La table \texttt{audit\_logs} ne référence intentionnellement aucune entité par clé étrangère afin de garantir la permanence des traces même après suppression d'un utilisateur. La table \texttt{app\_settings} est protégée par une contrainte \texttt{CHECK (id = 1)} garantissant l'unicité de la configuration.
@@ -889,7 +859,7 @@ Un workflow GitHub Actions exécute automatiquement à chaque push :
 \hline
 \textbf{Niveau} & \textbf{Outils} & \textbf{Périmètre} \\
 \hline
-Tests API & Postman & Contrats d'interface REST : auth, caméras, capteurs, utilisateurs (voir annexe~\ref{annexe:tests-api}). \\
+Tests API & curl & Contrats d'interface REST : auth, caméras, capteurs, utilisateurs (voir annexe~\ref{annexe:tests-api}). \\
 \hline
 Tests d'intégration & Scénarios réels & Flux complet : nœud caméra $\rightarrow$ serveur $\rightarrow$ dashboard. \\
 \hline
@@ -910,7 +880,7 @@ Les scénarios suivants ont été testés en laboratoire avant le déploiement t
 \begin{itemize}[label=\textbullet]
     \item \textbf{Coupure WiFi :} désactivation du point d'accès pendant 10 minutes. Le nœud Pi a basculé en mode hors ligne en moins de 5 secondes, enregistré les clips localement, puis les a uploadés intégralement au retour de la connexion, sans perte de données.
     \item \textbf{Coupure secteur (nœuds) :} débranchement de l'alimentation secteur. Le shield UPS X306 a assuré la continuité du flux et de l'enregistrement sans redémarrage du Pi. L'alerte batterie a été envoyée en push lorsque le niveau a atteint 14\%.
-    \item \textbf{Coupure secteur (serveur) :} débranchement de l'alimentation PC. L'onduleur a maintenu le serveur actif pendant 22 minutes, puis NUT a déclenché un arrêt propre. PostgreSQL n'a présenté aucune corruption au redémarrage.
+    \item \textbf{Coupure secteur (serveur) :} débranchement de l'alimentation secteur du PC portable. La batterie intégrée a maintenu le serveur actif sans interruption. PostgreSQL n'a présenté aucune corruption, aucun redémarrage n'ayant été nécessaire.
     \item \textbf{Crash Node.js :} kill forcé du processus serveur. PM2 a redémarré l'application en 8 secondes.
 \end{itemize}
 
@@ -936,6 +906,8 @@ Flux caméra jardin instable (déconnexions fréquentes) & Signal WiFi faible à
 Notifications push non reçues sur le téléphone du client & Navigateur en mode économie d'énergie (restriction push Android) & Documentation d'installation remise au client, mode batterie modifié \\
 \hline
 Boîtier de contrôle lent au démarrage & Carte microSD lente (Classe 6) & Remplacement par une carte SD Classe 10 (UHS-I) \\
+\hline
+Nœud caméra picam absent du dashboard (flux non démarré) & Fichier \texttt{device.conf} manquant sur le Pi : l'agent utilisait un identifiant par défaut (\texttt{pi-picam}) non reconnu par le serveur, empêchant le signal de réveil d'atteindre le bon nœud & Création du fichier \texttt{device.conf} avec le bon \texttt{DEVICE\_ID} ; suppression du nœud fantôme créé entre-temps en base de données \\
 \hline
 \end{tabular}
 \caption{Problèmes constatés lors du déploiement terrain et solutions apportées}
@@ -984,7 +956,7 @@ L'installation de SENTYS a été guidée par une documentation rédigée en para
 
 \subsubsection{Authentification et gestion des utilisateurs}
 
-Le système d'authentification repose sur des tokens JWT signés (expiration 1h), avec hashage bcrypt (coût 12) des mots de passe. Un système RBAC distingue les rôles \texttt{admin} et \texttt{user}. Le rate limiting (10 tentatives par 15 minutes) protège contre les attaques par force brute.
+Le système d'authentification repose sur des tokens JWT signés (expiration 1h), avec hashage bcrypt (coût 12) des mots de passe. Un système RBAC distingue les rôles \texttt{admin} et \texttt{user}. Le rate limiting (8 tentatives par 15 minutes) protège contre les attaques par force brute.
 
 Au premier démarrage, si aucun utilisateur n'existe en base, un compte administrateur
 initial \texttt{root} est créé automatiquement. Ce compte est \textbf{supprimé
@@ -1037,18 +1009,18 @@ Bascule secteur/batterie instantanée, autonomie 8h, monitoring via I2C, alerte 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.65\textwidth]{img/node_camera.jpg}
+    \includegraphics[width=0.65\textwidth]{img/annexe/electronique.jpg}
     \caption{Nœud caméra SENTYS assemblé : Pi Zero 2W, OV5647, shield UPS X306}
     \label{fig:node-camera}
 \end{figure}
 
 \subsubsection{Notifications push}
 
-Les alertes Web Push (protocole VAPID) sont déclenchées automatiquement lors d'événements critiques : caméra hors ligne, batterie inférieure à 15\%, détection de mouvement. L'abonnement (endpoint, clé p256dh, auth) est stocké en base de données.
+Les alertes Web Push (protocole VAPID) sont déclenchées automatiquement lors d'événements critiques : caméra hors ligne, batterie inférieure à 15\%, détection de mouvement. L'abonnement (endpoint, clé p256dh, auth) est stocké en base de données. Une capture de réception de notification est disponible en annexe~\ref{annexe:pwa-notifs}.
 
 \subsubsection{Progressive Web App (PWA)}
 
-Le plugin vite-plugin-pwa génère le Service Worker et le manifest. Les assets statiques sont mis en cache pour un chargement rapide. L'API du navigateur surveille l'état du réseau en temps réel et affiche un bandeau MODE OFFLINE si nécessaire.
+Le plugin vite-plugin-pwa génère le Service Worker et le manifest. Les assets statiques sont mis en cache pour un chargement rapide. L'API du navigateur surveille l'état du réseau en temps réel et affiche un bandeau MODE OFFLINE si nécessaire. L'installation en tant que PWA est illustrée en annexe~\ref{annexe:pwa-notifs}.
 
 \subsubsection{Mise à jour automatique des nœuds}
 
@@ -1078,7 +1050,7 @@ Tailscale repose sur WireGuard et établit des connexions P2P directes via UDP H
 % CORRECTION : le Raspberry Pi 2B était présenté sans contextualisation préalable.
 % Il est maintenant présenté comme choix retenu parmi les options disponibles.
 
-Le boîtier physique centralise le contrôle du système sans dépendance à Internet. Un Raspberry Pi 2 Model B a été retenu pour cette fonction : il était déjà disponible chez le client (coût nul), dispose de ressources suffisantes pour faire tourner Chromium en mode kiosk, et n'exige pas de shield UPS car il est connecté au même onduleur que le serveur hôte.
+Le boîtier physique centralise le contrôle du système sans dépendance à Internet. Un Raspberry Pi 2 Model B a été retenu pour cette fonction : il était déjà disponible chez le client (coût nul), dispose de ressources suffisantes pour faire tourner Chromium en mode kiosk, et n'exige pas de shield UPS : en cas de coupure secteur, il s'éteint normalement, le serveur hôte (PC portable sur batterie) restant lui actif.
 
 \paragraph{Fonctionnement}
 Au démarrage, Chromium s'ouvre en plein écran sur l'URL locale du dashboard. L'authentification par code PIN (US-20) verrouille automatiquement l'écran après 5 minutes d'inactivité. Après 3 échecs de PIN, l'interface se verrouille et une alerte est envoyée à l'administrateur.
@@ -1295,7 +1267,7 @@ La pérennité du système repose sur trois piliers :
 \begin{itemize}[label=\textbullet]
     \item \textbf{Mises à jour automatiques :} le pipeline CI/CD déploie automatiquement chaque nouvelle version sur le serveur. Les nœuds Pi se mettent à jour dans les 5 minutes suivant un déploiement. Aucune intervention manuelle n'est requise pour la maintenance courante.
     \item \textbf{Sauvegardes :} une sauvegarde quotidienne de PostgreSQL est planifiée via \texttt{cron}, avec rotation sur 30 jours. Les enregistrements vidéo sont purgés automatiquement au-delà de 30 jours, conformément à la loi belge.
-    \item \textbf{Monitoring :} PM2 surveille l'état du processus Node.js et redémarre automatiquement en cas de crash. Les alertes système (caméra hors ligne, batterie faible) sont remontées en temps réel via le dashboard et les notifications push.
+    \item \textbf{Monitoring :} PM2 surveille l'état du processus Node.js et redémarre automatiquement en cas de crash (voir annexe~\ref{fig:pm2-list}). Les alertes système (caméra hors ligne, batterie faible) sont remontées en temps réel via le dashboard et les notifications push.
 \end{itemize}
 
 La principale dépendance externe est Tailscale, dont la version gratuite est suffisante pour l'usage résidentiel actuel. En cas d'arrêt du service, le système resterait accessible sur le LAN local — seul l'accès distant serait impacté.
@@ -1308,6 +1280,7 @@ La principale dépendance externe est Tailscale, dont la version gratuite est su
     \item Interface multilingue (français / néerlandais / anglais).
     \item Tableau de bord analytique : statistiques d'activité par caméra et par période.
     \item Tests de charge et pentest pour valider le passage à l'échelle.
+    \item Amélioration de la fiabilité de la détection de mouvement et de la stabilité des flux caméras, afin de réduire les faux positifs et les reconnexions intempestives dans les environnements à signal WiFi variable.
 \end{itemize}
 
 
@@ -1329,7 +1302,9 @@ La principale dépendance externe est Tailscale, dont la version gratuite est su
     \item Autorité de Protection des Données (Belgique). \textit{Loi du 21 mars 2007 réglant l'installation et l'utilisation de caméras de surveillance}. Disponible sur : \url{https://www.autoriteprotectiondonnees.be/}
     \item OpenAI. \textit{GPT Models Documentation}. Disponible sur : \url{https://platform.openai.com/docs/}
     \item Anthropic. \textit{Claude AI Documentation}. Disponible sur : \url{https://docs.anthropic.com/}
-    \item AlexxIT. \textit{go2rtc --- Stream application with multi-protocol support}. disponible sur : \url{https://github.com/AlexxIT/go2rtc}
+    \item AlexxIT. \textit{go2rtc --- Stream application with multi-protocol support}. Disponible sur : \url{https://github.com/AlexxIT/go2rtc}
+    \item Printables. \textit{Cam OV5647 with M12 lens case for the articulating arm}. Modèle 3D utilisé pour le boîtier de la caméra. Disponible sur : \url{https://www.printables.com/model/253581-cam-ov5647-with-m12-lens-case-for-the-articulating}
+    \item Thingiverse. \textit{Articulating Raspberry Pi Camera Mount}. Modèle 3D du pied, adapté en taille pour le projet. Disponible sur : \url{https://www.thingiverse.com/thing:3071705}
 \end{enumerate}
 
 % ==========================================================
@@ -1374,16 +1349,86 @@ SYNCHRONISATION & Serveur de retour & Upload séquentiel des clips en attente & 
 \caption{Machine à états du nœud caméra}
 \end{table}
 
+\subsection{Détail des tables de la base de données}
+\label{annexe:db-tables}
+
+Le schéma entité-association est présenté à la figure~\ref{fig:db-schema}.
+
+\begin{description}[leftmargin=2.5cm, style=nextline]
+    \item[\texttt{users}]
+    Comptes permettant l'accès au tableau de bord. Champs : \texttt{id}, \texttt{username} (unique), \texttt{password} (hash bcrypt), \texttt{role} (admin/user), \texttt{created\_at}. Conformément au RGPD, un utilisateur peut demander la suppression ou l'anonymisation de son compte via l'interface d'administration (US-19).
+
+    \item[\texttt{cameras}]
+    Caméras fixes configurées dans le système. Champs : \texttt{id}, \texttt{name}, \texttt{rtsp\_url}, \texttt{location}, \texttt{active} (booléen), \texttt{created\_at}.
+
+    \item[\texttt{camera\_nodes}]
+    Parc de nœuds Pi Zero 2W validés et actifs dans le système. Champs : \texttt{id}, \texttt{device\_id} (unique), \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{motion\_detected}, \texttt{last\_motion\_at}, \texttt{last\_seen\_at}, \texttt{created\_at}.
+
+    \item[\texttt{camera\_node\_motion\_events}]
+    Événements de mouvement détectés par les nœuds caméras. Champs : \texttt{id}, \texttt{device\_id} (FK \texttt{camera\_nodes.device\_id}), \texttt{motion}, \texttt{offline\_recording} (booléen), \texttt{recording\_path}, \texttt{detected\_at}, \texttt{created\_at}.
+
+    \item[\texttt{alerts}]
+    Historique des événements de sécurité avec déduplication. Niveaux : \texttt{info}, \texttt{warning}, \texttt{critical}. Champs : \texttt{id}, \texttt{source\_type}, \texttt{source\_id}, \texttt{camera\_id} (FK \texttt{cameras}), \texttt{alert\_type}, \texttt{level}, \texttt{title}, \texttt{message}, \texttt{metadata} (JSONB), \texttt{dedupe\_key}, \texttt{status}, \texttt{acknowledged\_by} (FK \texttt{users}), \texttt{acknowledged\_at}, \texttt{created\_at}.
+
+    \item[\texttt{audit\_logs}]
+    Journal immuable des actions sensibles. Champs : \texttt{id}, \texttt{username} (texte brut, pas de FK — intentionnel pour préserver l'historique après suppression d'un compte), \texttt{action}, \texttt{details}, \texttt{ip\_address}, \texttt{created\_at}.
+
+    \item[\texttt{push\_subscriptions}]
+    Abonnements Web Push des utilisateurs pour les notifications. Champs : \texttt{id}, \texttt{endpoint} (URL unique de l'abonnement), \texttt{p256dh} (clé publique du client), \texttt{auth} (secret d'authentification), \texttt{user\_id} (FK \texttt{users}), \texttt{created\_at}. Chaque abonnement correspond à un navigateur sur un appareil.
+
+    \item[\texttt{camera\_discoveries}]
+    Nœuds caméras détectés sur le réseau mais pas encore validés dans \texttt{camera\_nodes}. Champs : \texttt{id}, \texttt{device\_id}, \texttt{name}, \texttt{host}, \texttt{stream\_url}, \texttt{location}, \texttt{model}, \texttt{source}, \texttt{last\_seen\_at}, \texttt{created\_at}. Permet à l'administrateur de valider manuellement un nœud avant qu'il soit intégré au système actif.
+
+    \item[\texttt{app\_settings}]
+    Singleton de configuration globale de l'application (une seule ligne, contrainte \texttt{CHECK (id = 1)}). Regroupe les paramètres d'interface (thème, densité, format d'heure), les seuils d'alerte (temps de reconnexion caméra, intervalle de découverte), les options de notification (alertes temps réel, résumé quotidien, son), le mode surveillance, et les paramètres du boîtier kiosque (PIN, utilisateur admin par défaut).
+\end{description}
+
 \subsection{Commandes de gestion du serveur}
 
 \begin{lstlisting}[language=bash, caption=Commandes PM2 essentielles]
 # Statut du serveur
 pm2 status
 # Logs en temps reel
-pm2 logs SENTYS
+pm2 logs sentys
 # Redemarrer
-pm2 restart SENTYS
+pm2 restart sentys
 \end{lstlisting}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{img/annexe/sentys.png}
+    \caption{État du processus SENTYS supervisé par PM2 sur le serveur hôte}
+    \label{fig:pm2-list}
+\end{figure}
+
+\subsection{Supports de caméra imprimés en 3D}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/annexe/support.jpg}
+    \caption{Impression des supports de fixation des nœuds caméra}
+    \label{fig:supports-camera}
+\end{figure}
+
+\subsection{Interface PWA et notifications push}
+\label{annexe:pwa-notifs}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}[t]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/annexe/pwa.jpg}
+        \caption{Installation de l'application SENTYS en tant que PWA sur un appareil mobile}
+        \label{fig:pwa}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{img/annexe/notifications.jpg}
+        \caption{Réception d'une notification push SENTYS sur appareil mobile}
+        \label{fig:notifications}
+    \end{minipage}
+\end{figure}
 
 \subsection{Résultats des tests de sécurité}
 \label{annexe:tests-secu}
@@ -1397,7 +1442,7 @@ curl -s http://localhost:4000/api/users
 \end{lstlisting}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_secu_1_no_token.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_secu_1.png}
     \caption{Test 1 : accès à une route protégée sans token --- retour 401}
 \end{figure}
 
@@ -1409,7 +1454,7 @@ curl -s http://localhost:4000/api/users \
 \end{lstlisting}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_secu_2_fake_token.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_secu_2.png}
     \caption{Test 2 : token JWT falsifié rejeté par le serveur}
 \end{figure}
 
@@ -1422,7 +1467,7 @@ curl -s -X POST http://localhost:4000/auth/login \
 \end{lstlisting}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_secu_3_sql_injection.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_secu_3.png}
     \caption{Test 3 : tentative d'injection SQL --- rejetée, aucun accès obtenu}
 \end{figure}
 
@@ -1434,7 +1479,7 @@ curl -s http://localhost:4000/api/users \
 \end{lstlisting}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_secu_4_auth_ok.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_secu_4.png}
     \caption{Test 4 : accès avec token valide --- liste des utilisateurs retournée}
 \end{figure}
 
@@ -1449,7 +1494,7 @@ done
 \end{lstlisting}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_secu_5_rate_limit.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_secu_5.png}
     \caption{Test 5 : rate limiting actif --- blocage à partir de la 8\textsuperscript{e} tentative}
 \end{figure}
 
@@ -1458,19 +1503,19 @@ done
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_api_cameras.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_api_cameras.png}
     \caption{Test API : \texttt{GET /api/cameras} --- liste des caméras configurées}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_api_nodes.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_api_nodes.png}
     \caption{Test API : \texttt{GET /api/camera-nodes} --- liste des nœuds actifs}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{img/test_api_alerts.png}
+    \includegraphics[width=0.85\textwidth]{img/annexe/test_api_alerts.png}
     \caption{Test API : \texttt{GET /api/alerts} --- historique des alertes}
 \end{figure}
 

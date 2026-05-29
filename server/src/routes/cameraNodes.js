@@ -33,7 +33,7 @@ mkdirSync(OFFLINE_RECORDINGS_DIR, { recursive: true });
 
 const offlineStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, OFFLINE_RECORDINGS_DIR),
-  filename: (_req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`),
+  filename: (_req, file, cb) => cb(null, `offline_sync_${Date.now()}_${file.originalname}`),
 });
 const uploadOffline = multer({
   storage: offlineStorage,
