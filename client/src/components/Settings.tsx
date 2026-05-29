@@ -119,9 +119,6 @@ function TabSettings() {
   const [displayError, setDisplayError] = useState('');
   const [displaySuccess, setDisplaySuccess] = useState('');
   const [displaySaving, setDisplaySaving] = useState(false);
-  const [cameraError, setCameraError] = useState('');
-  const [cameraSuccess, setCameraSuccess] = useState('');
-  const [cameraSaving, setCameraSaving] = useState(false);
   const [alertsError, setAlertsError] = useState('');
   const [alertsSuccess, setAlertsSuccess] = useState('');
   const [alertsSaving, setAlertsSaving] = useState(false);
@@ -237,28 +234,6 @@ function TabSettings() {
     }
   }
 
-  async function saveCameraSettings() {
-    if (!token) return;
-    setCameraError('');
-    setCameraSuccess('');
-    setCameraSaving(true);
-    try {
-      const nextConfig = await updateConfig(token, {
-        cameraAutostartEnabled: draftConfig.cameraAutostartEnabled,
-        cameraRefreshSeconds: draftConfig.cameraRefreshSeconds,
-        showOfflineCameras: draftConfig.showOfflineCameras,
-        defaultCameraAddMode: draftConfig.defaultCameraAddMode,
-        cameraDiscoveryIntervalSeconds: draftConfig.cameraDiscoveryIntervalSeconds,
-      });
-      setDraftConfig(nextConfig);
-      setCameraSuccess('Réglages caméras enregistrés.');
-    } catch (err: unknown) {
-      setCameraError(err instanceof Error ? err.message : 'Erreur serveur');
-    } finally {
-      setCameraSaving(false);
-    }
-  }
-
   async function saveAlertsSettings() {
     if (!token) return;
     setAlertsError('');
@@ -348,14 +323,6 @@ function TabSettings() {
             <input className="ui-input" type="text" value={draftConfig.loginMessage} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.loginMessage, (value) => updateDraft({ loginMessage: value }))} onChange={event => updateDraft({ loginMessage: event.target.value })} />
           </label>
         </div>
-        <div className="settings-toggle-list">
-          <SettingToggle
-            label="Afficher la version système"
-            description="Affiche le numéro de version dans l’en-tête et sur l’écran de connexion."
-            checked={draftConfig.showSystemVersion}
-            onChange={(checked) => updateDraft({ showSystemVersion: checked })}
-          />
-        </div>
         {applicationError && <div className="settings-msg settings-msg--error">⚠ {applicationError}</div>}
         {applicationSuccess && <div className="settings-msg settings-msg--success">✓ {applicationSuccess}</div>}
       </div>
@@ -417,139 +384,11 @@ function TabSettings() {
             <input type="range" min="40" max="64" step="4" value={settings.touchTarget} onChange={event => updateSettings({ touchTarget: Number(event.target.value) })} />
           </label>
 
-          <div className="appearance-preview" aria-label="Aperçu de l'interface">
-            <div className="appearance-preview-shell">
-              <div className="appearance-preview-topbar">
-                <span className="appearance-preview-brand">{config.appName}</span>
-                <span className="appearance-preview-status">EN LIGNE</span>
-              </div>
-              <div className="appearance-preview-content">
-                <div className="appearance-preview-panel">
-                  <span className="appearance-preview-kicker">Caméras</span>
-                  <span className="appearance-preview-title">Vue tactile</span>
-                  <span className="appearance-preview-text">Aperçu direct du thème, de la lisibilité et de la taille des zones cliquables.</span>
-                </div>
-                <div className="appearance-preview-actions">
-                  <button type="button" className="appearance-preview-button appearance-preview-button--primary">Afficher</button>
-                  <button type="button" className="appearance-preview-button">Paramètres</button>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="settings-msg settings-msg--success">
           Personnalisation enregistrée automatiquement sur cet appareil. Valeurs par défaut : {APPEARANCE_DEFAULTS.theme}, {Math.round(APPEARANCE_DEFAULTS.fontScale * 100)}%, {APPEARANCE_DEFAULTS.touchTarget}px.
         </div>
-      </div>
-
-      <div className="settings-section">
-        <div className="settings-section-label settings-section-label--row">
-          <span>AFFICHAGE</span>
-          <button className="ui-confirm-btn" onClick={saveDisplaySettings} disabled={displaySaving}>
-            {displaySaving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </div>
-        <div className="settings-config-grid">
-          <div className="settings-field">
-            <span className="settings-field-label">Densité d’interface</span>
-            <SettingsDropdown
-              value={draftConfig.uiDensity}
-              options={[
-                { value: 'compact', label: 'Compacte' },
-                { value: 'standard', label: 'Standard' },
-                { value: 'touch', label: 'Tactile' }
-              ]}
-              onChange={val => updateDraft({ uiDensity: val as typeof draftConfig.uiDensity })}
-              ariaLabel="Densité d’interface"
-            />
-          </div>
-          <div className="settings-field">
-            <span className="settings-field-label">Taille des cartes caméra</span>
-            <SettingsDropdown
-              value={draftConfig.cameraCardSize}
-              options={[
-                { value: 'compact', label: 'Compacte' },
-                { value: 'standard', label: 'Standard' },
-                { value: 'large', label: 'Grande' }
-              ]}
-              onChange={val => updateDraft({ cameraCardSize: val as typeof draftConfig.cameraCardSize })}
-              ariaLabel="Taille des cartes caméra"
-            />
-          </div>
-        </div>
-        <div className="settings-toggle-list">
-          <SettingToggle
-            label="Afficher le panneau de statut"
-            description="Affiche l'indicateur de statut du système dans l’en-tête."
-            checked={draftConfig.showStatusPanel}
-            onChange={(checked) => updateDraft({ showStatusPanel: checked })}
-          />
-          <SettingToggle
-            label="Utiliser le clavier virtuel à l'écran"
-            description="Affiche un clavier pour les champs de saisie. Utile pour les écrans tactiles."
-            checked={isKeyboardEnabled}
-            onChange={(checked) => {
-              if (checked) {
-                window.localStorage.setItem('sentys:virtual_keyboard', 'true');
-              } else {
-                window.localStorage.removeItem('sentys:virtual_keyboard');
-              }
-              window.location.reload();
-            }}
-          />
-        </div>
-        {displayError && <div className="settings-msg settings-msg--error">⚠ {displayError}</div>}
-        {displaySuccess && <div className="settings-msg settings-msg--success">✓ {displaySuccess}</div>}
-      </div>
-
-      <div className="settings-section">
-        <div className="settings-section-label settings-section-label--row">
-          <span>CAMÉRAS</span>
-          <button className="ui-confirm-btn" onClick={saveCameraSettings} disabled={cameraSaving}>
-            {cameraSaving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        </div>
-        <div className="settings-config-grid">
-          <label className="settings-field">
-            <span className="settings-field-label">Rafraîchissement de la grille</span>
-            <input className="ui-input" type="number" min="2" max="15" value={draftConfig.cameraRefreshSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraRefreshSeconds), (value) => updateDraft({ cameraRefreshSeconds: Number(value) || 2 }))} onChange={event => updateDraft({ cameraRefreshSeconds: Number(event.target.value) || 2 })} />
-            <span className="settings-field-hint">Secondes entre deux synchronisations de la liste des caméras.</span>
-          </label>
-          <label className="settings-field">
-    <span className="settings-field-label">Intervalle découverte (Nœuds / Scan)</span>
-            <input className="ui-input" type="number" min="3" max="30" value={draftConfig.cameraDiscoveryIntervalSeconds} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(String(draftConfig.cameraDiscoveryIntervalSeconds), (value) => updateDraft({ cameraDiscoveryIntervalSeconds: Number(value) || 3 }))} onChange={event => updateDraft({ cameraDiscoveryIntervalSeconds: Number(event.target.value) || 3 })} />
-            <span className="settings-field-hint">Secondes entre deux rafraîchissements dans le panneau d’ajout caméra.</span>
-          </label>
-          <div className="settings-field">
-            <span className="settings-field-label">Mode d’ajout par défaut</span>
-            <SettingsDropdown
-              value={draftConfig.defaultCameraAddMode}
-              options={[
-        { value: 'discover', label: 'Scan Réseau' },
-                { value: 'manual', label: 'Manuel' }
-              ]}
-              onChange={val => updateDraft({ defaultCameraAddMode: val as typeof draftConfig.defaultCameraAddMode })}
-              ariaLabel="Mode d’ajout par défaut"
-            />
-          </div>
-        </div>
-        <div className="settings-toggle-list">
-          <SettingToggle
-            label="Démarrer automatiquement les caméras au lancement du serveur"
-            description="Si désactivé, les flux actifs restent enregistrés mais ne sont pas relancés automatiquement au boot."
-            checked={draftConfig.cameraAutostartEnabled}
-            onChange={(checked) => updateDraft({ cameraAutostartEnabled: checked })}
-          />
-          <SettingToggle
-            label="Afficher les caméras hors ligne"
-            description="Conserve les flux stoppés ou en reconnexion dans la grille principale."
-            checked={draftConfig.showOfflineCameras}
-            onChange={(checked) => updateDraft({ showOfflineCameras: checked })}
-          />
-        </div>
-        {cameraError && <div className="settings-msg settings-msg--error">⚠ {cameraError}</div>}
-        {cameraSuccess && <div className="settings-msg settings-msg--success">✓ {cameraSuccess}</div>}
       </div>
 
       <div className="settings-section">
@@ -571,12 +410,6 @@ function TabSettings() {
             description="Prépare un résumé quotidien des événements et détections."
             checked={draftConfig.alertsDailySummaryEnabled}
             onChange={(checked) => updateDraft({ alertsDailySummaryEnabled: checked })}
-          />
-          <SettingToggle
-            label="Alertes sonores"
-            description="Autorise le déclenchement sonore local quand une alerte critique est remontée."
-            checked={draftConfig.alertsSoundEnabled}
-            onChange={(checked) => updateDraft({ alertsSoundEnabled: checked })}
           />
           <SettingToggle
             label="Alerter si une caméra se déconnecte"
@@ -1052,39 +885,6 @@ function TabHelp() {
             IA : YOLOv8n (ultralytics), OpenCV<br />
             Matériel : Raspberry Pi Zero 2W, MediaMTX
           </span>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <div className="settings-section-label">ACCÈS EXTERNE — TAILSCALE</div>
-        <div className="settings-danger-zone-text" style={{ lineHeight: '1.7' }}>
-          <p style={{ marginTop: 0 }}>
-            <strong>Tailscale</strong> est un VPN mesh basé sur WireGuard qui permet d'accéder à SENTYS depuis n'importe où, <strong>sans ouvrir de port</strong> sur votre routeur.
-          </p>
-          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>1 — INSTALLER TAILSCALE SUR LE SERVEUR</p>
-          <pre style={{ background: 'var(--bg-secondary)', borderRadius: '6px', padding: '10px 14px', fontSize: '0.82rem', overflowX: 'auto', margin: '0 0 14px 0' }}>
-{`# Sur le PC hôte (Linux/Debian)
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up`}
-          </pre>
-          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>2 — INSTALLER TAILSCALE SUR VOS APPAREILS CLIENTS</p>
-          <ul style={{ margin: '0 0 14px 0', fontSize: '0.9rem', lineHeight: '1.6', paddingLeft: '20px', color: 'var(--text-secondary)' }}>
-            <li style={{ marginBottom: '6px' }}><strong>Android / iOS</strong> — Tailscale sur le Play Store / App Store</li>
-            <li style={{ marginBottom: '6px' }}><strong>Windows / macOS</strong> — <span style={{ fontFamily: 'monospace' }}>tailscale.com/download</span></li>
-            <li style={{ marginBottom: '6px' }}>Connectez-vous avec le <strong>même compte</strong> que le serveur</li>
-          </ul>
-          <p style={{ marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600 }}>3 — ACCÉDER À SENTYS</p>
-          <p style={{ fontSize: '0.9rem', margin: '0 0 6px 0' }}>
-            Une fois connecté, accédez à SENTYS via l'IP Tailscale du serveur (ex : <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>http://100.x.x.x:3000</span>) ou via MagicDNS si activé :
-          </p>
-          <pre style={{ background: 'var(--bg-secondary)', borderRadius: '6px', padding: '10px 14px', fontSize: '0.82rem', overflowX: 'auto', margin: '0 0 14px 0' }}>
-{`# Trouver l'IP Tailscale du serveur
-tailscale ip -4
-# → ex: 100.72.14.3  →  http://100.72.14.3:3000`}
-          </pre>
-          <p style={{ marginBottom: '4px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Tailscale chiffre tout le trafic de bout en bout. Aucune donnée ne transite par un serveur Tailscale — la connexion est directe (P2P) entre vos appareils.
-          </p>
         </div>
       </div>
 

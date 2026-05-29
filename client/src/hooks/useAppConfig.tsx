@@ -40,7 +40,7 @@ interface AppConfigContextType {
 const DEFAULT_CONFIG: AppConfig = {
   appName: 'SENTYS',
   appSubtitle: 'Système de surveillance',
-  systemVersion: 'v2.4.1',
+  systemVersion: 'v0.0.1',
   loginMessage: 'Connexion sécurisée au système',
   interfaceLanguage: 'fr-FR',
   timeFormat: '24h',

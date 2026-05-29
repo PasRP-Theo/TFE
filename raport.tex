@@ -23,7 +23,27 @@
 \usepackage{tabularx}
 \usepackage{makecell}
 \usepackage{colortbl}  % pour \rowcolor
+\usepackage[most]{tcolorbox}
 \newcommand{\rref}[1]{\textsuperscript{\normalfont[#1]}}
+
+% ── Blocs colorés ─────────────────────────────────────────
+\tcbuselibrary{skins}
+\newtcolorbox{infobox}{
+  enhanced,
+  colback=blue!5!white,
+  colframe=blue!50!black,
+  boxrule=0.6pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  arc=3pt,
+}
+\newtcolorbox{warnbox}{
+  enhanced,
+  colback=orange!8!white,
+  colframe=orange!70!black,
+  boxrule=0.6pt,
+  left=6pt, right=6pt, top=4pt, bottom=4pt,
+  arc=3pt,
+}
 
 
 % ── Liens ─────────────────────────────────────────────────
@@ -112,27 +132,22 @@ Je souhaite enfin exprimer ma gratitude à l'ensemble du corps professoral de l'
 
 \newpage
 % ==========================================================
-\section*{Déclaration sur l'usage de l'intelligence artificielle}
+\section*{Utilisation de l’intelligence artificielle}
 \addcontentsline{toc}{section}{Déclaration sur l'usage de l'intelligence artificielle}
 % ==========================================================
 
-Par souci de transparence, je précise ici comment j'ai utilisé les outils d'intelligence artificielle générative dans la préparation des livrables associés à ce TFE.
+Par souci de transparence, je précise ici de quelle manière j'ai utilisé les outils d'intelligence artificielle générative dans le cadre de ce TFE.
 
-\paragraph{Les outils utilisés}
-Je me suis appuyé sur plusieurs outils, chacun pour un usage distinct :
+Les outils utilisés sont :
 \begin{itemize}[label=\textbullet]
-    \item \textbf{Claude Code (ligne de commande) :} assistance au développement du système SENTYS --- débogage, révision de code, cohérence architecturale.
-    \item \textbf{Claude (application de bureau) :} partenaire de réflexion sur les choix techniques et méthodologiques, et accompagnement lors de la rédaction de ce rapport (mise en forme \LaTeX{}, reformulation, structuration).
-    \item \textbf{ChatGPT (OpenAI) :} consultation ponctuelle pour des questions techniques ou des doutes lors du développement.
-    \item \textbf{Gemini (Google) :} recherches d'informations complémentaires et vérification de concepts.
+    \item \textbf{Claude Code (via l'IDE) :} assistance au développement du système SENTYS : débogage, révision de code et cohérence architecturale.
+    \item \textbf{ChatGPT et Gemini :} consultation ponctuelle pour des questions techniques en cours de développement, recherches d'informations complémentaires et vérification de concepts.
 \end{itemize}
 
+Je ne suis jamais parti d'une page blanche : la base de travail était toujours personnelle, constituée de mes notes, de mes décisions techniques déjà prises et des échanges avec mon rapporteur. L'IA est intervenue ensuite pour regrouper des informations, reformuler ou corriger, dans l'objectif d'obtenir un résultat plus soigné et plus cohérent.
 
-\paragraph{Comment je m'en suis servi}
-Je ne suis jamais parti d'une page blanche confiée à une IA. La base de travail était toujours personnelle : mes notes, mes décisions techniques déjà prises, les échanges avec mon rapporteur. L'IA est intervenue ensuite pour regrouper cette matière, la reformuler ou la corriger, dans l'objectif d'arriver à un résultat plus soigné et plus cohérent.
+Tout ce que l'intelligence artificielle a produit a été relu et validé par mes soins. Je suis le seul et unique responsable du projet final : le contenu, les choix et les analyses de ce document sont issus de mon propre travail et de mes lectures de documentation.
 
-\paragraph{Validation et responsabilité}
-Tout ce qu'un outil d'IA a produit --- du code intégré au système comme des paragraphes de ce rapport --- est passé par ma relecture et a été validé par moi avant d'être conservé. Je reste le seul responsable du contenu livré. Les analyses, les choix techniques et les positions exprimées dans ce document viennent de mon propre travail et de ma propre réflexion.
 
 \newpage
 
@@ -245,7 +260,7 @@ L'objectif est de concevoir un système intégré assurant la sécurité du foye
 \subsection{Périmètre du Projet}
 
 \subsubsection{Fonctionnalités incluses}
-Le projet inclut la mise en place d'un serveur local centralisé, des dispositifs de captation vidéo, des capteurs de mouvement, un point de contrôle physique, et des mécanismes de résilience électrique et réseau.
+Le projet inclut la mise en place d'un serveur local centralisé, des dispositifs de captation vidéo, des détéctions de mouvement, un point de contrôle physique, et des mécanismes de résilience électrique et réseau.
 
 \subsubsection{Exclusions}
 Toute intégration avec des services Cloud commerciaux est exclue. L'accès distant ne sera pas géré par une application tierce mais par un tunnel VPN privé.
@@ -277,7 +292,7 @@ Toute intégration avec des services Cloud commerciaux est exclue. L'accès dist
 
 \subsubsection{Point de Contrôle Physique}
 \begin{itemize}[label=•]
-    \item Visualisation directe des flux et de l'état général (stockage, capteurs).
+    \item Visualisation directe des flux et de l'état général (stockage, état du pc host).
     \item Activation/désactivation du mode surveillance en un geste.
     \item Fonctionnement garanti sans dépendance à Internet.
 \end{itemize}
@@ -287,15 +302,13 @@ Toute intégration avec des services Cloud commerciaux est exclue. L'accès dist
 
 \begin{itemize}[label=•]
     \item \textbf{Aucun service cloud :} la totalité des traitements et du stockage doit rester sur le réseau local du client.
-    \item \textbf{Aucun abonnement récurrent :} le système ne doit entraîner aucun coût mensuel après installation.
+    \item \textbf{Aucun abonnement récurrent :} le système ne doit entraîner aucun coût mensuel après installation dans la mesure du possible.
     \item \textbf{Accès distant exclusivement par VPN :} aucun port public ne doit être exposé sur Internet.
     \item \textbf{Confidentialité des données :} les flux vidéo ne doivent en aucun cas transiter par des serveurs tiers.
     \item \textbf{Interface physique prioritaire :} le boîtier de contrôle local doit constituer le point d'entrée principal, indépendamment de tout smartphone.
 \end{itemize}
 
 \subsection{Comparaison avec les solutions existantes}
-% CORRECTION : la comparaison était trop légère (prix non cités, complexité UX non expliquée,
-% critère "centralisation" absent alors qu'il justifie le choix au 3.6).
 
 Le tableau suivant présente une comparaison objective entre les leaders du marché et la solution proposée, sur l'ensemble des critères ayant guidé les choix du projet.
 
@@ -307,7 +320,7 @@ Le tableau suivant présente une comparaison objective entre les leaders du marc
 \hline
 \textbf{Critère} & \textbf{Solutions Cloud (Ring, Nest)} & \textbf{TP-Link Tapo} & \textbf{Solution Proposée} \\
 \hline
-\textbf{Dépendance Internet} & Totale --- inopérant sans connexion & Partielle --- fonctions réduites hors ligne & Nulle --- fonctionnement local complet \\
+\textbf{Dépendance Internet} & Totale, inopérant sans connexion & Partielle, fonctions réduites hors ligne & Nulle, fonctionnement local complet \\
 \hline
 \textbf{Coût récurrent} & Ring Protect : \textasciitilde 3--10 €/mois ; Nest Aware : \textasciitilde 6--12 €/mois & Gratuit (stockage SD) ou Tapo Care : \textasciitilde 3 €/mois & \textbf{0 € / mois} \\
 \hline
@@ -331,7 +344,7 @@ Le développement en interne repose sur quatre piliers, tous référencés dans 
 \begin{enumerate}
     \item \textbf{Centralisation :} s'affranchir de la multiplicité des applications propriétaires par une interface unique.
     \item \textbf{Souveraineté :} éliminer les risques de fuite de données sur des serveurs tiers.
-    \item \textbf{Indépendance économique :} zéro frais de fonctionnement après installation.
+    \item \textbf{Indépendance économique :} zéro frais de fonctionnement après installation dans la mesure du possible.
     \item \textbf{Valeur technique :} maîtrise de bout en bout de la chaîne technique, validant une expertise en systèmes distribués et cybersécurité.
 \end{enumerate}
 
@@ -565,7 +578,7 @@ Trois solutions d'alimentation continue ont été étudiées pour les nœuds Pi 
 \hline
 \textbf{Compacité} & Moyenne & Très compacte (empilée) & Faible \\
 \hline
-\textbf{Autonomie} & Variable selon modèle & \textasciitilde 8h & \textasciitilde 4--6h \\
+\textbf{Autonomie} & Variable selon modèle & \textasciitilde 4h & \textasciitilde 4h \\
 \hline
 \textbf{Décision} & Écarté & \textcolor{green!60!black}{\textbf{Retenu}} & Écarté \\
 \hline
@@ -612,9 +625,13 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 \caption{Comparaison des frameworks frontend candidats}
 \end{table}
 
+\begin{infobox}
 \textbf{Justification :} React avec TypeScript a été retenu pour son écosystème mature autour de la gestion vidéo (\texttt{hls.js}), son intégration Vite + PWA clé en main, et la maîtrise préalable du framework, facteur déterminant dans le contexte d'un TFE à réaliser en une année.
+\end{infobox}
 
+\begin{warnbox}
 \textbf{Limites identifiées :} l'écosystème React évolue rapidement, ce qui implique des mises à jour régulières des dépendances (breaking changes entre versions majeures). hls.js ne supporte pas nativement le DRM, ce qui ne pose pas de problème dans ce contexte 100\% local.
+\end{warnbox}
 
 
 \subsubsection{Backend}
@@ -646,7 +663,9 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 \caption{Comparaison des environnements backend candidats}
 \end{table}
 
+\begin{warnbox}
 \textbf{Limites identifiées :} Node.js n'est pas adapté aux tâches CPU-intensives (transcodage vidéo). C'est pourquoi FFmpeg est délégué en processus enfant plutôt qu'intégré dans la boucle événementielle.
+\end{warnbox}
 
 
 \subsubsection{Base de données}
@@ -676,9 +695,13 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 \caption{Comparaison des systèmes de gestion de base de données candidats}
 \end{table}
 
+\begin{infobox}
 \textbf{Justification :} SQLite a été écarté en raison de risques de corruption lors de coupures électriques (verrous au niveau fichier), incompatibles avec les exigences de fiabilité d'un système de sécurité. PostgreSQL a été préféré à MySQL pour son support natif du JSONB, permettant de stocker les métadonnées variables des événements IoT sans modifier le schéma.
+\end{infobox}
 
+\begin{warnbox}
 \textbf{Limites identifiées :} PostgreSQL requiert un dimensionnement mémoire approprié (\texttt{shared\_buffers}, \texttt{work\_mem}) pour des charges élevées. Dans le contexte actuel (moins de 10 caméras, faible volume transactionnel), la configuration par défaut est suffisante.
+\end{warnbox}
 
 
 \subsubsection{Streaming vidéo}
@@ -726,6 +749,7 @@ Le serveur hôte est un PC sous Ubuntu 24 LTS, retenu pour les raisons suivantes
     \item Résilience électrique naturelle : la batterie intégrée du PC portable assure la continuité du service en cas de coupure secteur (section~5.1.3).
 \end{itemize}
 
+\newpage
 \subsection{Architecture générale}
 
 Le système s'articule en trois couches : la capture distribuée, le serveur de traitement centralisé et l'interface utilisateur.
@@ -793,7 +817,13 @@ Le modèle de données a été optimisé pour PostgreSQL. Les tables sont créé
 Le détail de chaque table (champs, types, contraintes) est présenté en annexe~\ref{annexe:db-tables}.
 
 \paragraph{Relations et contraintes}
-Le schéma garantit l'intégrité des données via des clés étrangères entre \texttt{alerts} et \texttt{cameras}, entre \texttt{alerts} et \texttt{users} (acquittement), entre \texttt{camera\_node\_motion\_events} et \texttt{camera\_nodes}, et entre \texttt{push\_subscriptions} et \texttt{users}. La table \texttt{audit\_logs} ne référence intentionnellement aucune entité par clé étrangère afin de garantir la permanence des traces même après suppression d'un utilisateur. La table \texttt{app\_settings} est protégée par une contrainte \texttt{CHECK (id = 1)} garantissant l'unicité de la configuration.
+Le schéma garantit l'intégrité des données via les clés étrangères suivantes :
+\begin{itemize}[label=\textbullet, noitemsep]
+    \item \texttt{alerts} $\rightarrow$ \texttt{cameras} et \texttt{alerts} $\rightarrow$ \texttt{users} (acquittement)
+    \item \texttt{camera\_node\_motion\_events} $\rightarrow$ \texttt{camera\_nodes}
+    \item \texttt{push\_subscriptions} $\rightarrow$ \texttt{users}
+\end{itemize}
+La table \texttt{audit\_logs} ne référence intentionnellement aucune entité par clé étrangère, afin de préserver les traces même après suppression d'un utilisateur. La table \texttt{app\_settings} est protégée par une contrainte \texttt{CHECK (id = 1)} garantissant l'unicité de la configuration.
 
 \subsection{RGPD et Protection des Données}
 
@@ -1335,7 +1365,7 @@ Batterie Li-ion & Connecteur PH2.0 & Entrée BAT (Shield X306) \\
 \begin{table}[H]
 \centering
 \small
-\begin{tabular}{|p{2.8cm}|p{3.2cm}|p{5.5cm}|p{3.2cm}|}
+\begin{tabular}{|l|l|l|l|}
 \hline
 \textbf{État} & \textbf{Réseau} & \textbf{Comportement caméra} & \textbf{Déclencheur} \\
 \hline
