@@ -5,7 +5,6 @@ import { apiUrl, apiFetch } from "../lib/api";
 import { WebRTCPlayer } from "./WebRTCPlayer";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
-import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface Camera {
   id:        number;
@@ -402,7 +401,6 @@ export default function CameraFeed({ onStatusChange }: {
   const { config } = useAppConfig();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const [cameras, setCameras] = useState<Camera[]>([]);
   const camerasRef = useRef<Camera[]>([]);
   useEffect(() => { camerasRef.current = cameras; }, [cameras]);
@@ -1000,8 +998,6 @@ export default function CameraFeed({ onStatusChange }: {
                       className="ui-input"
                       style={{ padding: '2px 8px', fontSize: '14px', height: 'auto', margin: 0, minHeight: '28px', maxWidth: '200px' }}
                       value={editNameValue}
-                      readOnly={isKeyboardEnabled}
-                      onFocus={() => showKeyboard(editNameValue, setEditNameValue)}
                       onChange={e => setEditNameValue(e.target.value)}
                       onKeyDown={e => {
                         if (e.key === 'Enter') saveCameraName(focusedCam.id);

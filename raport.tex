@@ -423,6 +423,8 @@ US-11 & En tant que \textbf{propriétaire}, je veux être averti automatiquement
 \hline
 US-12 & En tant que \textbf{propriétaire}, je veux que le serveur redémarre automatiquement en cas de crash. & Redémarrage en moins de 30s sans intervention manuelle & \textbf{P2} & S \\
 \hline
+US-23 & En tant que \textbf{propriétaire}, je veux que l'intégralité des données (flux vidéo, enregistrements, événements) reste stockée exclusivement sur le réseau local, sans aucun transit vers un service cloud. & Aucune donnée ne transite par un serveur externe ; architecture vérifiable en coupant l'accès Internet (fonctionnement complet maintenu) & \textbf{P1} & S \\
+\hline
 \caption{Epic 2 --- Serveur Central}
 \end{longtable}
 
@@ -504,6 +506,8 @@ US-16 & Notifications push & Information de l'utilisateur sans présence active 
 US-20 & PIN boîtier de contrôle & Interface physique principale demandée par le client \\
 \hline
 US-21 & Toggle mode surveillance & Action principale du boîtier \\
+\hline
+US-23 & Données 100\% locales (zéro cloud) & Exigence fondamentale du client, non négociable \\
 \hline
 \end{tabular}
 \caption{User Stories constituant le MVP de SENTYS}
@@ -704,19 +708,74 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 \end{warnbox}
 
 
-\subsubsection{Streaming vidéo}
+\subsubsection{Streaming vidéo et serveurs de flux}
 
-Le système supporte deux protocoles complémentaires :
+Le pipeline vidéo de SENTYS repose sur deux outils distincts intervenant à deux niveaux différents de l'architecture : \textbf{MediaMTX} sur le nœud Pi (publication du flux RTSP) et \textbf{go2rtc} sur le serveur hôte (conversion vers WebRTC). Ils ne sont pas en concurrence --- ils sont complémentaires.
 
-\paragraph{HLS via FFmpeg (fallback)}
-Le flux RTSP de chaque caméra est segmenté par FFmpeg en fragments fMP4 d'une seconde,
-servis statiquement par le serveur Express via le chemin \texttt{/hls/\{cameraId\}/}.
-La latence est de 3 à 5 secondes. Ce protocole est utilisé comme fallback universel et
-pour l'enregistrement continu sur disque.
+\paragraph{Serveur RTSP sur le nœud --- Choix de MediaMTX}
 
+Chaque Pi Zero 2W doit exposer le flux H.264 de la caméra CSI en RTSP sur le réseau local. Plusieurs solutions ont été étudiées :
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|p{3cm}|p{3cm}|p{3cm}|}
+\hline
+\textbf{Critère} & \textbf{MediaMTX} & \textbf{Frigate NVR} & \textbf{FFmpeg direct} \\
+\hline
+\textbf{Ressources (Pi Zero 2W)} & Très légères (Go, binaire unique) & Lourdes (Python + ML), inadapté & Légères, mais pas de serveur RTSP intégré \\
+\hline
+\textbf{Support RTSP natif} & Oui, multi-protocole & Oui (mais via dépendances) & Non --- diffusion uniquement \\
+\hline
+\textbf{Re-streaming} & Oui (RTSP $\rightarrow$ HLS, WebRTC) & Oui & Non \\
+\hline
+\textbf{Configuration} & Fichier YAML simple & Complexe (Docker requis) & Ligne de commande, fragile \\
+\hline
+\textbf{Intégration systemd} & Native & Non & Possible \\
+\hline
+\textbf{Décision} & \textcolor{green!60!black}{\textbf{Retenu}} & Écarté & Écarté \\
+\hline
+\end{tabular}
+\caption{Comparaison des solutions de publication RTSP sur le nœud Pi Zero 2W}
+\end{table}
+
+\begin{infobox}
+\textbf{Justification :} MediaMTX est un binaire Go autonome, sans dépendances, consommant moins de 15 Mo de RAM sur le Pi Zero 2W. Il expose nativement le flux H.264 de la caméra CSI en RTSP, ce que FFmpeg seul ne permet pas sans serveur tiers. Frigate NVR est inadapté aux contraintes mémoire du Pi Zero 2W.
+\end{infobox}
+
+\paragraph{Proxy WebRTC sur le serveur --- Choix de go2rtc}
+
+Côté serveur hôte, le navigateur ne peut pas consommer directement un flux RTSP. Il faut un composant qui reçoit le flux RTSP de chaque Pi et le réexpose en WebRTC (protocole WHEP) pour le dashboard. C'est le rôle de go2rtc.
+
+\paragraph{Pourquoi les deux ensemble ?}
+
+MediaMTX et go2rtc jouent des rôles distincts dans la chaîne :
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Composant} & \textbf{Où} & \textbf{Rôle} \\
+\hline
+MediaMTX & Nœud Pi & Publie le flux H.264 de la caméra CSI en RTSP sur le réseau local \\
+\hline
+go2rtc & Serveur hôte & Consomme ce flux RTSP et le réexpose en WebRTC (WHEP) pour le navigateur \\
+\hline
+FFmpeg & Serveur hôte & Consomme ce même flux RTSP pour segmentation HLS et enregistrement disque \\
+\hline
+\end{tabular}
+\caption{Rôles complémentaires de MediaMTX, go2rtc et FFmpeg dans la chaîne vidéo}
+\end{table}
+
+Le système supporte ainsi deux protocoles de lecture complémentaires côté client :
 
 \paragraph{WebRTC via go2rtc (protocole principal)}
-Pour une latence inférieure à la seconde, go2rtc expose les flux via le protocole WHEP. Le client bascule automatiquement en fallback HLS si go2rtc est indisponible.
+Latence inférieure à la seconde via le protocole WHEP. Le client bascule automatiquement en fallback HLS si go2rtc est indisponible.
+
+\paragraph{HLS via FFmpeg (fallback)}
+Le flux RTSP est segmenté par FFmpeg en fragments fMP4 d'une seconde, servis statiquement via \texttt{/hls/\{cameraId\}/}. Latence 3--5 secondes. Utilisé comme fallback universel et pour l'enregistrement continu sur disque.
 
 \begin{table}[H]
 \centering
@@ -734,7 +793,7 @@ Enregistrement & \checkmark & \texttimes \\
 Rôle & Fallback & Principal \\
 \hline
 \end{tabular}
-\caption{Comparaison des protocoles de streaming vidéo}
+\caption{Comparaison des protocoles de lecture côté client}
 \end{table}
 
 \subsubsection{Hébergement}
@@ -748,6 +807,84 @@ Le serveur hôte est un PC sous Ubuntu 24 LTS, retenu pour les raisons suivantes
     \item CI/CD via GitHub Actions avec runner auto-hébergé.
     \item Résilience électrique naturelle : la batterie intégrée du PC portable assure la continuité du service en cas de coupure secteur (section~5.1.3).
 \end{itemize}
+
+\subsubsection{Accès distant --- Choix du VPN}
+
+L'accès au dashboard depuis l'extérieur du domicile impose une solution sécurisée sans exposer de port public. Quatre approches ont été étudiées :
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|p{2.5cm}|p{2.5cm}|p{2.5cm}|p{2.5cm}|}
+\hline
+\textbf{Critère} & \textbf{Tailscale} & \textbf{WireGuard standalone} & \textbf{ZeroTier} & \textbf{OpenVPN} \\
+\hline
+\textbf{Configuration} & Zéro config (compte + install) & Manuelle (clés, pairs, routes) & Compte + install & Complexe (PKI, certs) \\
+\hline
+\textbf{CGNAT traversal} & Oui (via relais DERP) & Non sans IP publique & Oui & Non sans IP publique \\
+\hline
+\textbf{Port exposé} & Aucun & 1 port UDP & Aucun & 1 port UDP/TCP \\
+\hline
+\textbf{Chiffrement} & WireGuard (ChaCha20) & WireGuard (ChaCha20) & AES-256 & TLS \\
+\hline
+\textbf{Latence} & Très faible (P2P direct) & Très faible & Faible & Modérée \\
+\hline
+\textbf{MagicDNS} & Oui (\texttt{http://sentys}) & Non & Non & Non \\
+\hline
+\textbf{Coût} & Gratuit (usage résidentiel) & Gratuit & Gratuit (limité) & Gratuit \\
+\hline
+\textbf{Données vues par le tiers} & Aucune (E2E WireGuard) & Aucune & Aucune (E2E AES) & Aucune (TLS) \\
+\hline
+\textbf{Décision} & \textcolor{green!60!black}{\textbf{Retenu}} & Écarté & Écarté & Écarté \\
+\hline
+\end{tabular}
+\caption{Comparaison des solutions d'accès distant sécurisé}
+\end{table}
+
+\begin{infobox}
+\textbf{Justification :} Tailscale a été retenu pour sa configuration quasi nulle et sa capacité à traverser le CGNAT (situation fréquente chez les opérateurs résidentiels belges), sans exposition d'aucun port. MagicDNS permet d'accéder au dashboard via \texttt{http://sentys} depuis n'importe quel appareil du Tailnet, sans mémoriser d'adresse IP.
+
+Sur le plan de la confidentialité, Tailscale ne voit à aucun moment le contenu des données échangées. Le chiffrement WireGuard (ChaCha20-Poly1305) est bout-à-bout : même les serveurs DERP relay, utilisés en fallback lorsque la connexion P2P directe échoue, ne transfèrent que des paquets chiffrés opaques qu'ils sont incapables de déchiffrer. Les serveurs de Tailscale ne gèrent que le plan de contrôle (authentification, distribution des clés publiques, assignation d'adresses IP) --- jamais le trafic applicatif. Les flux vidéo de SENTYS restent donc \textbf{invisibles} pour Tailscale, conformément à l'exigence de confidentialité du client (US-23).
+\end{infobox}
+
+\begin{warnbox}
+\textbf{Limites identifiées (opérationnelles, non liées à la confidentialité) :} Tailscale dépend d'un service tiers pour l'authentification initiale et les relais DERP (utilisés uniquement si la connexion P2P directe échoue). En cas d'arrêt du service Tailscale, l'accès distant serait interrompu ; l'accès LAN local resterait intact. Cette dépendance est \textbf{opérationnelle} (disponibilité), et non liée à la vie privée --- le contenu des données reste chiffré et invisible pour Tailscale dans tous les cas. Pour une souveraineté totale, WireGuard standalone avec IP publique serait l'alternative.
+\end{warnbox}
+
+\subsubsection{Gestionnaire de processus Node.js --- Choix de PM2}
+
+Le serveur Node.js doit redémarrer automatiquement en cas de crash et démarrer au boot du système. Plusieurs approches ont été comparées :
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|p{3cm}|p{3cm}|p{3cm}|}
+\hline
+\textbf{Critère} & \textbf{PM2} & \textbf{systemd seul} & \textbf{Docker} \\
+\hline
+\textbf{Redémarrage auto} & Oui & Oui (\texttt{Restart=always}) & Oui (\texttt{restart: always}) \\
+\hline
+\textbf{Logs centralisés} & Oui (\texttt{pm2 logs}) & journald & docker logs \\
+\hline
+\textbf{Monitoring CPU/RAM} & Oui (\texttt{pm2 monit}) & Non & Partiel \\
+\hline
+\textbf{Déploiement sans downtime} & Oui (\texttt{pm2 reload}) & Non natif & Oui \\
+\hline
+\textbf{Complexité} & Faible & Faible & Élevée (image, volumes, réseau) \\
+\hline
+\textbf{Overhead} & Minimal & Minimal & Significatif \\
+\hline
+\textbf{Décision} & \textcolor{green!60!black}{\textbf{Retenu}} & Écarté & Écarté \\
+\hline
+\end{tabular}
+\caption{Comparaison des solutions de gestion du processus Node.js}
+\end{table}
+
+\begin{infobox}
+\textbf{Justification :} PM2 est taillé pour les applications Node.js en production : monitoring intégré, rechargement sans coupure (\texttt{pm2 reload}) et gestion des logs sans configuration supplémentaire. systemd seul aurait suffi pour le redémarrage automatique, mais offre aucun monitoring applicatif. Docker a été écarté : la complexité de la gestion des volumes (HLS, enregistrements) et du réseau aurait alourdi inutilement l'installation pour un déploiement mono-serveur.
+\end{infobox}
 
 \newpage
 \subsection{Architecture générale}
@@ -1289,6 +1426,14 @@ L'approche itérative adoptée s'est révélée adaptée à la nature incertaine
 La rédaction de la documentation en parallèle du développement — plutôt qu'en fin de projet — a également constitué un choix bénéfique : elle a forcé à formaliser les décisions techniques au moment où elles étaient prises, et a servi de base de référence lors des échanges avec le client.
 
 En revanche, l'absence d'un outil de suivi de backlog formel (Trello, GitHub Projects) a rendu la gestion des priorités moins rigoureuse qu'elle aurait pu l'être. Dans un projet impliquant plusieurs développeurs, cela aurait constitué un risque réel de désorganisation. Pour un futur projet similaire, la mise en place d'un backlog structuré dès le début serait une amélioration méthodologique significative.
+
+Au-delà de l'organisation, ce projet a mis en évidence l'importance de la \textbf{flexibilité}. Plusieurs éléments ont évolué en cours de développement : certains choix d'interface ont été révisés pour améliorer l'UX (notamment la page de connexion, simplifiée après les retours du client), et des outils initialement retenus ont été remplacés lorsque leurs limites sont apparues en pratique — comme la bibliothèque de logging Pino, abandonnée au profit d'une solution mieux adaptée aux contraintes du projet. La capacité à remettre en question des décisions déjà prises, sans s'y accrocher, s'est révélée aussi importante que la rigueur de la planification initiale.
+
+\subsection{Bilan humain}
+
+Ce projet a également été formateur sur le plan de la relation client. Le client, satisfait des fonctionnalités de base proposées, ne formulait pas spontanément de nouvelles demandes. Il a donc été nécessaire de faire preuve d'initiative : aller à sa rencontre de manière proactive, lui soumettre des propositions concrètes et lui présenter des fonctionnalités auxquelles il n'avait pas pensé lui-même. Cette posture — passer de simple exécutant à force de proposition — a constitué l'un des apprentissages les plus marquants du projet.
+
+Cette expérience a mis en évidence que les compétences organisationnelles et relationnelles sont tout aussi importantes, sinon davantage, que les compétences purement techniques. Savoir écouter, reformuler un besoin implicite et maintenir une communication régulière avec le client sont des aptitudes indispensables à tout projet réel, au-delà de la maîtrise des outils.
 
 \subsection{Pérennité et maintenance}
 

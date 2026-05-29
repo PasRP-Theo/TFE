@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
 import BrandLogo from './BrandLogo';
-import { useVirtualKeyboard } from '../hooks/useVirtualKeyboard';
 
 export default function LoginPage() {
   const { login }  = useAuth();
@@ -34,7 +33,6 @@ export default function LoginPage() {
   }, []);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState('');
-  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -279,8 +277,7 @@ export default function LoginPage() {
                     disabled={loading || isLockedOut}
                     autoFocus
                     autoComplete="username"
-                    readOnly={isKeyboardEnabled}
-                    onFocus={() => showKeyboard(username, setUsername)}
+
                   />
                 </div>
               </div>
@@ -298,8 +295,7 @@ export default function LoginPage() {
                   disabled={loading || isLockedOut}
                   required
                   autoComplete="current-password"
-                  readOnly={isKeyboardEnabled}
-                  onFocus={() => showKeyboard(password, setPassword)}
+
                 />
               </div>
             </div>

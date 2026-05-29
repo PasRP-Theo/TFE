@@ -3,7 +3,6 @@ import { APPEARANCE_ACCENTS, APPEARANCE_DEFAULTS, useAppearance } from "../hooks
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiUrl, apiFetch, readJsonResponse } from '../lib/api';
-import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 import { subscribeUserToPush, unsubscribeUserFromPush, isPushSubscribed } from "./push";
 
 
@@ -108,7 +107,6 @@ function SettingToggle({ label, description, defaultChecked = false, disabled = 
 }
 
 function TabSettings() {
-  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const { settings, updateSettings, resetSettings } = useAppearance();
   const { token, logout } = useAuth();
   const { config, updateConfig } = useAppConfig();
@@ -289,15 +287,15 @@ function TabSettings() {
         <div className="settings-config-grid">
           <label className="settings-field">
             <span className="settings-field-label">Titre principal</span>
-            <input className="ui-input" type="text" value={draftConfig.appName} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appName, (value) => updateDraft({ appName: value }))} onChange={event => updateDraft({ appName: event.target.value })} />
+            <input className="ui-input" type="text" value={draftConfig.appName} onChange={event => updateDraft({ appName: event.target.value })} />
           </label>
           <label className="settings-field">
             <span className="settings-field-label">Sous-titre</span>
-            <input className="ui-input" type="text" value={draftConfig.appSubtitle} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.appSubtitle, (value) => updateDraft({ appSubtitle: value }))} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
+            <input className="ui-input" type="text" value={draftConfig.appSubtitle} onChange={event => updateDraft({ appSubtitle: event.target.value })} />
           </label>
           <label className="settings-field settings-field--wide">
             <span className="settings-field-label">Message d’accueil login</span>
-            <input className="ui-input" type="text" value={draftConfig.loginMessage} readOnly={isKeyboardEnabled} onFocus={() => showKeyboard(draftConfig.loginMessage, (value) => updateDraft({ loginMessage: value }))} onChange={event => updateDraft({ loginMessage: event.target.value })} />
+            <input className="ui-input" type="text" value={draftConfig.loginMessage} onChange={event => updateDraft({ loginMessage: event.target.value })} />
           </label>
         </div>
         {applicationError && <div className="settings-msg settings-msg--error">⚠ {applicationError}</div>}
@@ -361,22 +359,6 @@ function TabSettings() {
             <input type="range" min="40" max="64" step="4" value={settings.touchTarget} onChange={event => updateSettings({ touchTarget: Number(event.target.value) })} />
           </label>
 
-        </div>
-
-        <div className="settings-toggle-list">
-          <SettingToggle
-            label="Clavier virtuel à l'écran"
-            description="Affiche un clavier pour les champs de saisie. Utile pour les écrans tactiles."
-            checked={isKeyboardEnabled}
-            onChange={(checked) => {
-              if (checked) {
-                window.localStorage.setItem('sentys:virtual_keyboard', 'true');
-              } else {
-                window.localStorage.removeItem('sentys:virtual_keyboard');
-              }
-              window.location.reload();
-            }}
-          />
         </div>
 
         <div className="settings-msg settings-msg--success">
@@ -464,8 +446,7 @@ function TabSettings() {
                 maxLength={4}
                 placeholder="Ex: 1234"
                 value={showPin ? (draftConfig.kioskPin ?? '') : '●'.repeat((draftConfig.kioskPin ?? '').length)}
-                readOnly={isKeyboardEnabled || !showPin}
-                onFocus={() => showPin && showKeyboard(draftConfig.kioskPin, (value) => updateDraft({ kioskPin: value.replace(/\D/g, '') }))}
+                readOnly={!showPin}
                 onChange={e => showPin && updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })}
                 style={{ maxWidth: '200px', letterSpacing: showPin ? 'normal' : '4px' }}
                 autoComplete="off"
@@ -530,7 +511,6 @@ interface User {
 }
 
 function TabUsers() {
-  const { showKeyboard, isKeyboardEnabled } = useVirtualKeyboard();
   const { token, user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
