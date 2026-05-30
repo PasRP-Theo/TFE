@@ -110,47 +110,48 @@
 \thispagestyle{empty}
 
 \newpage
+\pagenumbering{roman}
+\thispagestyle{empty}
+% ==========================================================
+\section*{Utilisation de l’intelligence artificielle}
+\addcontentsline{toc}{section}{Déclaration sur l’usage de l’intelligence artificielle}
+% ==========================================================
 
+Par souci de transparence, je précise ici de quelle manière j’ai utilisé les outils d’intelligence artificielle générative dans le cadre de ce TFE.
+
+Les outils utilisés sont :
+\begin{itemize}[label=\textbullet]
+    \item \textbf{Claude Code (via l’IDE) :} assistance au développement du système SENTYS : débogage, révision de code et cohérence architecturale.
+    \item \textbf{ChatGPT et Gemini :} consultation ponctuelle pour des questions techniques en cours de développement, recherches d’informations complémentaires et vérification de concepts.
+\end{itemize}
+
+Je ne suis jamais parti d’une page blanche : la base de travail était toujours personnelle, constituée de mes notes, de mes décisions techniques déjà prises et des échanges avec mon rapporteur. L’IA est intervenue ensuite pour regrouper des informations, reformuler ou corriger, dans l’objectif d’obtenir un résultat plus soigné et plus cohérent.
+
+Tout ce que l’intelligence artificielle a produit a été relu et validé par mes soins. Je suis le seul et unique responsable du projet final : le contenu, les choix et les analyses de ce document sont issus de mon propre travail et de mes lectures de documentation.
+
+\newpage
 % ==========================================================
 \section*{Remerciements}
 \addcontentsline{toc}{section}{Remerciements}
 % ==========================================================
 
-Je tiens en premier lieu à remercier ma famille pour son soutien constant et ses précieux conseils tout au long de ces années d'études.
+Je tiens en premier lieu à remercier ma famille pour son soutien constant et ses précieux conseils tout au long de ces années d’études.
 
-Mes remerciements vont également à mes amis de classe pour leurs échanges enrichissants, leur solidarité et les nombreux moments de partage qui ont jalonné ce parcours.
+Mes remerciements vont également à mes amis de classe pour leurs échanges enrichissants, leur solidarité et les nombreux moments de partage qui ont rendu ce parcours plus qu'agréable.
 
 Je remercie ensuite Monsieur Dewulf, mon rapporteur de TFE, pour son suivi attentif,
-sa disponibilité et les orientations et remarques qu'il m'a apportées lors de l'élaboration de ce travail.
+sa disponibilité et les orientations et remarques qu’il m’a apportées lors de l’élaboration de ce travail.
 
-Je souhaite enfin exprimer ma gratitude à l'ensemble du corps professoral de l'EPHEC Louvain-la-Neuve, dont l'enseignement m'a fourni les fondements techniques et méthodologiques nécessaires à la réalisation de ce projet.
+Je souhaite enfin exprimer ma gratitude à l’ensemble du corps professoral de l’EPHEC Louvain-la-Neuve, dont l’enseignement m’a fourni les fondements techniques et méthodologiques nécessaires à la réalisation de ce projet.
 
 \newpage
 % ── Table des matières ────────────────────────────────────
 \tableofcontents
 
-
-\newpage
-% ==========================================================
-\section*{Utilisation de l’intelligence artificielle}
-\addcontentsline{toc}{section}{Déclaration sur l'usage de l'intelligence artificielle}
-% ==========================================================
-
-Par souci de transparence, je précise ici de quelle manière j'ai utilisé les outils d'intelligence artificielle générative dans le cadre de ce TFE.
-
-Les outils utilisés sont :
-\begin{itemize}[label=\textbullet]
-    \item \textbf{Claude Code (via l'IDE) :} assistance au développement du système SENTYS : débogage, révision de code et cohérence architecturale.
-    \item \textbf{ChatGPT et Gemini :} consultation ponctuelle pour des questions techniques en cours de développement, recherches d'informations complémentaires et vérification de concepts.
-\end{itemize}
-
-Je ne suis jamais parti d'une page blanche : la base de travail était toujours personnelle, constituée de mes notes, de mes décisions techniques déjà prises et des échanges avec mon rapporteur. L'IA est intervenue ensuite pour regrouper des informations, reformuler ou corriger, dans l'objectif d'obtenir un résultat plus soigné et plus cohérent.
-
-Tout ce que l'intelligence artificielle a produit a été relu et validé par mes soins. Je suis le seul et unique responsable du projet final : le contenu, les choix et les analyses de ce document sont issus de mon propre travail et de mes lectures de documentation.
-
-
 \newpage
 
+
+\pagenumbering{arabic}
 
 % ==========================================================
 \section{Introduction}
@@ -170,11 +171,11 @@ Le nom SENTYS fait référence à une sentinelle et évoque un système permetta
 % CORRECTION : la souveraineté numérique était mentionnée au 3.1.2 seulement.
 % Elle constitue pourtant un enjeu central qui doit être posé dès l'introduction.
 
-Le marché de la vidéosurveillance résidentielle est aujourd'hui largement dominé par des plateformes cloud commerciales (Ring, Nest, Arlo). Ces solutions imposent, par nature, le transit et le stockage des flux vidéo sur des serveurs tiers, souvent localisés hors de l'Union Européenne. Cette dépendance soulève trois problèmes fondamentaux :
+Le marché de la vidéosurveillance résidentielle est aujourd'hui largement dominé par des plateformes cloud (Ring, Nest, Tapo, etc). Ces solutions imposent, par nature, le transit et le stockage des flux vidéo sur des serveurs tiers, souvent localisés hors de l'Union Européenne. Cette dépendance soulève trois problèmes fondamentaux :
 
 \begin{enumerate}
     \item \textbf{Souveraineté des données :} les images captées dans un domicile privé sont confiées à des entreprises dont les conditions d'utilisation peuvent évoluer, être piratées, ou être soumises à des injonctions légales étrangères.
-    \item \textbf{Dépendance opérationnelle :} en l'absence de connexion Internet, ces systèmes deviennent totalement inopérants, ce qui est particulièrement problématique en zone à connectivité instable.
+    \item \textbf{Dépendance opérationnelle :} en l'absence de connexion Internet, ces systèmes deviennent inaccessible ou partiellement, ce qui est particulièrement problématique en zone à connectivité instable.
     \item \textbf{Coût récurrent :} l'accès aux fonctionnalités essentielles (archivage, détection de mouvement) est généralement conditionné à un abonnement mensuel, représentant une charge financière permanente.
     \item \textbf{Accessibilité en cas de coupure secteur :} une coupure électrique met hors ligne le routeur Internet du domicile, rendant tout accès distant impossible même si le système de surveillance dispose d'une alimentation de secours. Pour garantir la continuité de l'accès à distance, une connexion 4G de secours est nécessaire, représentant un coût matériel et d'abonnement supplémentaire.
 \end{enumerate}
@@ -194,7 +195,7 @@ Ce rapport est structuré en neuf sections. Après la présentation du cahier de
 
 Le projet SENTYS n'est pas le premier sujet de TFE envisagé. Un premier projet, portant sur un gestionnaire de tournois de football, avait été initié en début d'année. Ce sujet a été abandonné en cours de route, principalement par manque de motivation : le périmètre fonctionnel apparaissait insuffisamment conséquent pour constituer un TFE de Bachelier à part entière. Le passage au projet SENTYS, décidé mi-février 2026 lors de la première rencontre avec le client, a permis de repartir sur une problématique technique nettement plus ambitieuse, ancrée dans un besoin réel.
 
-Le projet a ensuite été conduit selon une approche itérative, organisée en grandes phases successives. Chaque phase a donné lieu à un livrable intermédiaire discuté avec le promoteur, permettant de valider les choix effectués avant de passer à l'étape suivante. Cette méthode a permis de détecter tôt les écarts entre les besoins exprimés et la solution en cours de construction, notamment lors de la transition matérielle vers une architecture distribuée de nœuds sous Linux.
+Le projet a ensuite été conduit selon une approche itérative, organisée en différentes phases. Chaque phase a donné lieu à un livrable intermédiaire discuté avec le rapporteur lors des rencontres a l'Ephec, permettant de valider et de proposer des alternatives aux choix effectués.
 
 \subsection{Calendrier de travail}
 
@@ -229,7 +230,7 @@ Le suivi du projet a été assuré par des échanges réguliers avec le client s
 \begin{itemize}[label=\textbullet]
     \item \textbf{Réunion de cadrage (mi-février 2026) :} première rencontre formelle pour identifier les besoins, les contraintes (zone semi-isolée, instabilité réseau, refus du cloud) et définir le périmètre du projet.
     \item \textbf{Points d'avancement mensuels :} présentation des développements en cours, recueil du feedback sur l'interface et les fonctionnalités, ajustement des priorités.
-    \item \textbf{Validation du dashboard (Fin Avril 2026) :} démonstration en direct de l'interface web et du flux vidéo en temps réel. Le client a validé l'ergonomie générale et demandé l'ajout du boîtier de contrôle physique comme point d'entrée principal.
+    \item \textbf{Validation du dashboard (Fin Avril 2026) :} démonstration en direct de l'interface web et du flux vidéo en temps réel. Le client a validé l'ergonomie générale.
     \item \textbf{Déploiement de test (Fin avril 2026) :} installation du système complet sur site pendant plusieurs jours pour valider le comportement en conditions réelles (coupures réseau, autonomie batterie, qualité vidéo). Les résultats sont détaillés en section~\ref{sec:validation-terrain}.
 \end{itemize}
 
@@ -390,7 +391,7 @@ US-02 & En tant que \textbf{propriétaire}, je veux que le nœud de capture s'an
 \hline
 US-03 & En tant que \textbf{propriétaire}, je veux que le stockage local hors ligne soit limité par rotation automatique. & Suppression automatique des clips les plus anciens si stockage $>$ 500 Mo ; clips $<$ 50 Ko ignorés & \textbf{P1} & M \\
 \hline
-US-04 & En tant que \textbf{propriétaire}, je veux que le nœud détecte les mouvements et notifie le serveur. & Signal envoyé au serveur dans les 2s, horodatage enregistré, déclenchement de l'enregistrement local & \textbf{P1} & M \\
+US-04 & En tant que \textbf{propriétaire}, je veux que le nœud détecte les mouvements et notifie le serveur. & Signal envoyé au serveur dans les 2s, déclenchement de l'enregistrement local & \textbf{P1} & M \\
 \hline
 US-05 & En tant que \textbf{propriétaire}, je veux que les clips enregistrés hors ligne soient automatiquement transférés au serveur dès le retour du réseau. & Upload automatique, clips supprimés localement après confirmation, badge SYNC visible dans l'historique & \textbf{P1} & L \\
 \hline
@@ -417,11 +418,11 @@ US-08 & En tant que \textbf{utilisateur}, je veux que le serveur reçoive et rel
 \hline
 US-09 & En tant que \textbf{propriétaire}, je veux que le serveur reçoive et stocke les fichiers vidéo envoyés après une coupure. & Fichier + métadonnées acceptés et enregistrés, visibles dans l'historique & \textbf{P1} & M \\
 \hline
-US-10 & En tant que \textbf{propriétaire}, je veux que le serveur enregistre les flux caméra en continu. & Segments vidéo horodatés, redémarrage automatique de l'enregistrement si le flux est interrompu & \textbf{P1} & L \\
+US-10 & En tant que \textbf{propriétaire}, je veux que le serveur enregistre puissent afficher les flux caméra sur demande. & Redémarrage automatique de l'enregistrement si le flux est interrompu & \textbf{P1} & L \\
 \hline
 US-11 & En tant que \textbf{propriétaire}, je veux être averti automatiquement si une caméra passe hors ligne ou si la batterie est faible. & Alerte envoyée si caméra offline ou batterie $<$ 15\%, notification push reçue en temps réel & \textbf{P1} & M \\
 \hline
-US-12 & En tant que \textbf{propriétaire}, je veux que le serveur redémarre automatiquement en cas de crash. & Redémarrage en moins de 30s sans intervention manuelle & \textbf{P2} & S \\
+US-12 & En tant que \textbf{propriétaire}, je veux que le serveur redémarre automatiquement en cas de crash. & Redémarrage dans un delais minimal sans intervention manuelle & \textbf{P2} & S \\
 \hline
 US-23 & En tant que \textbf{propriétaire}, je veux que l'intégralité des données (flux vidéo, enregistrements, événements) reste stockée exclusivement sur le réseau local, sans aucun transit vers un service cloud. & Aucune donnée ne transite par un serveur externe ; architecture vérifiable en coupant l'accès Internet (fonctionnement complet maintenu) & \textbf{P1} & S \\
 \hline
@@ -446,9 +447,9 @@ US-14 & En tant qu'\textbf{utilisateur}, je veux visualiser les flux vidéo en d
 \hline
 US-15 & En tant que \textbf{propriétaire}, je veux accéder aux clips vidéo enregistrés. & Clips listés par caméra et par date, téléchargement possible, clips hors ligne identifiés & \textbf{P1} & M \\
 \hline
-US-16 & En tant qu'\textbf{utilisateur}, je veux recevoir des notifications push sur mon téléphone. & Abonnement sauvegardé, notification reçue même lorsque le dashboard n'est pas ouvert & \textbf{P1} & M \\
+US-16 & En tant qu'\textbf{utilisateur}, je veux recevoir des notifications push sur mon téléphone. & Notification reçue même lorsque le dashboard n'est pas ouvert & \textbf{P1} & M \\
 \hline
-US-17 & En tant qu'\textbf{utilisateur}, je veux que l'interface reste consultable même sans réseau. & Assets mis en cache, données déjà chargées consultables hors ligne, bandeau MODE OFFLINE visible & \textbf{P1} & M \\
+US-17 & En tant qu'\textbf{utilisateur}, je veux que l'interface reste consultable même en cas de coupure wifi. & Clé 4g prend le relais pour que l'interface reste accessible & \textbf{P1} & M \\
 \hline
 US-18 & En tant que \textbf{propriétaire}, je veux consulter l'historique des événements. & Historique filtrable par date et criticité, clips hors ligne identifiés & \textbf{P1} & M \\
 \hline
@@ -594,9 +595,9 @@ Trois solutions d'alimentation continue ont été étudiées pour les nœuds Pi 
 
 \subsubsection{Résilience électrique et réseau du serveur hôte}
 
-Le serveur hôte est un PC portable sous Ubuntu 24 LTS. Ce choix matériel présente un avantage naturel pour la résilience électrique : la batterie intégrée joue le rôle d'onduleur sans configuration supplémentaire. En cas de coupure secteur, le système continue de fonctionner sans interruption ni redémarrage, le temps que la batterie se décharge — éliminant tout risque de corruption de la base de données PostgreSQL par arrêt brutal.
+Le serveur hôte est un PC portable sous Ubuntu 24 LTS. Ce choix matériel présente un avantage naturel pour la résilience électrique : la batterie intégrée joue le rôle de la résilience éléctrique sans configuration supplémentaire. En cas de coupure secteur, le système continue de fonctionner sans interruption ni redémarrage, le temps que la batterie se décharge — éliminant tout risque de corruption de la base de données PostgreSQL par arrêt brutal.
 
-Pour la continuité de l'accès au dashboard en cas de panne de la box Internet, une clé 4G est connectée en permanence au laptop. Elle assure uniquement l'accessibilité du dashboard pour les appareils clients distants (via Tailscale). Le traitement vidéo, l'enregistrement et la détection de mouvement restent entièrement locaux, indépendamment de cette connexion.
+Pour la continuité de l'accès au dashboard en cas de panne de la box Internet, une clé 4G est connectée en permanence au laptop. Elle assure uniquement l'accessibilité du dashboard pour les appareils clients distants. Le traitement vidéo, l'enregistrement et la détection de mouvement restent entièrement locaux, indépendamment de cette connexion.
 
 Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que le serveur devient inaccessible (US-01), garantissant la continuité de la surveillance même en cas d'indisponibilité temporaire du serveur.
 
@@ -710,7 +711,7 @@ Côté nœuds caméras, l'enregistrement sur carte SD prend le relais dès que l
 
 \subsubsection{Streaming vidéo et serveurs de flux}
 
-Le pipeline vidéo de SENTYS repose sur deux outils distincts intervenant à deux niveaux différents de l'architecture : \textbf{MediaMTX} sur le nœud Pi (publication du flux RTSP) et \textbf{go2rtc} sur le serveur hôte (conversion vers WebRTC). Ils ne sont pas en concurrence --- ils sont complémentaires.
+Le pipeline vidéo de SENTYS repose sur deux outils distincts intervenant à deux niveaux différents de l'architecture : \textbf{MediaMTX} sur le nœud Pi (publication du flux RTSP) et \textbf{go2rtc} sur le serveur hôte (conversion vers WebRTC). Ils ne sont pas en concurrence, ils sont complémentaires.
 
 \paragraph{Serveur RTSP sur le nœud --- Choix de MediaMTX}
 
@@ -1045,8 +1046,8 @@ Tests terrain & Déploiement sur site & Validation en conditions réelles chez l
 Les scénarios suivants ont été testés en laboratoire avant le déploiement terrain (captures en annexe~\ref{annexe:resilience-captures}) :
 
 \begin{itemize}[label=\textbullet]
-    \item \textbf{Coupure WiFi :} désactivation du point d'accès pendant 10 minutes. Le nœud Pi a basculé en mode hors ligne en moins de 5 secondes, enregistré les clips localement, puis les a uploadés intégralement au retour de la connexion, sans perte de données.
-    \item \textbf{Coupure secteur (nœuds) :} débranchement de l'alimentation secteur. Le shield UPS X306 a assuré la continuité du flux et de l'enregistrement sans redémarrage du Pi. L'alerte batterie a été envoyée en push lorsque le niveau a atteint 14\%.
+    \item \textbf{Coupure WiFi :} désactivation du point d'accès pendant 2 minutes en ligne de commande sur les pi zero 2W. Le nœud Pi a basculé en mode hors ligne en moins de 5 secondes, enregistré les clips localement, puis les a uploadés intégralement au retour de la connexion, sans perte de données.
+    \item \textbf{Coupure secteur (nœuds) :} débranchement de l'alimentation secteur. Le shield UPS X306 a assuré la continuité du flux et de l'enregistrement sans redémarrage du Pi.
     \item \textbf{Coupure secteur (serveur) :} débranchement de l'alimentation secteur du PC portable. La batterie intégrée a maintenu le serveur actif sans interruption. PostgreSQL n'a présenté aucune corruption, aucun redémarrage n'ayant été nécessaire.
     \item \textbf{Crash Node.js :} kill forcé du processus serveur. PM2 a redémarré l'application en 8 secondes.
 \end{itemize}
@@ -1068,11 +1069,7 @@ Le système complet a été installé chez le client pendant une semaine en mai 
 \hline
 \textbf{Problème} & \textbf{Cause identifiée} & \textbf{Solution apportée} \\
 \hline
-Flux caméra jardin instable (déconnexions fréquentes) & Signal WiFi faible à 15m du routeur & Ajout d'un répéteur WiFi dédié côté jardin \\
-\hline
-Notifications push non reçues sur le téléphone du client & Navigateur en mode économie d'énergie (restriction push Android) & Documentation d'installation remise au client, mode batterie modifié \\
-\hline
-Boîtier de contrôle lent au démarrage & Carte microSD lente (Classe 6) & Remplacement par une carte SD Classe 10 (UHS-I) \\
+Complexité de connecter le wifi au pi zero 2w & wifi faible & il a fallu du temps \\
 \hline
 Nœud caméra picam absent du dashboard (flux non démarré) & Fichier \texttt{device.conf} manquant sur le Pi : l'agent utilisait un identifiant par défaut (\texttt{pi-picam}) non reconnu par le serveur, empêchant le signal de réveil d'atteindre le bon nœud & Création du fichier \texttt{device.conf} avec le bon \texttt{DEVICE\_ID} ; suppression du nœud fantôme créé entre-temps en base de données \\
 \hline
@@ -1081,7 +1078,7 @@ Nœud caméra picam absent du dashboard (flux non démarré) & Fichier \texttt{d
 \end{table}
 
 \subsubsection{Résultats}
-À l'issue de la semaine de déploiement, le système a fonctionné de manière satisfaisante. Deux coupures WiFi naturelles ont été absorbées sans perte de données. Le client a validé l'ergonomie du boîtier de contrôle et des notifications push. Aucune corruption de données n'a été observée sur PostgreSQL.
+À l'issue des quelques jours de déploiement, le système a fonctionné de manière satisfaisante. Deux coupures WiFi naturelles ont été absorbées sans perte de données. Le client a validé l'ergonomie du boîtier de contrôle et des notifications push. Aucune corruption de données n'a été observée sur PostgreSQL.
 
 \subsection{Analyse critique de la stratégie de validation}
 
@@ -1096,15 +1093,6 @@ Cependant, plusieurs zones n'ont pas été testées de manière systématique :
     \item \textbf{Tests de sécurité formels :} aucun pentest structuré n'a été réalisé. Les vérifications effectuées (injection, RBAC, rate limiting) ont été menées manuellement via \texttt{curl}, sans outil automatisé de type OWASP ZAP ou Burp Suite.
     \item \textbf{Tests unitaires insuffisants :} la couverture de code côté serveur est faible. Les fonctions critiques (parsing des annonces Pi, logique de déduplication des alertes) ne disposent pas de tests automatisés.
     \item \textbf{Test de longue durée :} le déploiement terrain d'une semaine a validé le comportement nominal, mais n'a pas permis de détecter d'éventuelles fuites mémoire ou dégradations progressives de performance sur des semaines de fonctionnement continu.
-\end{itemize}
-
-\subsubsection{Pistes d'amélioration}
-
-\begin{itemize}[label=\textbullet]
-    \item Mettre en place une suite de tests d'intégration automatisés (Jest + Supertest) couvrant les routes API critiques, déclenchée à chaque push via le pipeline CI/CD.
-    \item Intégrer un outil de monitoring de performance (ex: \texttt{pm2 monit} enrichi, ou Prometheus + Grafana) pour détecter les dérives progressives en production.
-    \item Réaliser un test de charge avec simulation de 6 à 10 caméras simultanées pour identifier les limites réelles du serveur hôte.
-    \item Effectuer un pentest minimal avec OWASP ZAP avant toute extension du système à d'autres utilisateurs.
 \end{itemize}
 
 
@@ -1140,7 +1128,7 @@ des utilisateurs.
 
 \subsubsection{Dashboard de surveillance}
 
-Le dashboard React affiche en temps réel l'état de toutes les caméras configurées. Les flux vidéo sont lus via hls.js ou WebRTC selon la disponibilité. Chaque carte caméra affiche le statut (EN LIGNE / EN PAUSE / ARRÊTÉE / RECONNEXION), l'indicateur REC et l'heure courante.
+Le dashboard React affiche en temps réel l'état de toutes les caméras configurées. Les flux vidéo sont lus via hls.js ou WebRTC selon la disponibilité. Chaque carte caméra affiche le statut (EN LIGNE / EN VEILLE / ARRÊTÉE / RECONNEXION), l'indicateur REC et l'heure courante.
 
 \begin{figure}[H]
     \centering
@@ -1267,12 +1255,6 @@ Rotation du \texttt{JWT\_SECRET} & Tous les 6 mois & Limite l'exposition en cas 
 \hline
 \texttt{npm audit} + mise à jour des dépendances & Mensuelle & Correction des vulnérabilités connues (CVE) \\
 \hline
-Sauvegarde PostgreSQL (\texttt{pg\_dump}) & Quotidienne & Protection contre la corruption ou la perte de données \\
-\hline
-Révision des comptes utilisateurs & Trimestrielle & Suppression des comptes inactifs ou compromis \\
-\hline
-Vérification des logs d'audit & Mensuelle & Détection d'activités anormales ou de tentatives d'intrusion \\
-\hline
 Mise à jour de l'OS du serveur & Mensuelle & Correction des failles noyau et système \\
 \hline
 Renouvellement du certificat Tailscale & Automatique & Géré par Tailscale, aucune intervention requise \\
@@ -1308,7 +1290,7 @@ L'erreur \texttt{permission denied for schema public} au premier démarrage. Sol
 Comme détaillé en section~5.1.1, les tests avec l'ESP32-CAM AI-Thinker ont révélé des limitations bloquantes : flux MJPEG instable, mode hors ligne irréalisable, brochage insuffisant pour le capteur PIR. La transition vers le Pi Zero 2W, plus onéreuse, a permis d'implémenter toutes les fonctionnalités de résilience requises.
 
 \paragraph{Note sur la détection IA}
-L'analyse vidéo par IA (Python + OpenCV/YOLO) est une évolution planifiée, volontairement exclue du périmètre du MVP dont l'objectif prioritaire est la stabilité du pipeline de capture, d'enregistrement et d'alerte.
+L'analyse vidéo par IA (Python + OpenCV/YOLO) est intégrée dans le projet mais est volontairement exclue du périmètre du MVP dont l'objectif prioritaire est la stabilité du pipeline de capture, d'enregistrement et d'alerte.
 
 \subsection{Outils de travail}
 
@@ -1388,15 +1370,15 @@ La loi belge fixe une durée maximale de conservation des images à \textbf{30 j
 \hline
 \textbf{Obligation} & \textbf{Mise en œuvre} & \textbf{Statut} \\
 \hline
-Champ limité à la propriété privée & Paramétrage des angles de vue lors de l'installation & \checkmark \\
+Champ limité à la propriété privée & Paramétrage des angles de vue lors de l'installation & \checkmark OK \\
 \hline
-Signalétique à l'entrée & Pictogramme fourni au client & \checkmark \\
+Signalétique à l'entrée & Pictogramme fourni au client & \checkmark OK \\
 \hline
-Conservation $\leq$ 30 jours & Purge automatique implémentée & \checkmark \\
+Conservation $\leq$ 30 jours & Purge automatique implémentée & \checkmark OK\\
 \hline
-Aucun flux sur serveur tiers & Architecture 100\% locale (pas de cloud) & \checkmark \\
+Aucun flux sur serveur tiers & Architecture 100\% locale (pas de cloud) & \checkmark OK \\
 \hline
-Droits d'accès/suppression & Interface d'administration (US-19) & \checkmark \\
+Droits d'accès/suppression & Interface d'administration (US-19) & \checkmark OK \\
 \hline
 \end{tabular}
 \caption{Bilan de conformité légale du système SENTYS}
@@ -1423,15 +1405,15 @@ Le projet SENTYS constitue un système de surveillance résidentiel complet, ent
 
 L'approche itérative adoptée s'est révélée adaptée à la nature incertaine du projet. La décision de transition de l'ESP32-CAM vers le Raspberry Pi Zero 2W, prise en cours de développement, illustre bien l'intérêt de cette méthode : les limitations matérielles ont été détectées lors d'une itération de test, avant que l'architecture complète ne soit figée.
 
-La rédaction de la documentation en parallèle du développement — plutôt qu'en fin de projet — a également constitué un choix bénéfique : elle a forcé à formaliser les décisions techniques au moment où elles étaient prises, et a servi de base de référence lors des échanges avec le client.
+La rédaction de la documentation en parallèle du développement (plutôt qu'en fin de projet) a également constitué un choix bénéfique : elle a forcé à formaliser les décisions techniques au moment où elles étaient prises, et a servi de base de référence lors des échanges avec le client.
 
 En revanche, l'absence d'un outil de suivi de backlog formel (Trello, GitHub Projects) a rendu la gestion des priorités moins rigoureuse qu'elle aurait pu l'être. Dans un projet impliquant plusieurs développeurs, cela aurait constitué un risque réel de désorganisation. Pour un futur projet similaire, la mise en place d'un backlog structuré dès le début serait une amélioration méthodologique significative.
 
-Au-delà de l'organisation, ce projet a mis en évidence l'importance de la \textbf{flexibilité}. Plusieurs éléments ont évolué en cours de développement : certains choix d'interface ont été révisés pour améliorer l'UX (notamment la page de connexion, simplifiée après les retours du client), et des outils initialement retenus ont été remplacés lorsque leurs limites sont apparues en pratique — comme la bibliothèque de logging Pino, abandonnée au profit d'une solution mieux adaptée aux contraintes du projet. La capacité à remettre en question des décisions déjà prises, sans s'y accrocher, s'est révélée aussi importante que la rigueur de la planification initiale.
+Au-delà de l'organisation, ce projet a mis en évidence l'importance de la \textbf{flexibilité}. Plusieurs éléments ont évolué en cours de développement : certains choix d'interface ont été révisés pour améliorer l'UX (notamment la page de connexion, simplifiée après les retours du client), et des outils initialement retenus ont été remplacés lorsque leurs limites sont apparues en pratique, comme la bibliothèque de logging Pino, abandonnée au profit d'une solution mieux adaptée aux contraintes du projet. La capacité à remettre en question des décisions déjà prises, sans s'y accrocher, s'est révélée aussi importante que la rigueur de la planification initiale.
 
 \subsection{Bilan humain}
 
-Ce projet a également été formateur sur le plan de la relation client. Le client, satisfait des fonctionnalités de base proposées, ne formulait pas spontanément de nouvelles demandes. Il a donc été nécessaire de faire preuve d'initiative : aller à sa rencontre de manière proactive, lui soumettre des propositions concrètes et lui présenter des fonctionnalités auxquelles il n'avait pas pensé lui-même. Cette posture — passer de simple exécutant à force de proposition — a constitué l'un des apprentissages les plus marquants du projet.
+Ce projet a également été formateur sur le plan de la relation client. Le client, satisfait des fonctionnalités de base proposées, ne formulait pas spontanément de nouvelles demandes. Il a donc été nécessaire de faire preuve d'initiative : aller à sa rencontre de manière proactive, lui soumettre des propositions concrètes et lui présenter des fonctionnalités auxquelles il n'avait pas pensé lui-même. Cette posture, consistant à passer de simple exécutant à force de proposition, a constitué l'un des apprentissages les plus marquants du projet.
 
 Cette expérience a mis en évidence que les compétences organisationnelles et relationnelles sont tout aussi importantes, sinon davantage, que les compétences purement techniques. Savoir écouter, reformuler un besoin implicite et maintenir une communication régulière avec le client sont des aptitudes indispensables à tout projet réel, au-delà de la maîtrise des outils.
 
@@ -1445,7 +1427,7 @@ La pérennité du système repose sur trois piliers :
     \item \textbf{Monitoring :} PM2 surveille l'état du processus Node.js et redémarre automatiquement en cas de crash (voir annexe~\ref{fig:pm2-list}). Les alertes système (caméra hors ligne, batterie faible) sont remontées en temps réel via le dashboard et les notifications push.
 \end{itemize}
 
-La principale dépendance externe est Tailscale, dont la version gratuite est suffisante pour l'usage résidentiel actuel. En cas d'arrêt du service, le système resterait accessible sur le LAN local — seul l'accès distant serait impacté.
+La principale dépendance externe est Tailscale, dont la version gratuite est suffisante pour l'usage résidentiel actuel. En cas d'arrêt du service, le système resterait accessible sur le LAN local ; seul l'accès distant serait impacté.
 
 \subsection{Perspectives d'évolution}
 
@@ -1480,6 +1462,10 @@ La principale dépendance externe est Tailscale, dont la version gratuite est su
     \item AlexxIT. \textit{go2rtc --- Stream application with multi-protocol support}. Disponible sur : \url{https://github.com/AlexxIT/go2rtc}
     \item Printables. \textit{Cam OV5647 with M12 lens case for the articulating arm}. Modèle 3D utilisé pour le boîtier de la caméra. Disponible sur : \url{https://www.printables.com/model/253581-cam-ov5647-with-m12-lens-case-for-the-articulating}
     \item Thingiverse. \textit{Articulating Raspberry Pi Camera Mount}. Modèle 3D du pied, adapté en taille pour le projet. Disponible sur : \url{https://www.thingiverse.com/thing:3071705}
+    \item W3C / IETF. \textit{WebRTC 1.0: Real-Time Communication Between Browsers}. W3C Recommendation, 2021. Disponible sur : \url{https://www.w3.org/TR/webrtc/}
+    \item Pantos, R. et May, W. \textit{RFC 8216 --- HTTP Live Streaming}. IETF, 2017. Disponible sur : \url{https://www.rfc-editor.org/rfc/rfc8216}
+    \item video-dev. \textit{hls.js --- JavaScript HLS client using Media Source Extensions}. Disponible sur : \url{https://github.com/video-dev/hls.js}
+    \item aler0. \textit{MediaMTX --- Real-time media server and media proxy}. Disponible sur : \url{https://github.com/bluenviron/mediamtx}
 \end{enumerate}
 
 % ==========================================================

@@ -294,3 +294,16 @@ export function scheduleDiscoveryCleanup(ttlMinutes = 10, intervalMs = 5 * 60 * 
   _pruneStaleDiscoveries(ttlMinutes).catch(err => console.error('[DISCOVERY CLEANUP]', err));
   setInterval(() => _pruneStaleDiscoveries(ttlMinutes).catch(err => console.error('[DISCOVERY CLEANUP]', err)), intervalMs);
 }
+
+async function _pruneOldAlerts(retentionDays = 90) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM alerts WHERE created_at < NOW() - ($1 || ' days')::INTERVAL`,
+    [retentionDays]
+  );
+  if (rowCount > 0) console.log(`[ALERT CLEANUP] ${rowCount} alerte(s) de plus de ${retentionDays} jours supprimée(s)`);
+}
+
+export function scheduleAlertsCleanup(retentionDays = 90, intervalMs = 24 * 60 * 60 * 1000) {
+  _pruneOldAlerts(retentionDays).catch(err => console.error('[ALERT CLEANUP]', err));
+  setInterval(() => _pruneOldAlerts(retentionDays).catch(err => console.error('[ALERT CLEANUP]', err)), intervalMs);
+}
