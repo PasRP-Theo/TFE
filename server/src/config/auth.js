@@ -2,7 +2,7 @@ if (!process.env.JWT_SECRET) {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('[AUTH] JWT_SECRET doit être défini en production. Démarrage refusé.');
   } else {
-    console.warn('[AUTH] ⚠ JWT_SECRET non défini — valeur par défaut utilisée (dev uniquement)');
+    console.warn('[AUTH] JWT_SECRET non défini — valeur par défaut utilisée (dev uniquement)');
   }
 }
 

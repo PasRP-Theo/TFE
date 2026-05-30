@@ -58,7 +58,7 @@ def _load_device_conf():
             if k:
                 conf[k] = v
     except Exception as e:
-        print(f"[CONFIG] ⚠ Impossible de lire {_CONF_PATH} : {e}")
+        print(f"[CONFIG] Impossible de lire {_CONF_PATH} : {e}")
     return conf
 
 _conf           = _load_device_conf()
@@ -92,9 +92,9 @@ def fetch_remote_config():
             MOTION_MIN_PIXELS        = int(cfg.get("motionMinPixels",        MOTION_MIN_PIXELS))
             STREAM_IDLE_TIMEOUT      = int(cfg.get("streamIdleTimeout",      STREAM_IDLE_TIMEOUT))
             WAKE_STREAM_TIMEOUT      = int(cfg.get("wakeStreamTimeout",      WAKE_STREAM_TIMEOUT))
-            print("[CONFIG] ✅ Config chargée depuis le serveur")
+            print("[CONFIG] Config chargée depuis le serveur")
     except Exception as e:
-        print(f"[CONFIG] ⚠ Impossible de charger la config distante : {e}")
+        print(f"[CONFIG] Impossible de charger la config distante : {e}")
 
 
 def enforce_storage_limit():
@@ -110,11 +110,11 @@ def enforce_storage_limit():
             freed = oldest.stat().st_size
             oldest.unlink()
             total -= freed
-            print(f"[STORAGE] 🗑 {oldest.name} supprimé ({freed // 1024 // 1024} Mo libérés)")
+            print(f"[STORAGE] {oldest.name} supprimé ({freed // 1024 // 1024} Mo libérés)")
         except FileNotFoundError:
             pass
         except Exception as e:
-            print(f"[STORAGE] ⚠ {oldest.name} : {e}")
+            print(f"[STORAGE] {oldest.name} : {e}")
 
 
 def get_local_ip():
@@ -149,11 +149,11 @@ def announce(ip):
     try:
         r = requests.post(f"{SERVER_URL}/api/camera-nodes/announce", json=payload, timeout=5)
         if r.status_code == 200:
-            print(f"[ANNOUNCE] ✅ Noeud annoncé ({ip})")
+            print(f"[ANNOUNCE] Noeud annoncé ({ip})")
         else:
-            print(f"[ANNOUNCE] ⚠ HTTP {r.status_code}")
+            print(f"[ANNOUNCE] HTTP {r.status_code}")
     except Exception as e:
-        print(f"[ANNOUNCE] ❌ {e}")
+        print(f"[ANNOUNCE] {e}")
     try:
         requests.post(f"{SERVER_URL}/api/cameras/announce", json=payload, timeout=5)
     except Exception:
@@ -170,9 +170,9 @@ def clean_shm():
                     subprocess.run(['sudo', 'rm', '-rf', d], timeout=5, capture_output=True)
                 except Exception:
                     pass
-            print(f"[SHM] 🧹 {len(dirs)} répertoire(s) MediaMTX supprimé(s) de /dev/shm")
+            print(f"[SHM] {len(dirs)} répertoire(s) MediaMTX supprimé(s) de /dev/shm")
     except Exception as e:
-        print(f"[SHM] ⚠ clean_shm : {e}")
+        print(f"[SHM] clean_shm : {e}")
 
 
 def release_camera(kill_rpicam_jpeg: bool = True):
@@ -203,7 +203,7 @@ def release_camera(kill_rpicam_jpeg: bool = True):
                 except Exception:
                     pass
         except Exception as e:
-            print(f"[CAM] ⚠ release_camera fuser : {e}")
+            print(f"[CAM] release_camera fuser : {e}")
 
     clean_shm()
     time.sleep(0.5)
@@ -213,9 +213,9 @@ def set_mediamtx(active: bool):
     action = 'start' if active else 'stop'
     try:
         subprocess.run(['sudo', 'systemctl', action, 'mediamtx'], check=True, timeout=10)
-        print(f"[MEDIAMTX] {'▶' if active else '⏹'} MediaMTX {action}")
+        print(f"[MEDIAMTX] MediaMTX {action}")
     except Exception as e:
-        print(f"[MEDIAMTX] ❌ Impossible de {action} MediaMTX : {e}")
+        print(f"[MEDIAMTX] Impossible de {action} MediaMTX : {e}")
 
 
 def wait_for_rtsp_path(max_wait: int = 20) -> bool:
@@ -228,12 +228,12 @@ def wait_for_rtsp_path(max_wait: int = 20) -> bool:
             )
             if r.status_code == 200 and r.json().get("ready") is True:
                 elapsed = round(time.time() - (deadline - max_wait), 1)
-                print(f"[MEDIAMTX] ✅ Path /{RTSP_PATH} prêt ({elapsed}s)")
+                print(f"[MEDIAMTX] Path /{RTSP_PATH} prêt ({elapsed}s)")
                 return True
         except Exception:
             pass
         time.sleep(0.5)
-    print(f"[MEDIAMTX] ⚠ Path /{RTSP_PATH} non ready après {max_wait}s")
+    print(f"[MEDIAMTX] Path /{RTSP_PATH} non ready après {max_wait}s")
     return False
 
 
@@ -260,11 +260,11 @@ def notify_motion(active: bool):
             timeout=5,
         )
         if r.status_code == 200:
-            print(f"[MOTION] ✅ Serveur notifié ({'actif' if active else 'inactif'})")
+            print(f"[MOTION] Serveur notifié ({'actif' if active else 'inactif'})")
         else:
-            print(f"[MOTION] ⚠ HTTP {r.status_code}")
+            print(f"[MOTION] HTTP {r.status_code}")
     except Exception as e:
-        print(f"[MOTION] ❌ Impossible de notifier le serveur : {e}")
+        print(f"[MOTION] Impossible de notifier le serveur : {e}")
 
 
 def check_wake_signal() -> bool:
@@ -304,7 +304,7 @@ def capture_snapshot(out_path: Path) -> bool:
         )
         return True
     except Exception as e:
-        print(f"[SNAPSHOT] ⚠ Échec capture : {e}")
+        print(f"[SNAPSHOT] Échec capture : {e}")
         return False
 
 
@@ -337,7 +337,7 @@ def record_offline_clip(out: Path) -> bool:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except Exception as e:
-        print(f"[MOTION] ❌ Échec rpicam-vid : {e}")
+        print(f"[MOTION] Échec rpicam-vid : {e}")
         try: h264_out.unlink()
         except: pass
         return False
@@ -350,7 +350,7 @@ def record_offline_clip(out: Path) -> bool:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     except Exception as e:
-        print(f"[MOTION] ❌ Échec ffmpeg remux : {e}")
+        print(f"[MOTION] Échec ffmpeg remux : {e}")
         try: out.unlink()
         except: pass
         return False
@@ -373,7 +373,7 @@ def upload_pending():
         except FileNotFoundError:
             continue
         if size < MIN_CLIP_SIZE:
-            print(f"[SYNC] ⚠ {f.name} trop petit ({size} o) — supprimé")
+            print(f"[SYNC] {f.name} trop petit ({size} o) — supprimé")
             try: f.unlink()
             except: pass
         else:
@@ -397,14 +397,14 @@ def upload_pending():
                     timeout=120,
                 )
             if r.status_code in (200, 201):
-                print(f"[SYNC] ✅ {f.name} → serveur (URL: {r.json().get('url', '?')})")
+                print(f"[SYNC] {f.name} -> serveur (URL: {r.json().get('url', '?')})")
                 try: f.unlink()
                 except: pass
             else:
-                print(f"[SYNC] ❌ {f.name} — HTTP {r.status_code}: {r.text[:200]}")
+                print(f"[SYNC] {f.name} — HTTP {r.status_code}: {r.text[:200]}")
                 break
         except Exception as e:
-            print(f"[SYNC] ❌ {f.name} — {e}")
+            print(f"[SYNC] {f.name} — {e}")
             break
 
 
@@ -461,7 +461,7 @@ def main():
 
         # ── Reconnexion serveur ────────────────────────────────────────────────
         if online and was_offline:
-            print("[SENTYS] 🟢 Connexion rétablie — synchronisation des clips hors-ligne")
+            print("[SENTYS] Connexion rétablie — synchronisation des clips hors-ligne")
             fetch_remote_config()
             server_loss_streak    = 0
             server_check_interval = SERVER_CHECK_INTERVAL_ONLINE
@@ -471,7 +471,7 @@ def main():
 
         if not online:
             if not was_offline:
-                print("[SENTYS] 🔴 Serveur injoignable — passage en mode hors-ligne")
+                print("[SENTYS] Serveur injoignable — passage en mode hors-ligne")
             was_offline = True
 
             if stream_state == 'STREAMING':
@@ -500,7 +500,7 @@ def main():
             if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
                 last_wake_check = now
                 if check_wake_signal():
-                    print("[WAKE] 🔔 Démarrage demandé par l'interface web")
+                    print("[WAKE] Démarrage demandé par l'interface web")
                     ready = start_stream()
                     if ready:
                         notify_motion(True)
@@ -509,7 +509,7 @@ def main():
                         last_motion_time  = now
                         stream_start_time = now
                     else:
-                        print("[WAKE] ⚠ MediaMTX non prêt — retour en veille")
+                        print("[WAKE] MediaMTX non prêt — retour en veille")
                         stop_stream()
                     continue
 
@@ -519,7 +519,7 @@ def main():
             if capture_snapshot(cur_snap):
                 if prev_snap is not None and prev_snap.exists():
                     if images_differ(prev_snap, cur_snap):
-                        print("[MOTION] 🔴 Mouvement détecté !")
+                        print("[MOTION] Mouvement détecté !")
                         last_motion_time = now
 
                         if online:
@@ -528,14 +528,14 @@ def main():
                             stream_state = 'STREAMING'
                             wake_mode    = False
                         else:
-                            print("[MOTION] 📴 Mode hors-ligne — enregistrement local")
+                            print("[MOTION] Mode hors-ligne — enregistrement local")
                             enforce_storage_limit()
                             ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
                             out = RECORD_DIR / f"{ts}.mp4"
                             if record_offline_clip(out):
-                                print(f"[MOTION] 📼 Clip enregistré : {out.name}")
+                                print(f"[MOTION] Clip enregistré : {out.name}")
                             else:
-                                print(f"[MOTION] ❌ Échec enregistrement")
+                                print(f"[MOTION] Échec enregistrement")
                                 try:
                                     if out.exists(): out.unlink()
                                 except Exception:
@@ -554,7 +554,7 @@ def main():
         elif stream_state == 'STREAMING':
 
             if online and check_sleep_signal():
-                print("[SLEEP] 💤 Arrêt demandé par l'interface web")
+                print("[SLEEP] Arrêt demandé par l'interface web")
                 stop_stream()
                 notify_motion(False)
                 stream_state = 'IDLE'
@@ -568,7 +568,7 @@ def main():
 
             if wake_mode:
                 if now - stream_start_time > WAKE_STREAM_TIMEOUT:
-                    print(f"[WAKE] ⏹ {WAKE_STREAM_TIMEOUT}s écoulés — arrêt automatique")
+                    print(f"[WAKE] {WAKE_STREAM_TIMEOUT}s écoulés — arrêt automatique")
                     stop_stream()
                     if online:
                         notify_motion(False)
@@ -581,7 +581,7 @@ def main():
                     time.sleep(2)
             else:
                 if now - last_motion_time > STREAM_IDLE_TIMEOUT:
-                    print(f"[MOTION] ⏹ {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
+                    print(f"[MOTION] {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
                     stop_stream()
                     if online:
                         notify_motion(False)

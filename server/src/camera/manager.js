@@ -277,7 +277,7 @@ function clearInactivityTimer(cameraId) {
 function scheduleInactivity(cameraId) {
   clearInactivityTimer(cameraId);
   inactivityTimers.set(String(cameraId), setTimeout(() => {
-    console.log(`[CAM ${cameraId}] ⏱ Inactivité — arrêt du stream HLS`);
+    console.log(`[CAM ${cameraId}] Inactivité — arrêt du stream HLS`);
     stopHlsStream(String(cameraId));
   }, STREAM_INACTIVE_TIMEOUT_MS));
 }
@@ -600,7 +600,7 @@ export async function startHlsStream(camera) {
         console.error(`[CAM ${id} IA] ${msg}`);
     });
     aiProc.on('error', err => console.error(`[CAM ${id} IA] ${err.message}`));
-    console.log(`[CAM ${id}] 🤖 IA démarrée`);
+    console.log(`[CAM ${id}] IA démarrée`);
   }
 
   // Dernière vérification avant d'écraser l'état — stopHlsStream/stopCamera peut avoir
@@ -632,7 +632,7 @@ export async function startHlsStream(camera) {
         await fsPromises.access(hlsIndex);
         s.hlsUrl = `/hls/${id}/index.m3u8`;
         broadcast(id);
-        console.log(`[CAM ${id}] ✔ Manifeste HLS prêt`);
+        console.log(`[CAM ${id}] Manifeste HLS prêt`);
         return;
       } catch { /* pas encore créé */ }
       await new Promise(r => setTimeout(r, 300));
@@ -708,10 +708,10 @@ export function stopHlsStream(cameraId) {
   s.startedAt = null;
   s.proc?.kill('SIGKILL');
   s.proc = null;
-  if (s.aiProc) { s.aiProc.kill('SIGKILL'); s.aiProc = null; console.log(`[CAM ${id}] 🤖 IA arrêtée`); }
+  if (s.aiProc) { s.aiProc.kill('SIGKILL'); s.aiProc = null; console.log(`[CAM ${id}] IA arrêtée`); }
   if (activeRecordings.has(id)) { activeRecordings.get(id)?.kill('SIGKILL'); activeRecordings.delete(id); }
   broadcast(id);
-  console.log(`[CAM ${id}] ⏹ Stream HLS arrêté — mode veille`);
+  console.log(`[CAM ${id}] Stream HLS arrêté — mode veille`);
   return true;
 }
 
@@ -749,7 +749,7 @@ export function stopCamera(cameraId) {
   s.status    = 'stopped';   // avant kill pour éviter la reconnexion auto
   s.recording = false;
   s.proc?.kill('SIGKILL');
-  if (s.aiProc) { s.aiProc?.kill('SIGKILL'); console.log(`[CAM ${id}] 🤖 Arrêt de l'IA.`); }
+  if (s.aiProc) { s.aiProc?.kill('SIGKILL'); console.log(`[CAM ${id}] Arrêt de l'IA.`); }
   if (activeRecordings.has(id)) { activeRecordings.get(id)?.kill('SIGKILL'); activeRecordings.delete(id); }
   states.delete(id);
   broadcast(id);
@@ -867,7 +867,7 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
 
   s.recording = true; // Allume la pastille "REC" sur l'interface
   broadcast(id);
-  console.log(`[CAM ${id}] 🎥 Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
+  console.log(`[CAM ${id}] Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
 
   const pushTitle = detectionLabel || 'Mouvement détecté';
   const camLabel = cameraName || `CAM ${id}`;
@@ -898,6 +898,6 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
       broadcast(id);
     }
 
-    console.log(`[CAM ${id}] 🛑 Fin de l'enregistrement de mouvement.`);
+    console.log(`[CAM ${id}] Fin de l'enregistrement de mouvement.`);
   });
 }

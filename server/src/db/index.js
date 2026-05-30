@@ -11,7 +11,7 @@ export const pool = new Pool({
   password: String(process.env.DB_PASSWORD ?? 'admin'),
 });
 
-pool.on('error', err => console.error('❌ PostgreSQL:', err.message));
+pool.on('error', err => console.error('[PostgreSQL]', err.message));
 
 export async function initDB() {
   const client = await pool.connect();
@@ -272,10 +272,10 @@ export async function initDB() {
         [rows[0].id]
       );
 
-      console.log('✅ Compte administrateur initial créé: root / root');
+      console.log('[DB] Compte administrateur initial créé: root / root');
     }
 
-    console.log('✅ Base de données "sentys" initialisée');
+    console.log('[DB] Base de données "sentys" initialisée');
   } finally {
     client.release();
   }
