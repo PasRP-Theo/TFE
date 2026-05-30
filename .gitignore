@@ -5,8 +5,8 @@ DOCUMENTATION.tex
 # Rapport et documentation locale
 raport.tex
 *.tex
-README*
-readme*
+README-*
+readme-*
 
 # Dependency directories
 node_modules/
