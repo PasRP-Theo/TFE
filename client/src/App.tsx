@@ -90,7 +90,11 @@ function getSystemStatus(
 
   function AppShell() {
   const { user, logout, loading } = useAuth();
-  const { config } = useAppConfig();
+  const { config, refreshConfig } = useAppConfig();
+
+  useEffect(() => {
+    if (user) refreshConfig().catch(() => {});
+  }, [user, refreshConfig]);
   const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
