@@ -2,13 +2,18 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 const { Pool } = pg;
 
+const required = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+const missing = required.filter(k => !process.env[k]);
+if (missing.length) {
+  throw new Error(`[DB] Variables manquantes dans .env : ${missing.join(', ')}`);
+}
+
 export const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME     || 'sentys',
-  //database: process.env.DB_NAME     || 'aubepines',
-  user:     process.env.DB_USER     || 'postgres',
-  password: String(process.env.DB_PASSWORD ?? 'admin'),
+  host:     process.env.DB_HOST,
+  port:     parseInt(process.env.DB_PORT),
+  database: process.env.DB_NAME,
+  user:     process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
 });
 
 pool.on('error', err => console.error('[PostgreSQL]', err.message));
