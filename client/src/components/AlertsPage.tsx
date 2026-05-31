@@ -290,7 +290,6 @@ export default function AlertsPage() {
     }
   }
 
-  // Suppression de toutes les alertes
   async function deleteAllAlerts() {
     if (!authHeaders) return;
     setActionLoadingKey('delete-all');

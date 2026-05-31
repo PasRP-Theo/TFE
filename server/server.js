@@ -35,7 +35,7 @@ const io = new Server(httpServer, {
   }
 });
 
-// Middleware d'authentification pour Socket.IO (reutilise tes JWT)
+// auth Socket.IO
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("Authentication error"));
@@ -55,7 +55,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Rendre io accessible partout dans Express via req.app.get('io')
+// io accessible
 app.set('io', io);
 
 export async function logAudit(username, action, details, ip) {
@@ -69,7 +69,7 @@ export async function logAudit(username, action, details, ip) {
   }
 }
 
-// ── CORS ───────────────────────────────────────────────────
+// CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:5173', 'http://localhost:4000'];
@@ -87,11 +87,9 @@ app.options("/{*path}", cors());
 app.use(express.json());
 app.set('trust proxy', 'loopback');
 
-// ── Rate limiting ──────────────────────────────────────────
+// rate limiting
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  // En développement, on peut être plus permissif pour éviter les blocages dus au hot-reload.
-  // En production, la limite stricte est une bonne pratique de sécurité.
   max: process.env.NODE_ENV === 'development' ? 50 : 10,
   message: { error: "Trop de tentatives, reessayez dans 15 minutes." },
   standardHeaders: true, legacyHeaders: false,
@@ -114,7 +112,7 @@ function getRequestUser(req) {
   }
 }
 
-// ── Auth ───────────────────────────────────────────────────
+// auth
 app.post("/auth/register", async (req, res) => {
   const { username, password, role = "user" } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
@@ -145,7 +143,7 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", loginLimiter, async (req, res) => {
   const { username, password } = req.body;
 
-  // Control Panel passwordless login:
+  // kiosk login
   const isKioskAdmin = username.toLowerCase().trim() === 'kiosk_admin' && !password;
   const isKioskGuest = username.toLowerCase().trim() === 'kiosk_guest' && !password;
   const ipStr = req.ip ? req.ip.replace(/^.*:/, '') : '';
@@ -158,7 +156,7 @@ app.post("/auth/login", loginLimiter, async (req, res) => {
       let user = rows[0];
 
       if (!user && isKioskGuest) {
-        // Fallback: Si aucun utilisateur 'user' n'existe, on crée un invité virtuel
+        // fallback invité
         user = { id: 9999, username: 'invité', role: 'user' };
       } else if (!user) {
         return res.status(401).json({ error: `Aucun compte ${roleTarget} disponible pour le panneau de contrôle.` });
@@ -207,7 +205,7 @@ app.get("/auth/me", async (req, res) => {
   } catch { res.status(401).json({ error: "Token invalide ou expire" }); }
 });
 
-// ── HLS static (flux vidéo live) ──────────────────────────
+// HLS statique
 const hlsDir = process.env.HLS_DIR || path.join(__dirname, '..', 'hls');
 if (!existsSync(hlsDir)) mkdirSync(hlsDir, { recursive: true });
 app.use('/hls', express.static(hlsDir));
@@ -215,7 +213,7 @@ const recordingsDir = process.env.RECORDINGS_DIR || path.join(__dirname, '..', '
 if (!existsSync(recordingsDir)) mkdirSync(recordingsDir, { recursive: true });
 app.use('/recordings', express.static(recordingsDir));
 
-// ── Routes API ─────────────────────────────────────────────
+// routes
 app.use("/api/users",   userRoutes);
 app.use("/api/system",  systemRoutes);
 app.use("/api/camera-nodes", cameraNodeRoutes);
@@ -239,7 +237,7 @@ app.get("/api/audit-logs", async (req, res) => {
 
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
-// Sert le script Pi pour auto-update
+// agent Pi
 app.get("/api/agent/sentys_agent.py", (_, res) => {
   const agentPath = path.join(__dirname, "../pi/sentys_agent.py");
   if (existsSync(agentPath)) {
@@ -250,7 +248,7 @@ app.get("/api/agent/sentys_agent.py", (_, res) => {
   }
 });
 
-// ── Frontend React (build) ────────────────────────────────
+// frontend
 const distPath = path.join(__dirname, "../client/dist");
 app.use(express.static(distPath));
 app.get("/*", (_, res) => {
@@ -262,16 +260,16 @@ app.get("/*", (_, res) => {
   }
 });
 
-// ── Démarrage ──────────────────────────────────────────────
+// démarrage
 async function start() {
   await initDB();
 
-  // ── go2rtc (WebRTC sub-second latency) ──────────────────────
+  // go2rtc
   startGo2rtc().then(ok => {
     if (ok) setTimeout(() => syncCamerasFromDB(pool), 3000);
   });
 
-  // Rendre les helpers go2rtc accessibles dans les routes cameras
+  // helpers go2rtc
   app.set('go2rtc:register',   registerStream);
   app.set('go2rtc:unregister', unregisterStream);
 
@@ -286,26 +284,25 @@ async function start() {
     )
   `);
 
-  // Force l'ajout des colonnes si la table existait déjà dans une ancienne version
+  // migrations colonnes
   await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS username VARCHAR(255)");
   await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(255)");
   await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT");
   await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45)");
 
-  // Force le type TEXT pour la colonne details au cas où elle aurait été créée en JSON précédemment
+  // migration TEXT
   await pool.query("ALTER TABLE audit_logs ALTER COLUMN details TYPE TEXT USING details::text").catch(() => {});
 
-  // Index pour accélérer les recherches dans audit_logs
+  // index audit
   await pool.query("CREATE INDEX IF NOT EXISTS idx_audit_logs_username_created ON audit_logs(username, created_at DESC)").catch(() => {});
   await pool.query("CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at DESC)").catch(() => {});
 
-
-  // device_id → timestamp de la première suspicion de déconnexion
+  // device_id → timestamp première suspicion déconnexion
   const suspectedOfflineNodes = new Map();
-  // camera id (string) → timestamp de la première suspicion
+  // camera id → timestamp première suspicion
   const suspectedOfflineCameras = new Map();
-  // Délai de confirmation avant alerte critique (ms)
-  const OFFLINE_CONFIRM_DELAY_MS = 60_000; // 60s de silence supplémentaires après suspicion
+  // délai confirmation
+  const OFFLINE_CONFIRM_DELAY_MS = 60_000;
 
   const runOfflineAlertsCheck = async () => {
     try {
@@ -315,7 +312,7 @@ async function start() {
       ]);
       const states = getAllStates();
 
-      // ── Caméras ────────────────────────────────────────────────────────
+      // caméras
       const activeCameraIds = new Set(cameraResult.rows.map(c => String(c.id)));
       for (const id of suspectedOfflineCameras.keys()) {
         if (!activeCameraIds.has(id)) suspectedOfflineCameras.delete(id);
@@ -351,7 +348,7 @@ async function start() {
         io.emit("new_alert", { level: "critical", title: `CAM ${id} — ${camera.name} hors ligne` });
       }));
 
-      // ── Noeuds Pi ─────────────────────────────────────────────────────
+      // noeuds Pi
       const activeNodeIds = new Set(nodeResult.rows.map(n => n.device_id));
       for (const id of suspectedOfflineNodes.keys()) {
         if (!activeNodeIds.has(id)) suspectedOfflineNodes.delete(id);
@@ -395,7 +392,7 @@ async function start() {
     }
   };
 
-  // Auto-démarrer les caméras actives en base
+  // autostart
   try {
     const settingsResult = await pool.query('SELECT camera_autostart_enabled FROM app_settings WHERE id = 1');
     const cameraAutostartEnabled = settingsResult.rows[0]?.camera_autostart_enabled ?? true;
@@ -414,8 +411,8 @@ async function start() {
   setInterval(() => cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err)), 24 * 60 * 60 * 1000);
   runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err));
   setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
-  scheduleDiscoveryCleanup(10, 5 * 60 * 1000); // purge les annonces > 10 min, toutes les 5 min
-  scheduleAlertsCleanup(90); // purge les alertes > 90 jours, toutes les 24h
+  scheduleDiscoveryCleanup(10, 5 * 60 * 1000);
+  scheduleAlertsCleanup(90);
 
   const PORT = process.env.PORT || 4000;
   httpServer.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));

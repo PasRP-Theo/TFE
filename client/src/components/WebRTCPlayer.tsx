@@ -15,7 +15,7 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
     let disposed = false;
 
     async function connect() {
-      // Vérifie rapidement si go2rtc est disponible avant de démarrer ICE
+      // statut go2rtc
       try {
         const statusRes = await apiFetch(apiUrl('/api/webrtc/status'));
         if (statusRes.ok) {
@@ -33,11 +33,10 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
       });
       pcRef.current = pc;
 
-      // On ne veut que recevoir (pas envoyer de flux depuis le navigateur)
+      // recvonly
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.addTransceiver('audio', { direction: 'recvonly' });
 
-      // Quand une piste vidéo arrive, on l'affiche
       pc.ontrack = ({ streams }) => {
         if (videoRef.current && !disposed && streams[0]) {
           videoRef.current.srcObject = streams[0];
@@ -46,25 +45,24 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
         }
       };
 
-      // Détection de déconnexion WebRTC → bascule vers HLS
+      // déco→HLS
       pc.onconnectionstatechange = () => {
         if (disposed) return;
         const state = pc.connectionState;
         if (state === 'failed') {
           onError();
         } else if (state === 'disconnected') {
-          // Petite tolérance pour les décos transitoires
           setTimeout(() => {
             if (!disposed && pc.connectionState === 'disconnected') onError();
           }, 3000);
         }
       };
 
-      // Création de l'offre SDP locale
+      // offre SDP
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // Attente de la fin du gathering ICE (max 1s — réseau local, pas besoin de plus)
+      // gathering ICE
       await new Promise<void>((resolve) => {
         if (pc.iceGatheringState === 'complete') return resolve();
         const timeout = setTimeout(resolve, 1000);
@@ -79,7 +77,7 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
 
       if (disposed) { pc.close(); return; }
 
-      // Envoi de l'offre SDP au serveur Node.js qui la proxie vers go2rtc
+      // envoi SDP
       const res = await apiFetch(apiUrl(`/api/webrtc/${cameraId}`), {
         method:  'POST',
         headers: { 'Content-Type': 'application/sdp' },
@@ -88,7 +86,7 @@ export function WebRTCPlayer({ cameraId, onError }: WebRTCPlayerProps) {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      // go2rtc répond avec la SDP answer (ICE candidates inclus)
+      // SDP answer
       const answerSdp = await res.text();
       if (disposed) { pc.close(); return; }
 

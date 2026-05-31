@@ -12,7 +12,7 @@ import { sendPushNotification } from './push.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
 
-// Flags en mémoire : deviceId → true quand l'UI demande un stream sur ce Pi
+// flags réveil/sommeil Pi
 const streamWakeRequests  = new Map();
 const streamSleepRequests = new Map();
 
@@ -152,7 +152,7 @@ async function getConnectedHosts() {
   return new Set(rows.map(row => getHostFromStreamUrl(row.rtsp_url)).filter(Boolean));
 }
 
-// GET /api/camera-nodes/
+// liste
 router.get('/', requireAuth, async (_req, res) => {
   try {
     const [nodesResult, connectedHosts] = await Promise.all([
@@ -174,7 +174,7 @@ router.get('/', requireAuth, async (_req, res) => {
   }
 });
 
-// GET /api/camera-nodes/:deviceId/wake — le Pi poll cet endpoint pour démarrer
+// réveil
 router.get('/:deviceId/wake', (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const wake = streamWakeRequests.get(deviceId) || false;
@@ -182,7 +182,7 @@ router.get('/:deviceId/wake', (req, res) => {
   res.json({ wake });
 });
 
-// GET /api/camera-nodes/:deviceId/sleep — le Pi poll cet endpoint pour s'arrêter
+// sommeil
 router.get('/:deviceId/sleep', (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const sleep = streamSleepRequests.get(deviceId) || false;
@@ -190,7 +190,7 @@ router.get('/:deviceId/sleep', (req, res) => {
   res.json({ sleep });
 });
 
-// POST /api/camera-nodes/announce — appelé par le Pi au démarrage (pas d'auth requis)
+// annonce Pi
 router.post('/announce', async (req, res) => {
   const payload = normalizeNodePayload(req.body);
   if (!payload) {
@@ -210,7 +210,7 @@ router.post('/announce', async (req, res) => {
   }
 });
 
-// POST /api/camera-nodes/motion — appelé par le Pi (pas d'auth requis)
+// mouvement Pi
 router.post('/motion', async (req, res) => {
   const deviceId = String(req.body.deviceId || req.body.device_id || '').trim();
   const motion = Boolean(req.body.motion) !== false && req.body.motion !== false;
@@ -244,31 +244,31 @@ router.post('/motion', async (req, res) => {
         [deviceId, true, detectedAt.toISOString()]
       );
 
-      // Démarre le stream HLS + déclenche l'enregistrement pour la caméra liée
+      // stream + enregistrement
       pool.query('SELECT * FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
         .then(({ rows: camRows }) => {
           if (camRows[0]) {
             startHlsStream(camRows[0]).catch(() => {});
-            // Enregistrement déclenché 3s après pour laisser MediaMTX démarrer
+            // délai MediaMTX
             setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name), 3000);
           }
         })
         .catch(() => {});
     } else {
-      // motion: false → le Pi a arrêté MediaMTX, on coupe proprement le stream HLS
+      // arrêt stream
       pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
         .then(({ rows: camRows }) => { if (camRows[0]) stopHlsStream(String(camRows[0].id)); })
         .catch(() => {});
     }
 
-    // Répond au Pi immédiatement — la classification se fait en tâche de fond
+    // réponse immédiate
     const connectedHosts = await getConnectedHosts();
     res.json({
       message: motion ? 'Mouvement enregistre' : 'Mouvement acquitte',
       node: serializeNode(rows[0], connectedHosts),
     });
 
-    // ── Tâche de fond : classification YOLO + alerte ──────────────
+    // fond : YOLO + alerte
     if (motion) {
       const node = rows[0];
       setImmediate(async () => {
@@ -344,7 +344,7 @@ router.post('/motion', async (req, res) => {
   }
 });
 
-// GET /api/camera-nodes/:deviceId/motion-history
+// historique
 router.get('/:deviceId/motion-history', requireAuth, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
@@ -365,7 +365,7 @@ router.get('/:deviceId/motion-history', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/camera-nodes/:deviceId/connect — connexion noeud → caméra (admin)
+// connexion noeud→caméra
 router.post('/:deviceId/connect', requireAuth, requireAdmin, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
@@ -409,7 +409,7 @@ router.post('/:deviceId/connect', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-// POST /api/camera-nodes/:deviceId/upload-recording — appelé par le Pi après reconnexion
+// upload hors ligne
 router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || !req.file) return res.status(400).json({ error: 'deviceId et fichier requis' });
@@ -436,7 +436,7 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
     const offlineCamId    = linkedCam ? String(linkedCam.id) : null;
     const offlineCamLabel = linkedCam ? `CAM ${linkedCam.id} — ${linkedCam.name}` : node.name;
 
-    // Déplace le fichier dans le dossier de la caméra liée avant l'insertion en base
+    // déplace → dossier caméra
     let finalFilename = req.file.filename;
     let recordingUrl  = `/recordings/offline/${req.file.filename}`;
 
@@ -454,7 +454,7 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
       }
     }
 
-    // INSERT avec le chemin final
+    // insertion
     await pool.query(
       `INSERT INTO camera_node_motion_events (device_id, motion, detected_at, offline_recording, recording_path)
        VALUES ($1, true, $2, true, $3)`,
@@ -492,7 +492,7 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
   }
 });
 
-// GET /api/camera-nodes/:deviceId/config — lu par le Pi (pas d'auth requis)
+// config lecture
 router.get('/:deviceId/config', async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
@@ -519,7 +519,7 @@ router.get('/:deviceId/config', async (req, res) => {
   }
 });
 
-// PATCH /api/camera-nodes/:deviceId/config — modifié depuis l'interface admin
+// config modification
 router.patch('/:deviceId/config', requireAuth, requireAdmin, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
@@ -557,7 +557,7 @@ router.patch('/:deviceId/config', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-// DELETE /api/camera-nodes/:deviceId — supprime un noeud
+// suppression
 router.delete('/:deviceId', requireAuth, requireAdmin, async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });

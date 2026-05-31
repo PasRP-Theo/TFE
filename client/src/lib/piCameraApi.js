@@ -3,7 +3,6 @@ const PI_API_BASE = '/pi-api';
 const PI_IP = '192.168.0.213';
 
 function getAuthHeader() {
-  // ERR_2 — Header d'authentification Basic requis par MediaMTX
   return { 'Authorization': 'Basic ' + btoa('admin:admin') };
 }
 
@@ -32,7 +31,6 @@ export const piCameraApi = {
   },
 
   getCameraStatus: async (streamName = 'cam1') => {
-    // On réutilise checkPiOnline pour la gestion du timeout et du 401
     await piCameraApi.checkPiOnline();
 
     const res = await fetch(`${PI_API_BASE}/v3/paths/list`, { headers: getAuthHeader() });
@@ -41,7 +39,6 @@ export const piCameraApi = {
     const cam = data.items?.find(item => item.name === streamName);
     if (!cam) throw new Error(`Caméra '${streamName}' non trouvée sur le Pi.`);
     
-    // ERR_5 — Vérifier si le flux est actif (MediaMTX retourne 'ready', ou 'bytesReceived')
     const isStreaming = cam.ready === true || cam.bytesReceived > 0 || (cam.tracks && cam.tracks.length > 0);
     
     if (!isStreaming) {

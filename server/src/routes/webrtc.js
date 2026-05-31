@@ -4,19 +4,16 @@ import { pool }      from '../db/index.js';
 
 const router = Router();
 
-// ── GET /api/webrtc/status ───────────────────────────────────
-// Indique au client si WebRTC est disponible
+// statut
 router.get('/status', (_req, res) => {
   res.json({ available: isReady() });
 });
 
-// ── POST /api/webrtc/:cameraId ───────────────────────────────
-// Reçoit la SDP offer du navigateur et retourne la SDP answer de go2rtc.
-// Le corps doit être en text/plain ou application/sdp.
+// négociation SDP
 router.post(
   '/:cameraId',
   (req, res, next) => {
-    // Parser SDP comme texte brut (express.json() ne convient pas ici)
+    // SDP texte brut
     let body = '';
     req.setEncoding('utf8');
     req.on('data', (chunk) => { body += chunk; });
@@ -42,7 +39,7 @@ router.post(
       try {
         sdpAnswer = await negotiate(cameraId, sdpOffer);
       } catch (firstErr) {
-        // Stream inconnu de go2rtc → on tente un enregistrement à la volée puis on réessaie
+        // enregistrement à la volée si stream inconnu
         const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id = $1', [cameraId]);
         if (rows[0]) {
           await registerStream(cameraId, rows[0].rtsp_url);
@@ -59,8 +56,7 @@ router.post(
   }
 );
 
-// ── POST /api/webrtc/:cameraId/register ──────────────────────
-// Enregistre ou met à jour un stream dans go2rtc depuis la base
+// enregistrement stream
 router.post('/:cameraId/register', async (req, res) => {
   const cameraId = parseInt(req.params.cameraId, 10);
   if (isNaN(cameraId)) return res.status(400).json({ error: 'cameraId invalide' });
@@ -75,8 +71,7 @@ router.post('/:cameraId/register', async (req, res) => {
   }
 });
 
-// ── DELETE /api/webrtc/:cameraId ─────────────────────────────
-// Retire un stream de go2rtc (appelé quand une caméra est supprimée)
+// suppression stream
 router.delete('/:cameraId', async (req, res) => {
   const cameraId = parseInt(req.params.cameraId, 10);
   if (isNaN(cameraId)) return res.status(400).json({ error: 'cameraId invalide' });

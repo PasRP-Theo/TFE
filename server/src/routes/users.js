@@ -18,7 +18,7 @@ async function getAppSettings(client = pool) {
   return rows[0] || { bootstrap_admin_user_id: null, default_admin_active: false };
 }
 
-// GET /api/users
+// liste
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -30,7 +30,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/users — creation depuis le panel admin
+// ajout
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { username, password, role = 'user' } = req.body;
   if (!username || !password)
@@ -63,7 +63,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/users/:id — modifier identifiant / mot de passe / role
+// modification
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   const userId = Number(req.params.id);
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Identifiant invalide' });
@@ -157,7 +157,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id
+// suppression
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const userId = Number(req.params.id);

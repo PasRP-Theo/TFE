@@ -253,7 +253,7 @@ export async function initDB() {
        ON CONFLICT (id) DO NOTHING`
     );
 
-    // Force l'onglet par défaut sur "Annonces réseau" (discover)
+    // défaut discover
     await client.query("UPDATE app_settings SET default_camera_add_mode = 'discover' WHERE id = 1");
 
     const userCountResult = await client.query('SELECT COUNT(*)::int AS count FROM users');
@@ -286,7 +286,7 @@ export async function initDB() {
   }
 }
 
-// Supprime les entrées camera_discoveries dont last_seen_at est plus vieux que ttlMinutes
+// purge discoveries
 async function _pruneStaleDiscoveries(ttlMinutes) {
   const { rowCount } = await pool.query(
     `DELETE FROM camera_discoveries WHERE last_seen_at < NOW() - ($1 || ' minutes')::INTERVAL`,

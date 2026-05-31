@@ -16,13 +16,13 @@ if (VAPID_READY) {
   console.warn('[PUSH] Clés VAPID non configurées — notifications push désactivées.');
 }
 
-// GET /api/notifications/vapid-public-key
+// clé vapid
 router.get('/vapid-public-key', (req, res) => {
   if (!VAPID_READY) return res.status(503).json({ error: 'Push notifications non configurées' });
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
-// POST /api/notifications/subscribe
+// abonnement
 router.post('/subscribe', requireAuth, async (req, res) => {
   const { subscription } = req.body;
   if (!subscription?.endpoint) {
@@ -48,7 +48,7 @@ router.post('/subscribe', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/notifications/subscribe
+// désabonnement
 router.delete('/subscribe', requireAuth, async (req, res) => {
   const { endpoint } = req.body;
   if (!endpoint) return res.status(400).json({ error: 'Endpoint manquant' });
@@ -61,7 +61,7 @@ router.delete('/subscribe', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/notifications/test
+// test push
 router.post('/test', requireAuth, async (req, res) => {
   const payload = JSON.stringify({
     title: 'Sentys — Test notification',

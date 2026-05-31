@@ -4,15 +4,15 @@ import { JWT_SECRET } from '../config/auth.js';
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization;
 
-  // 1. Essai JWT
+  // JWT
   if (header?.startsWith('Bearer ')) {
     try {
       req.user = jwt.verify(header.slice(7), JWT_SECRET);
       return next();
-    } catch { /* invalide, on essaie la session */ }
+    } catch { /* invalide */ }
   }
 
-  // 2. Essai session cookie
+  // session
   if (req.session?.userId) {
     req.user = { id: req.session.userId, username: req.session.username, role: req.session.role };
     return next();

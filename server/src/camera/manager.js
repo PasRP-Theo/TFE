@@ -42,6 +42,7 @@ const SCAN_SUBNETS = String(process.env.CAMERA_SCAN_SUBNETS || '192.168.0')
   .filter(value => /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(value))
   .filter(Boolean);
 
+// masque identifiants dans URL
 function redactStreamUrl(value) {
   const input = String(value || '').trim();
   if (!input) return input;
@@ -58,6 +59,7 @@ function redactStreamUrl(value) {
   }
 }
 
+// masque URLs dans args ffmpeg
 function redactCommandArgs(args) {
   return args.map(arg => (/^(rtsp|https?):/i.test(String(arg)) ? redactStreamUrl(String(arg)) : arg));
 }
@@ -66,6 +68,7 @@ function isPrivateIpv4(address) {
   return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(address);
 }
 
+// IPs locales privées
 function getLocalPrivateIpv4s() {
   const nets = os.networkInterfaces();
   const addrs = new Set();
@@ -95,6 +98,7 @@ function getLastOctet(address) {
   return Number(parts[3]);
 }
 
+// ordre de scan : plages caméras courantes d'abord, puis autour de l'IP locale
 function buildPriorityOctets(localIp, rangeStart, rangeEnd) {
   const localOctet = getLastOctet(localIp);
   const values = [];
@@ -133,6 +137,7 @@ function buildPriorityOctets(localIp, rangeStart, rangeEnd) {
   return values;
 }
 
+// liste d'hôtes à scanner, dédupliquée et ordonnée
 function buildScanHosts({ localIps, preferredHosts = [], subnets = [] }) {
   const start = Math.max(1, Math.min(254, SCAN_RANGE_START));
   const end = Math.max(start, Math.min(254, SCAN_RANGE_END));
@@ -168,6 +173,7 @@ function buildScanHosts({ localIps, preferredHosts = [], subnets = [] }) {
   return hosts;
 }
 
+// scan réseau local — retourne les streams trouvés
 export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_AFTER, concurrency = SCAN_CONCURRENCY, signal, preferredHosts = [], subnets = SCAN_SUBNETS } = {}) {
   if (signal?.aborted) return [];
   const localIps = getLocalPrivateIpv4s();
@@ -261,8 +267,8 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
 
 export const cameraEvents = new EventEmitter();
 
-// État en mémoire : camId (string) → { proc, status, recording, startedAt, hlsUrl, aiProc, sourceUrl }
-// Statuts possibles : 'stopped' | 'watching' | 'running' | 'reconnecting' | 'paused'
+// états : camId → { proc, status, recording, startedAt, hlsUrl, aiProc, sourceUrl }
+// statuts : 'stopped' | 'watching' | 'running' | 'reconnecting' | 'paused'
 const states = new Map();
 const activeRecordings = new Map();
 const inactivityTimers = new Map();
@@ -274,6 +280,7 @@ function clearInactivityTimer(cameraId) {
   if (timer) { clearTimeout(timer); inactivityTimers.delete(String(cameraId)); }
 }
 
+// arrêt HLS après inactivité
 function scheduleInactivity(cameraId) {
   clearInactivityTimer(cameraId);
   inactivityTimers.set(String(cameraId), setTimeout(() => {
@@ -312,26 +319,25 @@ export function getState(cameraId) {
   return { status: s.status, recording: s.recording, startedAt: s.startedAt, hlsUrl: s.hlsUrl };
 }
 
-// Met la caméra en attente du réveil Pi (status=reconnecting, pas de FFmpeg).
-// Le serveur déclenchera startHlsStream quand le Pi appellera notify_motion(True).
+// veille Pi : status=reconnecting, sans FFmpeg
 export function setPiWaiting(cameraId) {
   const id = String(cameraId);
   let s = states.get(id);
-  // Si la caméra n'a pas d'état (ex. stopCamera appelé avant), en créer un minimal
+  // init état minimal si absent
   if (!s) {
     states.set(id, { proc: null, aiProc: null, status: 'watching', recording: false, startedAt: null, hlsUrl: null, sourceUrl: null });
     s = states.get(id);
   }
   if (s.status === 'running') return;
-  // Annuler tout timer de reconnect existant (boucle infinie si Pi était hors ligne)
+  // annule reconnect existant
   clearInactivityTimer(id);
   const rt = reconnectTimers.get(id); if (rt) { clearTimeout(rt); reconnectTimers.delete(id); }
-  // Tuer un éventuel FFmpeg zombie (reconnect raté)
+  // tue FFmpeg zombie
   if (s.proc) { s.proc.kill('SIGKILL'); s.proc = null; }
   s.status = 'reconnecting';
   s.hlsUrl = null;
   broadcast(id);
-  // Timeout de sécurité : si le Pi ne répond pas en 60s (boot lent + réseau), repasser en veille
+  // timeout 60s si Pi ne répond pas
   setTimeout(() => {
     const cur = states.get(id);
     if (cur && cur.status === 'reconnecting' && !cur.proc) {
@@ -348,6 +354,7 @@ export function getAllStates() {
   return out;
 }
 
+// test HTTP : vérifie type MIME du flux
 async function testHttpStreamUrl(candidate, signal) {
   try {
     const controller = new AbortController();
@@ -381,6 +388,7 @@ async function testHttpStreamUrl(candidate, signal) {
   }
 }
 
+// test RTSP via ffmpeg -t 1
 function testRtspStreamUrl(candidate, signal) {
   return new Promise((resolve) => {
     const args = [
@@ -421,6 +429,7 @@ function testRtspStreamUrl(candidate, signal) {
   });
 }
 
+// détection automatique URL stream (HTTP/MJPEG/RTSP)
 export async function detectCameraStreamUrl(sourceUrl, signal, { probeRtsp = false } = {}) {
   if (typeof fetch !== 'function') return null;
   let normalized = String(sourceUrl || '').trim();
@@ -467,7 +476,7 @@ async function resolveHttpStreamUrl(sourceUrl) {
   return resolved || sourceUrl;
 }
 
-// Met la caméra en mode veille : URL résolue, prête à streamer sur demande (pas de FFmpeg).
+// veille : URL résolue, prête à streamer (pas de FFmpeg)
 export async function startCamera(camera) {
   const id  = String(camera.id);
   const cur = states.get(id);
@@ -483,19 +492,17 @@ export async function startCamera(camera) {
   console.log(`[CAM ${id}] En veille → ${redactStreamUrl(sourceUrl)}`);
 }
 
-// Démarre le stream HLS FFmpeg + IA (déclenché par un clic utilisateur ou une détection mouvement).
+// démarrage FFmpeg HLS + IA
 export async function startHlsStream(camera) {
   const id  = String(camera.id);
   const cur = states.get(id);
   if (cur?.status === 'running') { scheduleInactivity(id); return; }
 
-  // Token pour détecter si stopHlsStream/stopCamera intervient pendant les await ci-dessous.
-  // On ne doit annuler QUE si une intervention extérieure a changé le status — pas si on
-  // est parti de 'watching' (déclenchement par mouvement) et qu'il est toujours 'watching'.
+  // token pour détecter interruption extérieure pendant les await
   const startToken = Date.now();
   if (cur) cur._startToken = startToken;
 
-  // Tuer l'éventuel processus IA existant (sera relancé ci-dessous)
+  // tue IA existante (sera relancée)
   if (cur?.aiProc) {
     cur.aiProc.kill('SIGKILL');
     await new Promise(resolve => {
@@ -504,8 +511,7 @@ export async function startHlsStream(camera) {
     });
   }
 
-  // Vérification post-await : annuler seulement si une fonction extérieure a pris la main
-  // (stopHlsStream → status='watching' + token différent, stopCamera → state supprimé).
+  // annulé si stopHlsStream/stopCamera a pris la main
   {
     const s = states.get(id);
     if (!s || s.status === 'stopped' || s.status === 'paused' ||
@@ -535,12 +541,12 @@ export async function startHlsStream(camera) {
   const runId    = Date.now();
   const hlsIndex = path.join(hlsDir, 'index.m3u8');
 
-  // Utilise sourceUrl déjà résolu si disponible (mode veille) sinon résoudre
+  // réutilise sourceUrl du mode veille si dispo
   let sourceUrl = cur?.sourceUrl || String(camera.rtsp_url || '').trim();
   const isRtsp  = /^rtsp:/i.test(sourceUrl);
   if (!isRtsp && sourceUrl && !cur?.sourceUrl) sourceUrl = await resolveHttpStreamUrl(sourceUrl);
 
-  // Vérification post-await (résolution URL HTTP peut aussi prendre du temps)
+  // annulé si état changé après résolution URL
   {
     const s = states.get(id);
     if (!s || s.status === 'stopped' || s.status === 'paused' ||
@@ -586,7 +592,7 @@ export async function startHlsStream(camera) {
     broadcast(id);
   });
 
-  // Démarrage de l'IA
+  // démarrage IA
   const aiScript = path.join(PROJECT_ROOT, 'server', 'motion_detector.py');
   let aiProc = null;
   if (existsSync(aiScript)) {
@@ -603,8 +609,7 @@ export async function startHlsStream(camera) {
     console.log(`[CAM ${id}] IA démarrée`);
   }
 
-  // Dernière vérification avant d'écraser l'état — stopHlsStream/stopCamera peut avoir
-  // été appelé pendant le spawn FFmpeg+IA (race condition async).
+  // annulé si état changé après spawn (race condition async)
   {
     const s = states.get(id);
     if (!s || s.status === 'stopped' || s.status === 'paused' ||
@@ -621,8 +626,7 @@ export async function startHlsStream(camera) {
   broadcast(id);
   scheduleInactivity(id);
 
-  // Attend que FFmpeg écrive le premier manifeste HLS avant d'exposer l'URL au client
-  // (évite l'écran noir "Connexion au flux..." pendant la phase d'init)
+  // attend le premier manifeste avant d'exposer l'URL (évite écran noir)
   const waitForManifest = async () => {
     const deadline = Date.now() + 12000;
     while (Date.now() < deadline) {
@@ -637,7 +641,7 @@ export async function startHlsStream(camera) {
       } catch { /* pas encore créé */ }
       await new Promise(r => setTimeout(r, 300));
     }
-    // Timeout : on expose quand même l'URL pour que le client puisse afficher l'erreur
+    // timeout : expose quand même
     const s = states.get(id);
     if (s && s.status === 'running') { s.hlsUrl = `/hls/${id}/index.m3u8`; broadcast(id); }
   };
@@ -654,7 +658,7 @@ export async function startHlsStream(camera) {
       const now = Date.now();
       const runTime = now - new Date(startedAt).getTime();
 
-      // Si le stream a duré plus de 15s → vraie déconnexion, reset compteur et reconnecte
+      // stream > 15s : vraie déconnexion, reconnexion dans 5s
       if (runTime > 15000) {
         reconnectFailures.delete(id);
         console.log(`[CAM ${id}] ffmpeg fermé (code ${code}), redémarrage dans 5s…`);
@@ -666,7 +670,7 @@ export async function startHlsStream(camera) {
         return;
       }
 
-      // Échec rapide (MediaMTX pas encore prêt) → compteur d'échecs
+      // échec rapide : compteur, mise en veille après 4 tentatives
       const fail = reconnectFailures.get(id) || { count: 0, lastAt: 0 };
       const count = (now - fail.lastAt < 60000) ? fail.count + 1 : 1;
       reconnectFailures.set(id, { count, lastAt: now });
@@ -691,16 +695,15 @@ export async function startHlsStream(camera) {
   console.log(`[CAM ${id}] ▶ Stream HLS démarré → ${redactStreamUrl(sourceUrl)}`);
 }
 
-// Arrête uniquement le stream HLS (FFmpeg + IA) et repasse en mode veille.
+// arrêt HLS uniquement, repasse en veille
 export function stopHlsStream(cameraId) {
   const id = String(cameraId);
   const s  = states.get(id);
   if (!s) return false;
   clearInactivityTimer(id);
   const rt = reconnectTimers.get(id); if (rt) { clearTimeout(rt); reconnectTimers.delete(id); }
-  // Mettre le status à 'watching' AVANT de tuer le proc, sinon proc.on('close')
-  // voit encore 'running' et déclenche une reconnexion indésirable.
-  // Invalider le token pour annuler tout startHlsStream concurrent en cours d'init.
+  // status 'watching' AVANT kill — évite reconnexion auto dans proc.on('close')
+  // invalide le token pour annuler tout startHlsStream concurrent
   s._startToken = Date.now();
   s.status    = 'watching';
   s.recording = false;
@@ -757,6 +760,7 @@ export function stopCamera(cameraId) {
   return true;
 }
 
+// suppression clips expirés
 export async function cleanupOldRecordings({ retentionDays = Number(process.env.RECORDINGS_RETENTION_DAYS || 30) } = {}) {
   const days = Number(retentionDays);
   if (!Number.isFinite(days) || days <= 0) return;
@@ -829,35 +833,36 @@ export async function deleteAllRecordings(cameraId) {
   return { deletedCount };
 }
 
+// enregistrement mouvement + notification push
 export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null) {
   const id = String(cameraId);
   const s = states.get(id);
-  if (!s || !s.sourceUrl) return; // Permet de lancer l'enregistrement même si HLS est en "reconnecting"
-  if (activeRecordings.has(id)) return; // Déjà en cours d'enregistrement
+  if (!s || !s.sourceUrl) return;
+  if (activeRecordings.has(id)) return;
 
   const recDir = path.join(RECORDINGS_DIR, id);
   ensureDir(recDir);
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const mp4File = path.join(recDir, `${ts}.mp4`);
 
-  // Force la création (comme un "touch") pour que le fichier apparaisse dans l'historique quoiqu'il arrive
+  // touch : fichier visible dans l'historique même si ffmpeg échoue
   fsPromises.open(mp4File, 'a').then(fh => fh.close()).catch(() => {});
 
   const args = ['-y', '-fflags', '+genpts'];
   if (/^rtsp:/i.test(s.sourceUrl)) {
     args.push('-rtsp_transport', RTSP_TRANSPORT);
   }
-  
-  // Encodage rapide pour générer un MP4 valide même en cas de perte de paquets Wi-Fi
+
+  // ultrafast : MP4 valide même en cas de perte Wi-Fi
   args.push(
-    '-i', s.sourceUrl, '-t', String(durationSeconds), 
-    '-map', '0:v:0', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an', 
+    '-i', s.sourceUrl, '-t', String(durationSeconds),
+    '-map', '0:v:0', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an',
     '-movflags', 'frag_keyframe+empty_moov', mp4File
   );
 
   const proc = spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   activeRecordings.set(id, proc);
-  
+
   proc.stderr.on('data', data => {
     const txt = data.toString();
     if (txt.includes('Error') || txt.includes('error') || txt.includes('Invalid')) {
@@ -865,7 +870,7 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
     }
   });
 
-  s.recording = true; // Allume la pastille "REC" sur l'interface
+  s.recording = true; // pastille REC
   broadcast(id);
   console.log(`[CAM ${id}] Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
 
@@ -894,7 +899,7 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
   proc.on('close', () => {
     activeRecordings.delete(id);
     if (states.has(id)) {
-      states.get(id).recording = false; // Éteint la pastille "REC"
+      states.get(id).recording = false; // éteint pastille REC
       broadcast(id);
     }
 

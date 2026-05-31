@@ -148,7 +148,7 @@ async function deleteExpiredDiscoveries() {
   );
 }
 
-// GET /api/cameras — liste + état live
+// liste
 router.get('/', async (req, res) => {
   try {
     const [camerasResult, nodeMap] = await Promise.all([
@@ -165,7 +165,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/cameras — ajouter
+// ajout
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const normalized = normalizeCreateCameraPayload(req.body);
   if (!normalized.ok) {
@@ -179,7 +179,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       [name, rtspUrl, location || '']
     );
     const camera = rows[0];
-    // Démarre en mode veille (pas de FFmpeg) — le stream démarre sur demande de l'utilisateur
+    // veille
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
     req.app.get('go2rtc:register')?.(camera.id, rtspUrl)
       .catch(err => console.error('[go2rtc ADD]', err));
@@ -201,7 +201,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/cameras/announce — annonce d'une ESP32-CAM au démarrage
+// annonce ESP32
 router.post('/announce', async (req, res) => {
   const payload = normalizeDiscoveryPayload(req.body);
   if (!payload) {
@@ -217,11 +217,11 @@ router.post('/announce', async (req, res) => {
     });
   } catch (err) {
     console.error('[CAM ANNOUNCE]', err);
-    res.status(500).json({ error: 'Erreur serveur lors de l’annonce' });
+    res.status(500).json({ error: "Erreur serveur lors de l'annonce" });
   }
 });
 
-// GET /api/cameras/discoveries — liste des ESP32-CAM + noeuds Pi vus récemment
+// découvertes
 router.get('/discoveries', async (_req, res) => {
   try {
     await deleteExpiredDiscoveries();
@@ -255,8 +255,7 @@ router.get('/discoveries', async (_req, res) => {
   }
 });
 
-// GET /api/cameras/discover?host=192.168.0.101
-// GET /api/cameras/discover          -> recherche automatique sur le réseau local
+// détection ciblée ou scan réseau
 router.get('/discover', requireAuth, async (req, res) => {
   const host = String(req.query.host || '').trim();
   const abortController = new AbortController();
@@ -309,7 +308,7 @@ router.get('/discover', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/cameras/scan — Scan rapide MediaMTX (Pi Zero 2W) sur le réseau local
+// scan MediaMTX
 router.get('/scan', requireAuth, async (req, res) => {
   const foundCameras = [];
   const port = 9997;
@@ -317,10 +316,10 @@ router.get('/scan', requireAuth, async (req, res) => {
     ? Buffer.from(`${process.env.MEDIAMTX_USER}:${process.env.MEDIAMTX_PASSWORD || ''}`).toString('base64')
     : null;
 
-  // Détection dynamique des sous-réseaux (inclut ton réseau, localhost, et d'éventuels réseaux VPN/Docker)
+  // sous-réseaux dynamiques
   const interfaces = networkInterfaces();
-  const subnets = new Set(['192.168.0']); 
-  
+  const subnets = new Set(['192.168.0']);
+
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
@@ -339,14 +338,14 @@ router.get('/scan', requireAuth, async (req, res) => {
 
   const activeIps = [];
 
-  // 1. Scan TCP (très rapide) par lots pour éviter de saturer Node.js
+  // scan TCP par lots
   const BATCH_SIZE = 500;
   for (let i = 0; i < allIps.length; i += BATCH_SIZE) {
     const batch = allIps.slice(i, i + BATCH_SIZE);
     const checks = await Promise.all(batch.map(ip => {
       return new Promise((resolve) => {
         const socket = new Socket();
-        socket.setTimeout(1500); // 1500ms max pour le ping TCP (Pi Zero 2W Wi-Fi)
+        socket.setTimeout(1500);
         socket.once('connect', () => { socket.destroy(); resolve(ip); });
         socket.once('timeout', () => { socket.destroy(); resolve(null); });
         socket.once('error', () => { socket.destroy(); resolve(null); });
@@ -356,24 +355,24 @@ router.get('/scan', requireAuth, async (req, res) => {
     activeIps.push(...checks.filter(Boolean));
   }
 
-  // 2. Requêtes HTTP en parallèle sur les IPs ouvertes
+  // requêtes HTTP
   await Promise.all(activeIps.map(async (ip) => {
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 3500); // 3.5s de marge pour le Pi Zero
-      const response = await fetch(`http://${ip}:${port}/v3/paths/list`, { 
+      const id = setTimeout(() => controller.abort(), 3500);
+      const response = await fetch(`http://${ip}:${port}/v3/paths/list`, {
         signal: controller.signal,
         headers: auth ? { 'Authorization': `Basic ${auth}` } : {}
       });
       clearTimeout(id);
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data && data.items && data.items.length > 0) {
           const name = data.items[0].name;
           const rtspUrl = `rtsp://${ip}:8554/${name}`;
-          
-          // On enregistre la caméra MediaMTX dans la table persistante des Nœuds
+
+          // upsert node
           await pool.query(
             `INSERT INTO camera_nodes (device_id, name, host, stream_url, location, model, source, last_seen_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
@@ -400,7 +399,7 @@ router.get('/scan', requireAuth, async (req, res) => {
   res.json(foundCameras);
 });
 
-// PATCH /api/cameras/:id — modifier le nom
+// renommage
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { name } = req.body;
@@ -419,7 +418,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/cameras/:id
+// suppression
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     stopCamera(req.params.id);
@@ -432,14 +431,13 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/start
+// démarrage
 router.post('/:id/start', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
 
-    // Si la caméra vient d'un nœud Pi : envoyer le signal wake et attendre que le Pi
-    // confirme via notify_motion(True) — c'est là que FFmpeg sera déclenché.
+    // réveil Pi
     const host = getHostFromStreamUrl(rows[0].rtsp_url);
     if (host) {
       const { rows: nodeRows } = await pool.query(
@@ -459,20 +457,20 @@ router.post('/:id/start', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/stream/heartbeat — maintient le stream actif (envoyé par le client toutes les 60s)
+// heartbeat
 router.post('/:id/stream/heartbeat', requireAuth, (req, res) => {
   const ok = heartbeatStream(req.params.id);
   res.json({ alive: ok });
 });
 
-// POST /api/cameras/:id/pause
+// pause
 router.post('/:id/pause', requireAuth, (req, res) => {
   const ok = pauseCamera(req.params.id);
   if (!ok) return res.status(400).json({ error: 'Caméra non active' });
   res.json({ message: 'En pause', ...getState(req.params.id) });
 });
 
-// POST /api/cameras/:id/resume
+// reprise
 router.post('/:id/resume', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
@@ -484,7 +482,7 @@ router.post('/:id/resume', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/stop
+// arrêt
 router.post('/:id/stop', requireAuth, async (req, res) => {
   stopCamera(req.params.id);
   try {
@@ -497,7 +495,7 @@ router.post('/:id/stop', requireAuth, async (req, res) => {
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });
 });
 
-// GET /api/cameras/archives — dossiers d'enregistrements sans caméra correspondante
+// archives orphelines
 router.get('/archives', requireAuth, async (_req, res) => {
   try {
     const { rows } = await pool.query('SELECT id FROM cameras');
@@ -537,7 +535,7 @@ router.get('/archives', requireAuth, async (_req, res) => {
   }
 });
 
-// DELETE /api/cameras/archives/:id — purge un dossier orphelin
+// suppression archive
 router.delete('/archives/:id', requireAuth, requireAdmin, async (req, res) => {
   const { rows } = await pool.query('SELECT id FROM cameras WHERE id = $1', [req.params.id]);
   if (rows.length > 0) {
@@ -551,12 +549,12 @@ router.delete('/archives/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/cameras/:id/state
+// état
 router.get('/:id/state', (req, res) => {
   res.json(getState(req.params.id));
 });
 
-// POST /api/cameras/:id/motion — Webhook pour l'IA
+// webhook IA
 router.post('/:id/motion', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT rtsp_url, name FROM cameras WHERE id=$1', [req.params.id]);
@@ -566,15 +564,15 @@ router.post('/:id/motion', async (req, res) => {
     const detectionType  = req.body?.type  || null;
     triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name);
 
-    // NOUVEAU : On allume le badge "MOUVEMENT" en mettant à jour le noeud dans la base
+    // badge mouvement
     if (rows[0]) {
       const host = getHostFromStreamUrl(rows[0].rtsp_url);
       if (host) {
         let deviceId = null;
-        // Met à jour la date de mouvement du noeud (s'il a été ajouté via un scan réseau)
+        // màj noeud
         const updateRes = await pool.query('UPDATE camera_nodes SET last_motion_at = NOW() WHERE host = $1 RETURNING device_id', [host]);
-        
-        // Si aucun noeud n'existe pour cet hôte, on crée un noeud virtuel "IA"
+
+        // noeud virtuel IA
         if (updateRes.rowCount === 0) {
           deviceId = `ai_node:${host}`;
           await pool.query(
@@ -587,7 +585,7 @@ router.post('/:id/motion', async (req, res) => {
           deviceId = updateRes.rows[0].device_id;
         }
 
-        // Ajoute l'événement dans le journal d'historique texte
+        // event historique
         if (deviceId) {
           await pool.query(
             `INSERT INTO camera_node_motion_events (device_id, motion, detected_at)
@@ -595,7 +593,7 @@ router.post('/:id/motion', async (req, res) => {
             [deviceId]
           ).catch(err => console.error('[IA MOTION EVENT INSERT ERROR]', err));
 
-          // Génère une alerte globale visible dans le Centre d'Alertes
+          // alerte
           await createAlert({
             sourceType: 'camera',
             sourceId: String(req.params.id),
@@ -606,10 +604,10 @@ router.post('/:id/motion', async (req, res) => {
             message: `${detectionLabel || 'Mouvement'} détecté sur le flux de la caméra (Hôte: ${host}).`,
             metadata: { deviceId, host, detectedAt: new Date().toISOString() },
             dedupeKey: `motion:ai:${req.params.id}`,
-            cooldownSeconds: 60, // Limite à 1 alerte par minute
+            cooldownSeconds: 60, // cooldown 1min
           }).catch(err => console.error('[ALERT AI MOTION ERROR]', err));
 
-          // Déclenche une notification en temps réel (WebSocket)
+          // socket
           try {
             const io = req.app.get('io');
             if (io) io.emit('new_alert', { level: 'warning', title: `${detectionLabel || 'Mouvement détecté'} - Caméra ${req.params.id}` });
@@ -624,7 +622,7 @@ router.post('/:id/motion', async (req, res) => {
   }
 });
 
-// POST /api/cameras/:id/upload-offline — Récupération des vidéos après coupure Wi-Fi (US-09)
+// upload hors ligne
 router.post('/:id/upload-offline', async (req, res) => {
   try {
     const cameraId = String(req.params.id);
@@ -633,16 +631,15 @@ router.post('/:id/upload-offline', async (req, res) => {
       await fs.mkdir(camDir, { recursive: true });
     }
 
-    // Nom spécifique pour bien les identifier dans le frontend
     const filename = `offline_sync_${Date.now()}.mp4`;
     const filePath = path.join(camDir, filename);
 
-    // On récupère le fichier binaire streamé par le nœud caméra (ex: Pi ou ESP32)
+    // stream binaire
     await pipeline(req, createWriteStream(filePath));
-    
+
     res.json({ message: 'Fichier hors-ligne reçu avec succès', filename });
 
-    // Détection de mouvements a posteriori via ffmpeg (analyse du fichier sauvegardé)
+    // analyse ffmpeg
     const ffmpegProc = spawn('ffmpeg', ['-i', filePath, '-vf', "select='gt(scene,0.05)'", '-f', 'null', '-']);
     let ffmpegOut = '';
     ffmpegProc.stdout.on('data', d => { ffmpegOut += d.toString(); });
@@ -654,7 +651,7 @@ router.post('/:id/upload-offline', async (req, res) => {
         try {
           const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [cameraId]);
           const host = rows[0] ? getHostFromStreamUrl(rows[0].rtsp_url) : 'offline_cam';
-          
+
           await createAlert({
             sourceType: 'camera',
             sourceId: cameraId,
@@ -677,7 +674,7 @@ router.post('/:id/upload-offline', async (req, res) => {
   }
 });
 
-// GET /api/cameras/:id/history
+// historique
 router.get('/:id/history', requireAuth, async (req, res) => {
   const cameraId = String(req.params.id);
   const camDir = path.join(RECORDINGS_DIR, cameraId);
@@ -703,7 +700,7 @@ router.get('/:id/history', requireAuth, async (req, res) => {
     res.json({ recordings, retentionDays: getRecordingsRetentionDays() });
   } catch (err) {
     console.error('[CAM HISTORY]', err);
-    res.status(500).json({ error: 'Impossible de lire l’historique' });
+    res.status(500).json({ error: "Impossible de lire l'historique" });
   }
 });
 
@@ -713,7 +710,7 @@ router.delete('/:id/history', requireAuth, requireAdmin, async (req, res) => {
     res.json({ message: 'Historique supprimé', deletedCount: result.deletedCount });
   } catch (err) {
     console.error('[CAM HISTORY DELETE ALL]', err);
-    res.status(500).json({ error: 'Impossible de supprimer l’historique' });
+    res.status(500).json({ error: "Impossible de supprimer l'historique" });
   }
 });
 
@@ -727,7 +724,7 @@ router.delete('/:id/history/:filename', requireAuth, requireAdmin, async (req, r
     res.json({ message: 'Enregistrement supprimé', filename: result.filename });
   } catch (err) {
     console.error('[CAM HISTORY DELETE]', err);
-    res.status(500).json({ error: 'Impossible de supprimer l’enregistrement' });
+    res.status(500).json({ error: "Impossible de supprimer l'enregistrement" });
   }
 });
 

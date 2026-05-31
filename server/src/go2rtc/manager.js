@@ -10,12 +10,12 @@ const GO2RTC_BIN   = process.env.GO2RTC_BIN  || 'go2rtc';
 let proc  = null;
 let ready = false;
 
-// ── Nommage des streams : cam1, cam2, … ──────────────────────
+// nommage
 export function streamName(cameraId) {
   return `cam${cameraId}`;
 }
 
-// ── Démarrage du processus go2rtc ────────────────────────────
+// démarrage
 export function startGo2rtc() {
   return new Promise((resolve) => {
     proc = spawn(GO2RTC_BIN, ['-config', CONFIG_PATH], {
@@ -43,7 +43,7 @@ export function startGo2rtc() {
       resolve(true);
     };
 
-    // go2rtc imprime sur stdout ET stderr selon la version
+    // détection prêt stdout/stderr
     const detectReady = (data) => {
       const txt = data.toString();
       if (txt.includes('1984') || txt.includes('listen') || txt.includes('server')) {
@@ -61,8 +61,7 @@ export function startGo2rtc() {
       }
     });
 
-    // Timeout de sécurité : si go2rtc ne log pas ":1984" en 4s, on suppose qu'il tourne quand même
-    // Mais seulement si le processus n'a pas échoué au démarrage (ex: binaire manquant)
+    // timeout 4s, suppose actif si pas d'erreur démarrage
     setTimeout(() => {
       if (!ready && !errored) {
         console.warn('[go2rtc] Timeout détection — on suppose go2rtc actif.');
@@ -82,8 +81,7 @@ export function stopGo2rtc() {
   }
 }
 
-// ── Gestion des streams via l'API REST go2rtc ─────────────────
-
+// streams REST
 export async function registerStream(cameraId, rtspUrl) {
   if (!ready) return false;
   const name = streamName(cameraId);
@@ -111,8 +109,7 @@ export async function unregisterStream(cameraId) {
   }
 }
 
-// ── Négociation WebRTC WHEP-style ─────────────────────────────
-// Reçoit une SDP offer, retourne une SDP answer de go2rtc
+// négociation WebRTC
 export async function negotiate(cameraId, sdpOffer) {
   const name = streamName(cameraId);
   const res = await fetch(
@@ -130,7 +127,7 @@ export async function negotiate(cameraId, sdpOffer) {
   return res.text();
 }
 
-// ── Synchronisation initiale depuis la base ───────────────────
+// sync depuis DB
 export async function syncCamerasFromDB(pool, { retries = 5, delayMs = 2000 } = {}) {
   if (!ready) return;
   for (let attempt = 1; attempt <= retries; attempt++) {

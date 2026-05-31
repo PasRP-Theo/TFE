@@ -13,7 +13,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { apiUrl, readJsonResponse } from './lib/api';
 import './App.css';
 
-// ── Enregistrement de la PWA (Service Worker) ──────────────
+// PWA
 if (typeof window !== 'undefined') {
   registerSW({ immediate: true });
 }
@@ -30,7 +30,7 @@ interface BatteryManager extends EventTarget {
   readonly level: number;
 }
 
-// ── Route protégée par rôle ────────────────────────────────
+// route admin
 function AdminRoute({ 
   children 
 }: { 
@@ -126,7 +126,6 @@ function getSystemStatus(
 
     const handleBeforeInstallPrompt = (event: Event) => {
       const promptEvent = event as BeforeInstallPromptEvent;
-      // On laisse le navigateur libre d'afficher son pop-up natif automatique
       (window as { deferredInstallPrompt?: BeforeInstallPromptEvent }).deferredInstallPrompt = promptEvent;
     };
 
@@ -360,7 +359,6 @@ function getSystemStatus(
               <Settings />
             </AdminRoute>
           } />
-          {/* Redirige vers accueil si route inconnue */}
           <Route path="*" element={<Navigate to="/videos" replace />} />
         </Routes>
       </main>

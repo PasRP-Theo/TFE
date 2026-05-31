@@ -104,11 +104,10 @@ function getHistoryGroupLabel(value: string) {
   });
 }
 
-// ── Lecteur HLS ────────────────────────────────────────────
+// lecteur HLS
 function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Timestamp unique à chaque montage du composant — force le navigateur à recharger
-  // le manifest depuis le serveur plutôt que de servir une version mise en cache.
+  // cache-bust manifest
   const mountTokenRef = useRef(Date.now());
 
   let pathOnly = hlsUrl;
@@ -137,7 +136,6 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     let disposed = false;
     let nativeCleanup: (() => void) | null = null;
 
-    // N'affiche l'écran noir de chargement qu'au tout premier lancement
     if (retryCount === 0) {
       setLoading(true);
       setError(false);
@@ -166,9 +164,9 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
         hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
           if (data.fatal) {
             if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
-              hls?.startLoad(); // Récupère le segment manquant sans couper la vidéo
+              hls?.startLoad();
             } else if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
-              hls?.recoverMediaError(); // Répare les pixels corrompus sans couper la vidéo
+              hls?.recoverMediaError();
             } else {
               if (!disposed) {
                 hls?.destroy();
@@ -207,7 +205,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
     void loadStream();
 
-    // Détection de gel : si currentTime n'avance plus depuis 5s → caméra non alimentée
+    // détection gel
     stalledTimerRef.current = setInterval(() => {
       const video = videoRef.current;
       if (!video || video.paused || video.ended) return;
@@ -257,7 +255,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
   );
 }
 
-// ── Lecteur avec bascule WebRTC → HLS ────────────────────────
+// bascule WebRTC→HLS
 function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
   const [useHls, setUseHls] = useState(false);
   const handleError = useCallback(() => setUseHls(true), []);
@@ -268,7 +266,7 @@ function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
   return <WebRTCPlayer cameraId={cam.id} onError={handleError} />;
 }
 
-// ── Écran offline ─────────────────────────────────────────
+// écran offline
 function OfflineScreen({ status }: { status: Camera["status"] }) {
   const text = status === 'paused' ? 'EN PAUSE'
              : status === 'reconnecting' ? 'RECONNEXION...'
@@ -289,7 +287,7 @@ function OfflineScreen({ status }: { status: Camera["status"] }) {
   );
 }
 
-// ── Écran démarrage ───────────────────────────────────────
+// écran démarrage
 function StartingScreen() {
   return (
     <div className="cam-screen">
@@ -307,7 +305,7 @@ function StartingScreen() {
   );
 }
 
-// ── Écran caméra ──────────────────────────────────────────
+// écran caméra
 function CameraScreen({ cam, time, openKey = 0 }: { cam: Camera; time: Date; openKey?: number }) {
   return (
     <div className="cam-screen">
@@ -331,7 +329,7 @@ function CameraScreen({ cam, time, openKey = 0 }: { cam: Camera; time: Date; ope
   );
 }
 
-// ── Badge statut ──────────────────────────────────────────
+// badge statut
 function StatusBadge({ status }: { status: Camera["status"] }) {
   const cfg = {
     running:      { label: "EN LIGNE",    cls: "cam-badge--online"    },
@@ -372,7 +370,7 @@ function getCameraStatusText(cam: Camera) {
   return base;
 }
 
-// ── Contrôles ─────────────────────────────────────────────
+// contrôles
 function CameraControls({ cam, onAction, surveillanceActive }: {
   cam: Camera;
   onAction: (id: number, action: "start" | "pause" | "resume" | "stop") => void;
@@ -394,7 +392,7 @@ function CameraControls({ cam, onAction, surveillanceActive }: {
   );
 }
 
-// ── Composant principal ────────────────────────────────────
+// composant principal
 export default function CameraFeed({ onStatusChange }: {
   onStatusChange?: (summary: CameraStatusSummary) => void;
 }) {
@@ -474,7 +472,7 @@ export default function CameraFeed({ onStatusChange }: {
     }
   }, [cameras, onStatusChange]);
 
-  // Démarre le stream HLS quand l'utilisateur ouvre une caméra en veille ou arrêtée.
+  // démarrage auto focus
   useEffect(() => {
     if (focused === null) return;
     const cam = camerasRef.current.find(c => c.id === focused);
@@ -485,7 +483,7 @@ export default function CameraFeed({ onStatusChange }: {
     }
   }, [focused]);
 
-  // Heartbeat toutes les 60s pour maintenir le stream actif tant que la caméra est ouverte.
+  // heartbeat flux
   useEffect(() => {
     if (focused === null) return;
     const interval = setInterval(() => {
@@ -529,7 +527,7 @@ export default function CameraFeed({ onStatusChange }: {
     return () => clearInterval(t);
   }, [config.cameraRefreshSeconds]);
 
-  // Poll rapide (toutes les 800ms) quand une caméra est en cours de démarrage (running mais pas encore de flux HLS)
+  // poll démarrage
   const hasStartingCamera = cameras.some(c => c.status === 'running' && !c.hlsUrl);
   useEffect(() => {
     if (!hasStartingCamera) return;

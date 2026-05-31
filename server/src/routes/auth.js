@@ -7,7 +7,7 @@ import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/auth.js';
 
 const router = Router();
 
-// POST /auth/register
+// inscription
 router.post('/register', async (req, res) => {
   const { username, password, role = 'user' } = req.body;
   if (!username || !password)
@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /auth/login
+// connexion
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
@@ -60,7 +60,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /auth/logout
+// déconnexion
 router.post('/logout', (req, res) => {
   req.session.destroy(() => {
     res.clearCookie('connect.sid');
@@ -68,7 +68,7 @@ router.post('/logout', (req, res) => {
   });
 });
 
-// GET /auth/me
+// profil
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(

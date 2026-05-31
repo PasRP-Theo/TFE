@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// types
 
 interface CpuInfo {
   model: string;
@@ -67,7 +67,7 @@ interface SystemInfoData {
   battery: BatteryInfo;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// helpers
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -86,7 +86,7 @@ function getUsageColorClass(pct: number): string {
   return "green";
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// sous-composants
 
 function GaugeBar({
   label,
@@ -158,7 +158,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+// composant principal
 
 const POLL_INTERVAL = 5000;
 

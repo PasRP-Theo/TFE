@@ -18,7 +18,7 @@ export default function LoginPage() {
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
 
   const isControlPanel = useMemo(() => {
-    // Porte de sortie secrète : si l'URL contient ?kiosk=off, on désactive le mode sur cet appareil
+    // kiosk=off
     if (window.location.search.includes('kiosk=off')) {
       window.localStorage.removeItem('sentys:kiosk_mode');
       window.sessionStorage.removeItem('sentys:control_panel');
@@ -63,11 +63,9 @@ export default function LoginPage() {
   useEffect(() => {
     const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
 
-    // On tente l'auto-login en mode Kiosk SEULEMENT si le compte bootstrap par défaut est actif
     if (isKioskMode && config.defaultAdminActive && !autoLoginAttempted.current) {
       autoLoginAttempted.current = true;
       setLoading(true);
-      // Utilise les identifiants par défaut du compte bootstrap (ex: root/root)
       login(config.defaultAdminUsername, 'root').catch(() => {
         console.warn("Auto-login Kiosk avec le compte bootstrap a échoué.");
         setError("L'auto-login Kiosk a échoué. Le compte 'root' est peut-être désactivé.");

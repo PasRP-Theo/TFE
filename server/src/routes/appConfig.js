@@ -74,7 +74,6 @@ router.get('/', async (req, res) => {
   try {
     const row = await getConfigRow();
     const config = serializeConfig(row);
-    // Ne pas exposer le PIN kiosque aux utilisateurs non authentifiés
     let isAdmin = false;
     try {
       const header = req.headers.authorization;
