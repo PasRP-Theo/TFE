@@ -101,12 +101,12 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function refreshConfig() {
-    const token = localStorage.getItem(‘token’);
-    const response = await fetch(apiUrl(‘/api/app-config’), {
+    const token = localStorage.getItem('token');
+    const response = await fetch(apiUrl('/api/app-config'), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     const data = await readJsonResponse<AppConfig & { error?: string }>(response);
-    if (!response.ok) throw new Error(data.error || ‘Impossible de charger la configuration de l\’application’);
+    if (!response.ok) throw new Error(data.error || 'Impossible de charger la configuration de l\u2019application');
     setConfig(sanitizeConfig(data));
   }
 
