@@ -277,7 +277,7 @@ export async function initDB() {
         [rows[0].id]
       );
 
-      console.log('[DB] Compte administrateur initial créé: root / root');
+      console.log('[DB] Compte administrateur initial créé (root)');
     }
 
     console.log('[DB] Base de données "sentys" initialisée');

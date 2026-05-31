@@ -140,10 +140,7 @@ router.post('/reset', requireAuth, requireAdmin, async (_req, res) => {
         cameraNodes: 'reset',
         recordings: 'unchanged',
       },
-      bootstrapAdmin: {
-        username: 'root',
-        password: 'root',
-      },
+      bootstrapAdmin: { created: true },
     });
   } catch (err) {
     await client.query('ROLLBACK');

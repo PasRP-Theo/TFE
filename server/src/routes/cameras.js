@@ -312,7 +312,9 @@ router.get('/discover', requireAuth, async (req, res) => {
 router.get('/scan', requireAuth, async (req, res) => {
   const foundCameras = [];
   const port = 9997;
-  const auth = Buffer.from(`${process.env.MEDIAMTX_USER || 'admin'}:${process.env.MEDIAMTX_PASSWORD || 'admin'}`).toString('base64');
+  const auth = process.env.MEDIAMTX_USER
+    ? Buffer.from(`${process.env.MEDIAMTX_USER}:${process.env.MEDIAMTX_PASSWORD || ''}`).toString('base64')
+    : null;
 
   // Détection dynamique des sous-réseaux (inclut ton réseau, localhost, et d'éventuels réseaux VPN/Docker)
   const interfaces = networkInterfaces();
@@ -360,7 +362,7 @@ router.get('/scan', requireAuth, async (req, res) => {
       const id = setTimeout(() => controller.abort(), 3500); // 3.5s de marge pour le Pi Zero
       const response = await fetch(`http://${ip}:${port}/v3/paths/list`, { 
         signal: controller.signal,
-        headers: { 'Authorization': `Basic ${auth}` }
+        headers: auth ? { 'Authorization': `Basic ${auth}` } : {}
       });
       clearTimeout(id);
       
