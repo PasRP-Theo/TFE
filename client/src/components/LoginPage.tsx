@@ -191,11 +191,6 @@ export default function LoginPage() {
           <div className="lp-login-message">{config.loginMessage}</div>
           <div className="lp-sep" />
 
-          {config.defaultAdminActive && !isControlPanel && (
-            <div className="lp-error lp-error--info">
-              <span>ℹ</span><span>Première connexion : {config.defaultAdminUsername} / root. Change ce compte immédiatement après connexion.</span>
-            </div>
-          )}
 
           {isControlPanel ? (
             showPinPrompt ? (
