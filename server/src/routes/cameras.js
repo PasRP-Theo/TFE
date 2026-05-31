@@ -234,8 +234,9 @@ router.get('/discoveries', async (_req, res) => {
       pool.query(
         `SELECT id, device_id, name, host, stream_url, location, model, source, last_seen_at, created_at
          FROM camera_nodes
-         WHERE last_seen_at > NOW() - INTERVAL '${DISCOVERY_TTL_MINUTES} minutes'
-         ORDER BY last_seen_at DESC`
+         WHERE last_seen_at > NOW() - ($1 || ' minutes')::INTERVAL
+         ORDER BY last_seen_at DESC`,
+        [DISCOVERY_TTL_MINUTES]
       ),
     ]);
 
