@@ -196,12 +196,17 @@ def get_cameras_from_db():
         return []
 
     try:
+        required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+        missing = [k for k in required if not os.getenv(k)]
+        if missing:
+            print(f"⚠️  Variables manquantes : {', '.join(missing)}")
+            return []
         conn = psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            dbname=os.getenv("DB_NAME", "aubepines"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "admin"),
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            dbname=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
         )
         cur = conn.cursor()
         cur.execute("SELECT id, rtsp_url FROM cameras WHERE active = true")
