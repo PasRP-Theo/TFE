@@ -35,8 +35,8 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { username, password, role = 'user' } = req.body;
   if (!username || !password)
     return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
-  if (password.length < 6)
-    return res.status(400).json({ error: 'Mot de passe trop court (6 caracteres min)' });
+  if (password.length < 8)
+    return res.status(400).json({ error: 'Mot de passe trop court (8 caracteres min)' });
   if (!['user', 'admin'].includes(role))
     return res.status(400).json({ error: 'Role invalide' });
   try {

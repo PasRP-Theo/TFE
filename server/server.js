@@ -111,7 +111,7 @@ function getRequestUser(req) {
 app.post("/auth/register", async (req, res) => {
   const { username, password, role = "user" } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
-  if (password.length < 6) return res.status(400).json({ error: "Mot de passe trop court (6 caracteres min)" });
+  if (password.length < 8) return res.status(400).json({ error: "Mot de passe trop court (8 caracteres min)" });
   try {
     const existingUserResult = await pool.query('SELECT COUNT(*)::int AS count FROM users');
     const hasUsers = (existingUserResult.rows[0]?.count ?? 0) > 0;
