@@ -94,7 +94,8 @@ function getSystemStatus(
 
   useEffect(() => {
     if (user) refreshConfig().catch(() => {});
-  }, [user, refreshConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   const { settings, toggleTheme } = useAppearance();
   const [isInstalledMode, setIsInstalledMode] = useState(false);
   const [pendingAlertsCount, setPendingAlertsCount] = useState(0);
