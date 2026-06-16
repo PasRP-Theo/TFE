@@ -1,0 +1,12 @@
+{
+  "name": "sentys-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "monitor": "node monitor.js",
+    "simulate": "node simulate.js"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}

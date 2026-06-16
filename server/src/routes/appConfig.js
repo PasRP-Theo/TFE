@@ -4,6 +4,14 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config/auth.js';
 import { stopAllCameras, startCamera } from '../camera/manager.js';
+import rateLimit from 'express-rate-limit';
+
+const pinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 50 : 10,
+  message: { error: 'Trop de tentatives, réessayez dans 15 minutes.' },
+  standardHeaders: true, legacyHeaders: false,
+});
 
 const router = Router();
 
@@ -86,6 +94,20 @@ router.get('/', async (req, res) => {
     res.json(config);
   } catch (err) {
     console.error('[APP CONFIG GET]', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+router.post('/verify-pin', pinLimiter, async (req, res) => {
+  const { pin } = req.body;
+  if (typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) {
+    return res.status(400).json({ error: 'PIN invalide' });
+  }
+  try {
+    const row = await getConfigRow();
+    res.json({ valid: pin === row.kiosk_pin });
+  } catch (err) {
+    console.error('[VERIFY PIN]', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

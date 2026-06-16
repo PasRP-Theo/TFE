@@ -2,7 +2,7 @@
 # Auto-update sentys_agent.py depuis le serveur Sentys
 
 SERVER_URL="http://192.168.0.47:4000"
-AGENT_PATH="/home/picam/sentys_agent.py"
+AGENT_PATH="${HOME}/sentys_agent.py"
 TMP_PATH="/tmp/sentys_agent_new.py"
 MIN_SIZE=500  # octets minimum pour un fichier valide
 

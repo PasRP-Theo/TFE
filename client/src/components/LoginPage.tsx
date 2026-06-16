@@ -120,24 +120,40 @@ export default function LoginPage() {
     setError('');
   }
 
-  function handlePinPress(digit: string) {
+  async function handlePinPress(digit: string) {
     if (isLockedOut || pinInput.length >= 4) return;
     const nextPin = pinInput + digit;
     setPinInput(nextPin);
     setError('');
 
     if (nextPin.length === 4) {
-      const savedPin = config.kioskPin || '1234';
-      if (nextPin === savedPin) {
-        setError('');
-        setLoading(true);
-        login('kiosk_admin', '').catch(err => {
-          setError(err instanceof Error ? err.message : 'Erreur Admin');
-          setLoading(false);
-          setPinInput('');
+      try {
+        const res = await fetch('/api/app-config/verify-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: nextPin }),
         });
-      } else {
-        setError('Code PIN incorrect');
+        if (res.status === 429) {
+          const lockoutEndsAt = Date.now() + 15 * 60 * 1000;
+          setLockoutUntil(lockoutEndsAt);
+          setLockoutSecondsLeft(15 * 60);
+          setPinInput('');
+          return;
+        }
+        const data = await res.json();
+        if (data.valid) {
+          setLoading(true);
+          login('kiosk_admin', '').catch(err => {
+            setError(err instanceof Error ? err.message : 'Erreur Admin');
+            setLoading(false);
+            setPinInput('');
+          });
+        } else {
+          setError('Code PIN incorrect');
+          setTimeout(() => setPinInput(''), 500);
+        }
+      } catch {
+        setError('Erreur réseau');
         setTimeout(() => setPinInput(''), 500);
       }
     }
