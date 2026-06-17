@@ -39,7 +39,7 @@ export async function initDB() {
 
       CREATE TABLE IF NOT EXISTS app_settings (
         id                      SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-        app_name                VARCHAR(120) NOT NULL DEFAULT 'AUBEPINES',
+        app_name                VARCHAR(120) NOT NULL DEFAULT 'SENTYS',
         app_subtitle            VARCHAR(180) NOT NULL DEFAULT 'Système de surveillance',
         system_version          VARCHAR(40)  NOT NULL DEFAULT 'v2.4.1',
         login_message           VARCHAR(240) NOT NULL DEFAULT 'Connexion sécurisée au système',
@@ -250,7 +250,7 @@ export async function initDB() {
 
     await client.query(
       `INSERT INTO app_settings (id, app_name, app_subtitle, system_version)
-       VALUES (1, 'AUBEPINES', 'Système de surveillance', 'v2.4.1')
+       VALUES (1, 'SENTYS', 'Système de surveillance', 'v2.4.1')
        ON CONFLICT (id) DO NOTHING`
     );
 
