@@ -45,7 +45,7 @@ export async function initDB() {
         login_message           VARCHAR(240) NOT NULL DEFAULT 'Connexion sécurisée au système',
         interface_language      VARCHAR(10)  NOT NULL DEFAULT 'fr-FR',
         time_format             VARCHAR(8)   NOT NULL DEFAULT '24h',
-        show_system_version     BOOLEAN      NOT NULL DEFAULT true,
+        show_system_version     BOOLEAN      NOT NULL DEFAULT false,
         ui_density              VARCHAR(16)  NOT NULL DEFAULT 'standard',
         camera_card_size        VARCHAR(16)  NOT NULL DEFAULT 'standard',
         show_status_panel       BOOLEAN      NOT NULL DEFAULT true,
@@ -206,6 +206,7 @@ export async function initDB() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS alerts_disconnect_enabled BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS kiosk_pin VARCHAR(10) NOT NULL DEFAULT '1234';
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS surveillance_mode BOOLEAN NOT NULL DEFAULT true;
+      UPDATE app_settings SET show_system_version = false WHERE id = 1;
       ALTER TABLE camera_node_motion_events ADD COLUMN IF NOT EXISTS offline_recording BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE camera_node_motion_events ADD COLUMN IF NOT EXISTS recording_path VARCHAR(255);
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_clip_duration    INTEGER NOT NULL DEFAULT 30;
