@@ -10,10 +10,40 @@ Système de vidéosurveillance complet avec streaming live, détection de mouvem
 
 ### Prérequis
 
-- [Node.js 20+](https://nodejs.org)
-- [PostgreSQL 16+](https://www.postgresql.org/download/)
-- [FFmpeg](https://ffmpeg.org/download.html) — ajouté au PATH
-- [go2rtc](https://github.com/AlexxIT/go2rtc/releases) — binaire `go2rtc` dans le PATH ou dans `server/`
+**Node.js 20+**
+
+```bash
+# Windows — télécharger l'installeur sur https://nodejs.org
+# Vérifier :
+node -v
+```
+
+**PostgreSQL 16+**
+
+```bash
+# Windows — télécharger sur https://www.postgresql.org/download/windows/
+# Vérifier :
+psql --version
+```
+
+**FFmpeg**
+
+```bash
+# Windows :
+winget install ffmpeg
+# ou télécharger sur https://ffmpeg.org/download.html et ajouter au PATH
+# Vérifier :
+ffmpeg -version
+```
+
+**go2rtc**
+
+```bash
+# Télécharger go2rtc_windows_amd64.exe sur https://github.com/AlexxIT/go2rtc/releases
+# Renommer en go2rtc.exe et placer dans server/ ou dans un dossier du PATH
+# Vérifier :
+go2rtc --version
+```
 
 ### 1. Cloner le dépôt
 
@@ -69,32 +99,3 @@ npm start
 Ouvre [http://localhost:4000](http://localhost:4000) — login : `root` / `root`
 
 > Crée un compte admin dans **Paramètres → Utilisateurs**, le compte `root` se supprime automatiquement.
-
----
-
-## Ports utilisés
-
-| Service | Port |
-|---|---|
-| Dashboard + API | 4000 |
-| go2rtc WebRTC | 8889 |
-| go2rtc API | 1984 |
-| PostgreSQL | 5432 |
-| MediaMTX (Pi) | 8554 |
-
----
-
-## Nœuds caméra (Raspberry Pi Zero 2W)
-
-Édite `pi/setup_picam3.sh` et change :
-
-```bash
-DEVICE_ID="pi-salon"                    # nom unique du Pi
-SERVER_URL="http://192.168.x.x:4000"   # IP de ton PC serveur
-```
-
-Puis lance sur le Pi en SSH :
-
-```bash
-bash setup_picam3.sh
-```
