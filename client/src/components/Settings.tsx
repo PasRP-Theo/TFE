@@ -988,7 +988,7 @@ export default function Settings() {
     <div className="settings-wrapper">
       <div className="settings-header">
         <span className="settings-title">PARAMÈTRES</span>
-        <span className="settings-subtitle">{config.appSubtitle.toUpperCase()} {config.systemVersion}</span>
+        <span className="settings-subtitle">{config.appSubtitle.toUpperCase()}{config.showSystemVersion ? ` ${config.systemVersion}` : ''}</span>
       </div>
 
       <div className="settings-tabs">
