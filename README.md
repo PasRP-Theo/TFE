@@ -98,4 +98,4 @@ npm start
 
 Ouvre [http://localhost:4000](http://localhost:4000) — login : `root` / `root`
 
-> Crée un compte admin dans **Paramètres → Utilisateurs**, le compte `root` se supprime automatiquement.
+Crée un compte admin dans **Paramètres → Utilisateurs**.
