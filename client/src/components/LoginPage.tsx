@@ -169,11 +169,6 @@ export default function LoginPage() {
       <div className="lp-corner lp-corner--bl" />
       <div className="lp-corner lp-corner--br" />
 
-      <div className="lp-sysinfo">
-        <div>SYS // {config.appName.toUpperCase()}{config.showSystemVersion ? ` ${config.systemVersion}` : ''}</div>
-        <div>NODE // CENTRAL-UNIT-01</div>
-        <div>NET  // 192.168.1.1 — SECURED</div>
-      </div>
 
       <div className="lp-clock">
         <div className="lp-clock-time">{timeStr}</div>
