@@ -90,7 +90,7 @@ app.set('trust proxy', 'loopback');
 // rate limiting
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'development' ? 50 : 10,
+  max: process.env.NODE_ENV === 'development' ? 50 : 8,
   message: { error: "Trop de tentatives, reessayez dans 15 minutes." },
   standardHeaders: true, legacyHeaders: false,
 });
