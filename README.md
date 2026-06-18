@@ -55,7 +55,7 @@ cd TFE
 ### 2. Créer la base de données PostgreSQL
 
 ```sql
-CREATE DATABASE sentys;
+CREATE DATABASE DEMOTFE;
 ```
 
 Les tables sont créées automatiquement au premier démarrage.
