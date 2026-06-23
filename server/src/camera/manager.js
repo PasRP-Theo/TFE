@@ -309,8 +309,13 @@ export function getRecordingsRetentionDays() {
   return Number.isFinite(days) && days > 0 ? days : 30;
 }
 
+let _io = null;
+export function setSocketIO(io) { _io = io; }
+
 function broadcast(cameraId) {
-  cameraEvents.emit('state', { cameraId, ...getState(cameraId) });
+  const state = getState(cameraId);
+  cameraEvents.emit('state', { cameraId, ...state });
+  _io?.emit('camera_state', { cameraId, ...state });
 }
 
 export function getState(cameraId) {
@@ -639,7 +644,7 @@ export async function startHlsStream(camera) {
         console.log(`[CAM ${id}] Manifeste HLS prêt`);
         return;
       } catch { /* pas encore créé */ }
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 100));
     }
     // timeout : expose quand même
     const s = states.get(id);

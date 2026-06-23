@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
-import { apiUrl, apiFetch } from "../lib/api";
+import { io as ioClient } from "socket.io-client";
+import { apiUrl, apiFetch, API_BASE_URL } from "../lib/api";
 import { WebRTCPlayer } from "./WebRTCPlayer";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -517,13 +518,26 @@ export default function CameraFeed({ onStatusChange }: {
     return () => clearInterval(t);
   }, [config.cameraRefreshSeconds]);
 
-  // poll démarrage
+  // poll démarrage (fallback si socket.io manqué)
   const hasStartingCamera = cameras.some(c => c.status === 'running' && !c.hlsUrl);
   useEffect(() => {
     if (!hasStartingCamera) return;
-    const t = setInterval(fetchCameras, 800);
+    const t = setInterval(fetchCameras, 250);
     return () => clearInterval(t);
   }, [hasStartingCamera]);
+
+  // socket.io : réaction immédiate quand l'état caméra change côté serveur
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token || !user) return;
+    const socket = ioClient(API_BASE_URL || window.location.origin, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+    });
+    socket.on('camera_state', () => { fetchCameras().catch(() => {}); });
+    return () => { socket.disconnect(); };
+  }, [user]);
 
   useEffect(() => {
     let stopped = false;

@@ -20,7 +20,7 @@ import pushRoutes            from "./src/routes/push.js";
 import webrtcRoutes          from "./src/routes/webrtc.js";
 import homeRoutes            from "./src/routes/home.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
-import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
+import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates, setSocketIO } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
 
@@ -58,6 +58,7 @@ io.on("connection", (socket) => {
 
 // io accessible
 app.set('io', io);
+setSocketIO(io);
 
 export async function logAudit(username, action, details, ip) {
   try {

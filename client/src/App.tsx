@@ -352,7 +352,7 @@ function getSystemStatus(
 
       <main className="app-main">
         <Routes>
-          <Route path="/" element={<Navigate to="/videos" replace />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/videos"  element={<CameraFeed onStatusChange={setCameraStatus} />} />
           <Route path="/alerts"  element={<AlertsPage />} />
           <Route path="/home"    element={<HomePage />} />
@@ -362,7 +362,7 @@ function getSystemStatus(
               <Settings />
             </AdminRoute>
           } />
-          <Route path="*" element={<Navigate to="/videos" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </main>
 
