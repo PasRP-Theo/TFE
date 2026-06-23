@@ -458,21 +458,25 @@ router.post('/:id/start', requireAuth, async (req, res) => {
       if (nodeRows[0]) {
         setPiWaiting(req.params.id);
         requestPiWake(nodeRows[0].device_id);
+        const title = `Stream démarré — ${camera.name}`;
         createAlert({
           ...alertBase,
-          title: `Stream démarré — ${camera.name}`,
+          title,
           message: `Réveil du noeud Pi demandé pour la caméra "${camera.name}".`,
-        }).catch(err => console.error('[ALERT CAM START]', err));
+        }).then(() => req.app.get('io')?.emit('new_alert', { level: 'info', title }))
+          .catch(err => console.error('[ALERT CAM START]', err));
         return res.json({ message: 'Réveil Pi demandé', ...getState(req.params.id) });
       }
     }
 
     await startHlsStream(camera);
+    const startTitle = `Stream démarré — ${camera.name}`;
     createAlert({
       ...alertBase,
-      title: `Stream démarré — ${camera.name}`,
+      title: startTitle,
       message: `Le flux de la caméra "${camera.name}" a été activé.`,
-    }).catch(err => console.error('[ALERT CAM START]', err));
+    }).then(() => req.app.get('io')?.emit('new_alert', { level: 'info', title: startTitle }))
+      .catch(err => console.error('[ALERT CAM START]', err));
     res.json({ message: 'Stream démarré', ...getState(req.params.id) });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -519,18 +523,20 @@ router.post('/:id/stop', requireAuth, async (req, res) => {
     const camera = rows[0];
     if (camera?.node_device_id) requestPiSleep(camera.node_device_id);
     if (camera) {
+      const stopTitle = `Stream arrêté — ${camera.name}`;
       createAlert({
         sourceType: 'camera',
         sourceId: String(req.params.id),
         cameraId: req.params.id,
         alertType: 'camera_stopped',
         level: 'info',
-        title: `Stream arrêté — ${camera.name}`,
+        title: stopTitle,
         message: `Le flux de la caméra "${camera.name}" a été désactivé.`,
         metadata: { cameraId: req.params.id, cameraName: camera.name, triggeredBy: req.user?.username || 'system' },
         dedupeKey: `stream:stop:${req.params.id}`,
         cooldownSeconds: 10,
-      }).catch(err => console.error('[ALERT CAM STOP]', err));
+      }).then(() => req.app.get('io')?.emit('new_alert', { level: 'info', title: stopTitle }))
+        .catch(err => console.error('[ALERT CAM STOP]', err));
     }
   } catch { /* non bloquant */ }
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });

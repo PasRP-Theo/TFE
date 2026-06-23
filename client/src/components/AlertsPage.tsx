@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiUrl, readJsonResponse } from '../lib/api';
+import { io as ioClient } from 'socket.io-client';
+import { apiUrl, readJsonResponse, API_BASE_URL } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
 interface FilterOption {
@@ -230,6 +231,22 @@ export default function AlertsPage() {
     }, 15000);
     return () => clearInterval(interval);
   }, [authHeaders, fetchAlerts, fetchSummary, fetchAnalytics]);
+
+  // Rafraîchissement instantané via socket.io
+  useEffect(() => {
+    if (!token) return;
+    const socket = ioClient(API_BASE_URL || window.location.origin, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+    });
+    socket.on('new_alert', () => {
+      fetchAlerts().catch(() => {});
+      fetchSummary().catch(() => {});
+      fetchAnalytics().catch(() => {});
+    });
+    return () => { socket.disconnect(); };
+  }, [token, fetchAlerts, fetchSummary, fetchAnalytics]);
 
   async function acknowledgeAlert(id: number) {
     if (!authHeaders) return;
