@@ -839,10 +839,11 @@ export async function deleteAllRecordings(cameraId) {
 }
 
 // enregistrement mouvement + notification push
-export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null) {
+export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null, fallbackSourceUrl = null) {
   const id = String(cameraId);
   const s = states.get(id);
-  if (!s || !s.sourceUrl) return;
+  const sourceUrl = s?.sourceUrl || fallbackSourceUrl;
+  if (!sourceUrl) return;
   if (activeRecordings.has(id)) return;
 
   const recDir = path.join(RECORDINGS_DIR, id);
@@ -851,13 +852,13 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
   const mp4File = path.join(recDir, `${ts}.mp4`);
 
   const args = ['-y', '-fflags', '+genpts'];
-  if (/^rtsp:/i.test(s.sourceUrl)) {
+  if (/^rtsp:/i.test(sourceUrl)) {
     args.push('-rtsp_transport', RTSP_TRANSPORT);
   }
 
   // ultrafast : MP4 valide même en cas de perte Wi-Fi
   args.push(
-    '-i', s.sourceUrl, '-t', String(durationSeconds),
+    '-i', sourceUrl, '-t', String(durationSeconds),
     '-map', '0:v:0', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-an',
     '-movflags', 'frag_keyframe+empty_moov', mp4File
   );

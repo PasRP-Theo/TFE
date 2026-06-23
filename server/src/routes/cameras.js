@@ -609,7 +609,7 @@ router.post('/:id/motion', async (req, res) => {
 
     const detectionLabel = req.body?.label || null;
     const detectionType  = req.body?.type  || null;
-    triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name);
+    triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name, rows[0].rtsp_url);
 
     // badge mouvement
     if (rows[0]) {
