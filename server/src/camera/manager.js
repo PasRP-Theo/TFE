@@ -845,9 +845,6 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const mp4File = path.join(recDir, `${ts}.mp4`);
 
-  // touch : fichier visible dans l'historique même si ffmpeg échoue
-  fsPromises.open(mp4File, 'a').then(fh => fh.close()).catch(() => {});
-
   const args = ['-y', '-fflags', '+genpts'];
   if (/^rtsp:/i.test(s.sourceUrl)) {
     args.push('-rtsp_transport', RTSP_TRANSPORT);
@@ -882,27 +879,53 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
     icon: '/pwa-192.png',
     data: { url: '/videos' },
   });
-  pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
-    subs.forEach(sub =>
+  pool.query('SELECT endpoint, p256dh, auth FROM push_subscriptions').then(async ({ rows: subs }) => {
+    const stale = [];
+    await Promise.all(subs.map(sub =>
       sendPushNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         pushPayload
-      ).catch(async err => {
-        console.error(`[PUSH CAM ${id}]`, err.message);
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
-        }
+      ).catch(err => {
+        if (err.statusCode === 410 || err.statusCode === 404) stale.push(sub.endpoint);
+        else console.error(`[PUSH CAM ${id}]`, err.message);
       })
-    );
+    ));
+    if (stale.length > 0) {
+      pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1::text[])', [stale])
+        .catch(err => console.error(`[PUSH CAM ${id}] CLEANUP:`, err.message));
+    }
   }).catch(err => console.error(`[PUSH CAM ${id}] DB error:`, err.message));
 
-  proc.on('close', () => {
+  const cleanupFailedRecording = () => {
+    fsPromises.stat(mp4File)
+      .then(stat => {
+        if (stat.size < 1024) {
+          return fsPromises.unlink(mp4File).then(() => {
+            console.warn(`[CAM ${id} REC] Fichier supprimé (trop petit: ${stat.size} octets — ffmpeg a échoué)`);
+          });
+        }
+      })
+      .catch(() => {});
+  };
+
+  proc.on('error', err => {
+    console.error(`[CAM ${id} REC] Impossible de démarrer ffmpeg:`, err.message);
+    activeRecordings.delete(id);
+    if (states.has(id)) { states.get(id).recording = false; broadcast(id); }
+    cleanupFailedRecording();
+  });
+
+  proc.on('close', (code) => {
     activeRecordings.delete(id);
     if (states.has(id)) {
       states.get(id).recording = false; // éteint pastille REC
       broadcast(id);
     }
-
-    console.log(`[CAM ${id}] Fin de l'enregistrement de mouvement.`);
+    if (code !== 0) {
+      console.error(`[CAM ${id} REC] ffmpeg terminé avec code ${code}`);
+      cleanupFailedRecording();
+    } else {
+      console.log(`[CAM ${id}] Fin de l'enregistrement de mouvement.`);
+    }
   });
 }

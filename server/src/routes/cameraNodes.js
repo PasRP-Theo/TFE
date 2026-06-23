@@ -247,13 +247,14 @@ router.post('/motion', async (req, res) => {
       // stream + enregistrement
       pool.query('SELECT * FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
         .then(({ rows: camRows }) => {
-          if (camRows[0]) {
-            startHlsStream(camRows[0]).catch(() => {});
-            // délai MediaMTX
-            setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name), 3000);
+          if (!camRows[0]) {
+            console.warn(`[MOTION RECORDING] Aucune caméra liée à stream_url=${rows[0].stream_url} — enregistrement ignoré`);
+            return;
           }
+          startHlsStream(camRows[0]).catch(err => console.error('[MOTION STREAM START]', err.message));
+          setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name), 3000);
         })
-        .catch(() => {});
+        .catch(err => console.error('[MOTION CAM LOOKUP]', err.message));
     } else {
       // arrêt stream
       pool.query('SELECT id FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])

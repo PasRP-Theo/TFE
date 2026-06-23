@@ -632,7 +632,7 @@ router.post('/:id/motion', async (req, res) => {
             `INSERT INTO camera_node_motion_events (device_id, motion, detected_at)
              VALUES ($1, true, NOW())`,
             [deviceId]
-          ).catch(err => console.error('[IA MOTION EVENT INSERT ERROR]', err));
+          );
 
           // alerte
           await createAlert({
