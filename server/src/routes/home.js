@@ -9,8 +9,8 @@ let weatherCache = null;
 let weatherCacheAt = 0;
 const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
 
-const WEATHER_LAT = process.env.WEATHER_LAT || '50.85';
-const WEATHER_LON = process.env.WEATHER_LON || '4.35';
+const WEATHER_LAT = process.env.WEATHER_LAT || '50.5745';
+const WEATHER_LON = process.env.WEATHER_LON || '4.5282';
 
 const WMO_LABELS = {
   0: 'Ciel dégagé', 1: 'Principalement dégagé', 2: 'Partiellement nuageux', 3: 'Couvert',

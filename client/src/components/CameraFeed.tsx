@@ -472,16 +472,6 @@ export default function CameraFeed({ onStatusChange }: {
     }
   }, [cameras, onStatusChange]);
 
-  // démarrage auto focus
-  useEffect(() => {
-    if (focused === null) return;
-    const cam = camerasRef.current.find(c => c.id === focused);
-    if (cam?.status === 'watching' || cam?.status === 'stopped') {
-      apiFetch(apiUrl(`/api/cameras/${focused}/start`), { method: 'POST' })
-        .then(() => fetchCameras())
-        .catch(() => {});
-    }
-  }, [focused]);
 
   // heartbeat flux
   useEffect(() => {

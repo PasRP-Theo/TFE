@@ -280,9 +280,9 @@ function getSystemStatus(
   const isAdmin = user.role === 'admin';
 
   const navLinks = [
+    { to: '/home',     label: 'Maison',     shortLabel: 'Maison',   icon: '⌂', show: true    },
     { to: '/videos',   label: 'Caméras',    shortLabel: 'Caméras',  icon: '◉', show: true    },
     { to: '/alerts',   label: 'Alertes',    shortLabel: 'Alertes',  icon: '⚠', show: true, badge: pendingAlertsCount > 0 ? String(pendingAlertsCount) : '' },
-    { to: '/home',     label: 'Maison',     shortLabel: 'Maison',   icon: '⌂', show: true    },
     { to: '/system',   label: 'Système',    shortLabel: 'Système',  icon: '⌁', show: true    },
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
