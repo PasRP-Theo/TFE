@@ -113,7 +113,7 @@ function serializeNode(row, connectedHosts = new Set()) {
     ...row,
     stream_url: maskStreamUrl(row.stream_url),
     motionActive: computeMotionActive(row.last_motion_at),
-    connected: connectedHosts.has(row.host),
+    connected: 'connected' in row ? Boolean(row.connected) : connectedHosts.has(row.host),
   };
 }
 
@@ -155,18 +155,18 @@ async function getConnectedHosts() {
 // liste
 router.get('/', requireAuth, async (_req, res) => {
   try {
-    const [nodesResult, connectedHosts] = await Promise.all([
-      pool.query(
-        `SELECT id, device_id, name, host, stream_url, location, model, source, motion_detected, last_motion_at, last_seen_at, created_at
-         FROM camera_nodes
-         ORDER BY last_seen_at DESC, created_at DESC`
-      ),
-      getConnectedHosts(),
-    ]);
+    const { rows } = await pool.query(
+      `SELECT cn.id, cn.device_id, cn.name, cn.host, cn.stream_url, cn.location, cn.model,
+              cn.source, cn.motion_detected, cn.last_motion_at, cn.last_seen_at, cn.created_at,
+              (c.id IS NOT NULL) AS connected
+       FROM camera_nodes cn
+       LEFT JOIN cameras c ON c.rtsp_url = cn.stream_url
+       ORDER BY cn.last_seen_at DESC, cn.created_at DESC`
+    );
 
     res.json({
       motionActiveWindowSeconds: MOTION_ACTIVE_WINDOW_SECONDS,
-      nodes: nodesResult.rows.map(row => serializeNode(row, connectedHosts)),
+      nodes: rows.map(row => serializeNode(row)),
     });
   } catch (err) {
     console.error('[CAM NODE LIST]', err);
@@ -324,17 +324,20 @@ router.post('/motion', async (req, res) => {
           icon: '/pwa-192.png',
           data: { url: '/alerts' },
         });
-        pool.query('SELECT * FROM push_subscriptions').then(({ rows: subs }) => {
-          subs.forEach(sub =>
+        pool.query('SELECT endpoint, p256dh, auth FROM push_subscriptions').then(async ({ rows: subs }) => {
+          const stale = [];
+          await Promise.all(subs.map(sub =>
             sendPushNotification(
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
               payload
-            ).catch(async err => {
-              if (err.statusCode === 410 || err.statusCode === 404) {
-                await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
-              }
+            ).catch(err => {
+              if (err.statusCode === 410 || err.statusCode === 404) stale.push(sub.endpoint);
             })
-          );
+          ));
+          if (stale.length > 0) {
+            pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1::text[])', [stale])
+              .catch(err => console.error('[PUSH CLEANUP]', err));
+          }
         }).catch(err => console.error('[PUSH MOTION]', err));
       });
     }

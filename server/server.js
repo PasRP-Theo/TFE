@@ -18,6 +18,7 @@ import appConfigRoutes       from "./src/routes/appConfig.js";
 import alertsRoutes          from "./src/routes/alerts.js";
 import pushRoutes            from "./src/routes/push.js";
 import webrtcRoutes          from "./src/routes/webrtc.js";
+import homeRoutes            from "./src/routes/home.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates } from "./src/camera/manager.js";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
@@ -222,6 +223,7 @@ app.use("/api/app-config", appConfigRoutes);
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/notifications", pushRoutes);
 app.use("/api/webrtc", webrtcRoutes);
+app.use("/api/home",   homeRoutes);
 
 app.get("/api/audit-logs", async (req, res) => {
   const user = getRequestUser(req);

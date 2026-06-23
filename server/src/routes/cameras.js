@@ -436,9 +436,21 @@ router.post('/:id/start', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
+    const camera = rows[0];
+
+    const alertBase = {
+      sourceType: 'camera',
+      sourceId: String(req.params.id),
+      cameraId: req.params.id,
+      alertType: 'camera_started',
+      level: 'info',
+      metadata: { cameraId: req.params.id, cameraName: camera.name, triggeredBy: req.user?.username || 'system' },
+      dedupeKey: `stream:start:${req.params.id}`,
+      cooldownSeconds: 10,
+    };
 
     // réveil Pi
-    const host = getHostFromStreamUrl(rows[0].rtsp_url);
+    const host = getHostFromStreamUrl(camera.rtsp_url);
     if (host) {
       const { rows: nodeRows } = await pool.query(
         'SELECT device_id FROM camera_nodes WHERE host = $1 LIMIT 1', [host]
@@ -446,11 +458,21 @@ router.post('/:id/start', requireAuth, async (req, res) => {
       if (nodeRows[0]) {
         setPiWaiting(req.params.id);
         requestPiWake(nodeRows[0].device_id);
+        createAlert({
+          ...alertBase,
+          title: `Stream démarré — ${camera.name}`,
+          message: `Réveil du noeud Pi demandé pour la caméra "${camera.name}".`,
+        }).catch(err => console.error('[ALERT CAM START]', err));
         return res.json({ message: 'Réveil Pi demandé', ...getState(req.params.id) });
       }
     }
 
-    await startHlsStream(rows[0]);
+    await startHlsStream(camera);
+    createAlert({
+      ...alertBase,
+      title: `Stream démarré — ${camera.name}`,
+      message: `Le flux de la caméra "${camera.name}" a été activé.`,
+    }).catch(err => console.error('[ALERT CAM START]', err));
     res.json({ message: 'Stream démarré', ...getState(req.params.id) });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -486,11 +508,30 @@ router.post('/:id/resume', requireAuth, async (req, res) => {
 router.post('/:id/stop', requireAuth, async (req, res) => {
   stopCamera(req.params.id);
   try {
-    const { rows } = await pool.query(`
-      SELECT cn.device_id FROM camera_nodes cn
-      JOIN cameras c ON c.rtsp_url = cn.stream_url
-      WHERE c.id = $1 LIMIT 1`, [req.params.id]);
-    if (rows[0]) requestPiSleep(rows[0].device_id);
+    const { rows } = await pool.query(
+      `SELECT c.name, cn.device_id AS node_device_id
+       FROM cameras c
+       LEFT JOIN camera_nodes cn ON cn.stream_url = c.rtsp_url
+       WHERE c.id = $1
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const camera = rows[0];
+    if (camera?.node_device_id) requestPiSleep(camera.node_device_id);
+    if (camera) {
+      createAlert({
+        sourceType: 'camera',
+        sourceId: String(req.params.id),
+        cameraId: req.params.id,
+        alertType: 'camera_stopped',
+        level: 'info',
+        title: `Stream arrêté — ${camera.name}`,
+        message: `Le flux de la caméra "${camera.name}" a été désactivé.`,
+        metadata: { cameraId: req.params.id, cameraName: camera.name, triggeredBy: req.user?.username || 'system' },
+        dedupeKey: `stream:stop:${req.params.id}`,
+        cooldownSeconds: 10,
+      }).catch(err => console.error('[ALERT CAM STOP]', err));
+    }
   } catch { /* non bloquant */ }
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });
 });

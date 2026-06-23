@@ -71,24 +71,28 @@ router.post('/test', requireAuth, async (req, res) => {
   });
 
   try {
-    const { rows } = await pool.query('SELECT * FROM push_subscriptions');
+    const { rows } = await pool.query('SELECT endpoint, p256dh, auth FROM push_subscriptions');
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Aucun abonné enregistré' });
     }
 
+    const stale = [];
     const results = await Promise.allSettled(
       rows.map(row =>
         sendPushNotification(
           { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
           payload
-        ).catch(async err => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [row.endpoint]);
-          }
+        ).catch(err => {
+          if (err.statusCode === 410 || err.statusCode === 404) stale.push(row.endpoint);
           throw err;
         })
       )
     );
+
+    if (stale.length > 0) {
+      pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1::text[])', [stale])
+        .catch(err => console.error('[PUSH TEST CLEANUP]', err));
+    }
 
     const sent   = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;

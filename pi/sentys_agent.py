@@ -15,36 +15,37 @@ from datetime import datetime
 import requests
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-SERVER_URL        = "http://192.168.0.47:4000"
+SERVER_URL        = "http://192.168.0.47:4000"  # adresse du serveur Node.js
 DEVICE_MODEL      = "Raspberry Pi Zero"
-RECORD_DIR        = Path(f"/home/{os.getenv('USER', 'picam')}/offline_recordings")
-CLIP_DURATION_SEC = 30
-ANNOUNCE_INTERVAL = 30
-CHECK_INTERVAL    = 10
-MAX_STORAGE_MB    = 500
-RTSP_PORT         = 8554
-RTSP_PATH         = "cam1"
+RECORD_DIR        = Path(f"/home/{os.getenv('USER', 'picam')}/offline_recordings")  # dossier clips hors-ligne
+CLIP_DURATION_SEC = 30          # durée d'un clip offline en secondes
+ANNOUNCE_INTERVAL = 30          # fréquence d'annonce au serveur (secondes)
+CHECK_INTERVAL    = 10          # intervalle de vérification connectivité
+MAX_STORAGE_MB    = 500         # stockage max des clips sur la carte SD
+RTSP_PORT         = 8554        # port MediaMTX
+RTSP_PATH         = "cam1"      # nom du flux RTSP
 
 # Détection de mouvement
-MOTION_SNAPSHOT_INTERVAL = 1
-MOTION_THRESHOLD         = 25
-MOTION_MIN_PIXELS        = 300
-STREAM_IDLE_TIMEOUT      = 60
-WAKE_STREAM_TIMEOUT      = 300
-SNAPSHOT_WIDTH           = 320
+MOTION_SNAPSHOT_INTERVAL = 1    # une photo par seconde en mode IDLE
+MOTION_THRESHOLD         = 25   # différence de pixel pour considérer un changement
+MOTION_MIN_PIXELS        = 300  # nombre min de pixels changés pour déclencher
+STREAM_IDLE_TIMEOUT      = 60   # arrêt auto après 60s sans mouvement
+WAKE_STREAM_TIMEOUT      = 300  # arrêt auto après 5min si réveil manuel
+SNAPSHOT_WIDTH           = 320  # résolution réduite pour économiser le CPU
 SNAPSHOT_HEIGHT          = 240
-SNAPSHOT_DIR             = Path('/tmp/sentys_snapshots')
+SNAPSHOT_DIR             = Path('/tmp/sentys_snapshots')  # stockage temporaire snapshots
 
-# Backoff serveur
-SERVER_CHECK_INTERVAL_ONLINE  = 10
+# Backoff exponentiel : si le serveur ne répond pas, on attend de plus en plus longtemps
+SERVER_CHECK_INTERVAL_ONLINE  = 10   # vérification toutes les 10s si en ligne
 SERVER_CHECK_INTERVAL_MIN     = 10
-SERVER_CHECK_INTERVAL_MAX     = 120
+SERVER_CHECK_INTERVAL_MAX     = 120  # max 2min entre deux vérifications hors-ligne
 
 # ─── Identité unique par Pi ────────────────────────────────────────────────────
 _HOME      = Path(f"/home/{os.getenv('USER', 'picam')}")
-_CONF_PATH = _HOME / "device.conf"
+_CONF_PATH = _HOME / "device.conf"  # fichier de config local : DEVICE_ID, DEVICE_NAME, etc.
 
 def _load_device_conf():
+    """Lit device.conf pour récupérer l'identité du Pi (DEVICE_ID, DEVICE_NAME, DEVICE_LOCATION)."""
     conf = {}
     if not _CONF_PATH.exists():
         return conf
@@ -62,17 +63,19 @@ def _load_device_conf():
     return conf
 
 _conf           = _load_device_conf()
-DEVICE_ID       = _conf.get("DEVICE_ID") or f"pi-{socket.gethostname()}"
+DEVICE_ID       = _conf.get("DEVICE_ID") or f"pi-{socket.gethostname()}"   # ex: "pi-salon"
 DEVICE_NAME     = _conf.get("DEVICE_NAME") or socket.gethostname()
 DEVICE_LOCATION = _conf.get("DEVICE_LOCATION", "")
 
 RECORD_DIR.mkdir(parents=True, exist_ok=True)
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
-MIN_CLIP_SIZE = 50 * 1024
+MIN_CLIP_SIZE = 50 * 1024  # 50 Ko minimum — clips plus petits = enregistrement raté
 
 
 def fetch_remote_config():
+    """Récupère la config depuis le serveur (durée clip, port RTSP, seuils mouvement...).
+    Permet de modifier les paramètres du Pi depuis l'interface web sans SSH."""
     global DEVICE_NAME, DEVICE_LOCATION, CLIP_DURATION_SEC, MAX_STORAGE_MB
     global ANNOUNCE_INTERVAL, RTSP_PORT, RTSP_PATH
     global MOTION_SNAPSHOT_INTERVAL, MOTION_THRESHOLD, MOTION_MIN_PIXELS, STREAM_IDLE_TIMEOUT, WAKE_STREAM_TIMEOUT
@@ -98,6 +101,8 @@ def fetch_remote_config():
 
 
 def enforce_storage_limit():
+    """Supprime les clips les plus anciens si le stockage dépasse MAX_STORAGE_MB.
+    Evite de remplir la carte SD du Pi."""
     try:
         files = sorted(RECORD_DIR.glob("*.mp4"), key=lambda f: f.stat().st_mtime)
     except Exception:
@@ -118,6 +123,8 @@ def enforce_storage_limit():
 
 
 def get_local_ip():
+    """Récupère l'IP locale du Pi en ouvrant une socket UDP vers le serveur.
+    Astuce : pas besoin d'envoyer de données, connect() suffit pour connaître l'IP source."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("192.168.0.47", 80))
@@ -129,6 +136,7 @@ def get_local_ip():
 
 
 def server_reachable():
+    """Vérifie si le serveur Node.js répond sur /api/health (timeout 3s)."""
     try:
         r = requests.get(f"{SERVER_URL}/api/health", timeout=3)
         return r.status_code < 500
@@ -137,6 +145,8 @@ def server_reachable():
 
 
 def announce(ip):
+    """Annonce la présence du Pi au serveur toutes les 30s.
+    Envoie deviceId, host, streamUrl → insère dans camera_nodes et camera_discoveries."""
     payload = {
         "deviceId":  DEVICE_ID,
         "name":      DEVICE_NAME,
@@ -155,12 +165,15 @@ def announce(ip):
     except Exception as e:
         print(f"[ANNOUNCE] {e}")
     try:
+        # Double annonce aussi dans camera_discoveries (table de staging)
         requests.post(f"{SERVER_URL}/api/cameras/announce", json=payload, timeout=5)
     except Exception:
         pass
 
 
 def clean_shm():
+    """Supprime les fichiers temporaires de MediaMTX dans /dev/shm.
+    Nécessaire pour éviter les conflits lors du redémarrage de MediaMTX."""
     try:
         import glob
         dirs = glob.glob('/dev/shm/mediamtx-rpicamera-*')
@@ -176,6 +189,9 @@ def clean_shm():
 
 
 def release_camera(kill_rpicam_jpeg: bool = True):
+    """Libère le module caméra en tuant tous les processus qui l'utilisent.
+    La caméra CSI ne peut être utilisée que par un seul processus à la fois."""
+    # Tue les processus MediaMTX et rpicam
     patterns = ['mtxrpicam', 'rpicam-vid']
     if kill_rpicam_jpeg:
         patterns.append('rpicam-jpeg')
@@ -186,6 +202,7 @@ def release_camera(kill_rpicam_jpeg: bool = True):
         except Exception:
             pass
 
+    # Force la libération des devices vidéo (/dev/video0, /dev/media0...)
     devices = ['/dev/media0', '/dev/media1', '/dev/media2', '/dev/video0']
     existing = [d for d in devices if Path(d).exists()]
     if existing:
@@ -210,6 +227,8 @@ def release_camera(kill_rpicam_jpeg: bool = True):
 
 
 def set_mediamtx(active: bool):
+    """Démarre ou arrête le service MediaMTX via systemctl.
+    MediaMTX = serveur RTSP qui publie le flux de la caméra sur le réseau."""
     action = 'start' if active else 'stop'
     try:
         subprocess.run(['sudo', 'systemctl', action, 'mediamtx'], check=True, timeout=10)
@@ -219,6 +238,8 @@ def set_mediamtx(active: bool):
 
 
 def wait_for_rtsp_path(max_wait: int = 20) -> bool:
+    """Attend que le flux RTSP soit prêt dans MediaMTX (max 20s).
+    Interroge l'API REST locale de MediaMTX sur le port 9997."""
     deadline = time.time() + max_wait
     while time.time() < deadline:
         try:
@@ -238,12 +259,14 @@ def wait_for_rtsp_path(max_wait: int = 20) -> bool:
 
 
 def start_stream():
+    """Démarre le streaming complet : libère la caméra → démarre MediaMTX → attend que le flux soit prêt."""
     release_camera()
     set_mediamtx(True)
     return wait_for_rtsp_path()
 
 
 def stop_stream():
+    """Arrête MediaMTX et nettoie les ressources."""
     set_mediamtx(False)
     try:
         subprocess.run(['sudo', 'pkill', '-9', '-f', 'mtxrpicam'], capture_output=True, timeout=3)
@@ -253,6 +276,8 @@ def stop_stream():
 
 
 def notify_motion(active: bool):
+    """Notifie le serveur qu'un mouvement a été détecté (ou terminé).
+    Le serveur met à jour camera_nodes.last_motion_at et affiche le badge dans le dashboard."""
     try:
         r = requests.post(
             f"{SERVER_URL}/api/camera-nodes/motion",
@@ -268,6 +293,8 @@ def notify_motion(active: bool):
 
 
 def check_wake_signal() -> bool:
+    """Vérifie si l'interface web a demandé le réveil du Pi (clic sur Start).
+    Le serveur maintient un flag en mémoire par device_id."""
     try:
         r = requests.get(
             f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/wake",
@@ -281,6 +308,7 @@ def check_wake_signal() -> bool:
 
 
 def check_sleep_signal() -> bool:
+    """Vérifie si l'interface web a demandé l'arrêt du stream (clic sur Stop)."""
     try:
         r = requests.get(
             f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/sleep",
@@ -294,6 +322,8 @@ def check_sleep_signal() -> bool:
 
 
 def capture_snapshot(out_path: Path) -> bool:
+    """Prend une photo 320x240 avec rpicam-jpeg en 300ms.
+    Résolution réduite intentionnellement pour économiser le CPU du Pi Zero 2W."""
     try:
         subprocess.run(
             ['rpicam-jpeg', '-t', '300', '--nopreview',
@@ -309,14 +339,20 @@ def capture_snapshot(out_path: Path) -> bool:
 
 
 def images_differ(path_a: Path, path_b: Path) -> bool:
+    """Compare deux snapshots pixel par pixel en niveaux de gris.
+    Retourne True si plus de MOTION_MIN_PIXELS pixels ont changé de plus de MOTION_THRESHOLD.
+    Niveaux de gris = 3x moins de données à traiter (1 canal au lieu de RGB)."""
     try:
         from PIL import Image
         import numpy as np
+        # Conversion en niveaux de gris pour réduire la charge CPU
         img_a = np.array(Image.open(path_a).convert('L'), dtype=np.int16)
         img_b = np.array(Image.open(path_b).convert('L'), dtype=np.int16)
+        # Compte les pixels dont la différence dépasse le seuil
         changed = int(np.sum(np.abs(img_a - img_b) > MOTION_THRESHOLD))
         return changed > MOTION_MIN_PIXELS
     except ImportError:
+        # Fallback si PIL/numpy non installé : compare juste la taille des fichiers
         try:
             return abs(path_a.stat().st_size - path_b.stat().st_size) > 3000
         except Exception:
@@ -326,9 +362,11 @@ def images_differ(path_a: Path, path_b: Path) -> bool:
 
 
 def record_offline_clip(out: Path) -> bool:
-    """Enregistre en H264 brut puis remuxe en MP4 valide via ffmpeg (+faststart)."""
+    """Enregistre un clip H.264 brut avec rpicam-vid puis le remuxe en MP4 via ffmpeg.
+    +faststart = les métadonnées MP4 au début du fichier pour lecture immédiate."""
     h264_out = out.with_suffix('.h264')
     try:
+        # Enregistrement H.264 brut (encodage hardware sur le chip Pi)
         subprocess.run(
             ['rpicam-vid', '-t', str(CLIP_DURATION_SEC * 1000),
              '--codec', 'h264', '--width', '1280', '--height', '720',
@@ -343,6 +381,7 @@ def record_offline_clip(out: Path) -> bool:
         return False
 
     try:
+        # Remuxage en MP4 valide sans réencodage (-c:v copy)
         subprocess.run(
             ['ffmpeg', '-y', '-f', 'h264', '-i', str(h264_out),
              '-c:v', 'copy', '-movflags', '+faststart', str(out)],
@@ -355,17 +394,21 @@ def record_offline_clip(out: Path) -> bool:
         except: pass
         return False
     finally:
-        try: h264_out.unlink()
+        try: h264_out.unlink()  # supprime le H.264 brut intermédiaire
         except: pass
 
+    # Vérifie que le fichier existe et est assez grand (> 50 Ko)
     return out.exists() and out.stat().st_size >= MIN_CLIP_SIZE
 
 
 def upload_pending():
+    """Envoie tous les clips MP4 en attente au serveur après reconnexion.
+    Supprime chaque clip après upload réussi. S'arrête à la première erreur réseau."""
     files = sorted(RECORD_DIR.glob("*.mp4"))
     if not files:
         return
 
+    # Filtre les clips trop petits (enregistrements ratés)
     valid = []
     for f in files:
         try:
@@ -384,6 +427,7 @@ def upload_pending():
 
     print(f"[SYNC] {len(valid)} fichier(s) à envoyer au serveur")
     for f in valid:
+        # Extrait la date depuis le nom de fichier (format YYYYMMDD_HHMMSS)
         try:
             detected_at = datetime.strptime(f.stem, "%Y%m%d_%H%M%S").isoformat()
         except Exception:
@@ -398,50 +442,53 @@ def upload_pending():
                 )
             if r.status_code in (200, 201):
                 print(f"[SYNC] {f.name} -> serveur (URL: {r.json().get('url', '?')})")
-                try: f.unlink()
+                try: f.unlink()  # supprime le clip local après upload réussi
                 except: pass
             else:
                 print(f"[SYNC] {f.name} — HTTP {r.status_code}: {r.text[:200]}")
-                break
+                break  # arrêt si le serveur refuse (évite de spammer)
         except Exception as e:
             print(f"[SYNC] {f.name} — {e}")
-            break
+            break  # arrêt si erreur réseau
 
 
 # ─── Boucle principale ─────────────────────────────────────────────────────────
 
 def main():
     print(f"[SENTYS] Démarré | serveur={SERVER_URL} | device={DEVICE_ID}")
+    # Nettoyage au démarrage : s'assure que MediaMTX est arrêté
     set_mediamtx(False)
     release_camera()
 
-    was_offline        = False
-    last_announce      = 0.0
-    server_loss_streak = 0
+    was_offline        = False   # True si le serveur était injoignable au dernier check
+    last_announce      = 0.0     # timestamp de la dernière annonce
+    server_loss_streak = 0       # compteur de checks consécutifs sans serveur
 
     last_server_check      = 0.0
     server_check_interval  = SERVER_CHECK_INTERVAL_ONLINE
     online                 = False
 
-    stream_state       = 'IDLE'
-    last_motion_time   = 0.0
-    stream_start_time  = 0.0
+    stream_state       = 'IDLE'  # état courant : 'IDLE' ou 'STREAMING'
+    last_motion_time   = 0.0     # timestamp du dernier mouvement détecté
+    stream_start_time  = 0.0     # timestamp du démarrage du stream (pour timeout wake)
     snap_a             = SNAPSHOT_DIR / 'snap_a.jpg'
     snap_b             = SNAPSHOT_DIR / 'snap_b.jpg'
-    snap_toggle        = False
-    prev_snap          = None
+    snap_toggle        = False   # alterne entre snap_a et snap_b pour comparer
+    prev_snap          = None    # snapshot précédent pour comparaison
     last_wake_check    = 0.0
-    WAKE_CHECK_INTERVAL   = 0.5
-    SERVER_LOSS_TOLERANCE = 3
-    wake_mode = False
+    WAKE_CHECK_INTERVAL   = 0.5  # vérifie le signal wake toutes les 500ms
+    SERVER_LOSS_TOLERANCE = 3    # attend 3 échecs consécutifs avant d'arrêter le stream
+    wake_mode = False            # True si démarré manuellement depuis le dashboard
 
+    # Vérification initiale de connectivité
     online = server_reachable()
     last_server_check = time.time()
 
     if online:
-        fetch_remote_config()
+        fetch_remote_config()  # charge la config distante au démarrage
         server_check_interval = SERVER_CHECK_INTERVAL_ONLINE
 
+    # Synchronise les clips en attente si présents au démarrage
     if list(RECORD_DIR.glob("*.mp4")) and online:
         print("[SENTYS] Clips en attente au démarrage — synchronisation")
         upload_pending()
@@ -451,6 +498,7 @@ def main():
         now = time.time()
 
         # ── Vérification connectivité avec backoff exponentiel ────────────────
+        # Si hors-ligne, double l'intervalle à chaque échec (10s → 20s → 40s → max 120s)
         if now - last_server_check >= server_check_interval:
             online = server_reachable()
             last_server_check = now
@@ -466,7 +514,7 @@ def main():
             server_loss_streak    = 0
             server_check_interval = SERVER_CHECK_INTERVAL_ONLINE
             if stream_state != 'STREAMING':
-                upload_pending()
+                upload_pending()  # envoie les clips enregistrés pendant la coupure
             was_offline = False
 
         if not online:
@@ -474,6 +522,8 @@ def main():
                 print("[SENTYS] Serveur injoignable — passage en mode hors-ligne")
             was_offline = True
 
+            # Si on streamait, attend SERVER_LOSS_TOLERANCE échecs avant d'arrêter
+            # Evite d'arrêter le stream pour une micro-coupure réseau
             if stream_state == 'STREAMING':
                 server_loss_streak += 1
                 if server_loss_streak < SERVER_LOSS_TOLERANCE:
@@ -497,6 +547,7 @@ def main():
         # ── État IDLE : snapshots + écoute wake ───────────────────────────────
         if stream_state == 'IDLE':
 
+            # Vérifie toutes les 500ms si l'utilisateur a cliqué Start dans le dashboard
             if online and now - last_wake_check >= WAKE_CHECK_INTERVAL:
                 last_wake_check = now
                 if check_wake_signal():
@@ -505,7 +556,7 @@ def main():
                     if ready:
                         notify_motion(True)
                         stream_state      = 'STREAMING'
-                        wake_mode         = True
+                        wake_mode         = True   # démarrage manuel → timeout de 5min
                         last_motion_time  = now
                         stream_start_time = now
                     else:
@@ -513,6 +564,7 @@ def main():
                         stop_stream()
                     continue
 
+            # Alterne entre snap_a et snap_b pour toujours avoir deux snapshots à comparer
             cur_snap    = snap_b if snap_toggle else snap_a
             snap_toggle = not snap_toggle
 
@@ -523,11 +575,13 @@ def main():
                         last_motion_time = now
 
                         if online:
+                            # En ligne : démarre le stream pour que le serveur analyse le flux
                             ready = start_stream()
                             notify_motion(True)
                             stream_state = 'STREAMING'
                             wake_mode    = False
                         else:
+                            # Hors-ligne : enregistre directement sur la carte SD
                             print("[MOTION] Mode hors-ligne — enregistrement local")
                             enforce_storage_limit()
                             ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -548,11 +602,12 @@ def main():
                 release_camera(kill_rpicam_jpeg=False)
                 continue
 
-            time.sleep(MOTION_SNAPSHOT_INTERVAL)
+            time.sleep(MOTION_SNAPSHOT_INTERVAL)  # attend 1s avant le prochain snapshot
 
         # ── État STREAMING ─────────────────────────────────────────────────────
         elif stream_state == 'STREAMING':
 
+            # Vérifie si l'utilisateur a cliqué Stop dans le dashboard
             if online and check_sleep_signal():
                 print("[SLEEP] Arrêt demandé par l'interface web")
                 stop_stream()
@@ -567,6 +622,7 @@ def main():
                 continue
 
             if wake_mode:
+                # Démarrage manuel : arrêt automatique après WAKE_STREAM_TIMEOUT (5min)
                 if now - stream_start_time > WAKE_STREAM_TIMEOUT:
                     print(f"[WAKE] {WAKE_STREAM_TIMEOUT}s écoulés — arrêt automatique")
                     stop_stream()
@@ -580,6 +636,7 @@ def main():
                 else:
                     time.sleep(2)
             else:
+                # Démarrage sur mouvement : arrêt si plus aucun mouvement depuis 60s
                 if now - last_motion_time > STREAM_IDLE_TIMEOUT:
                     print(f"[MOTION] {STREAM_IDLE_TIMEOUT}s sans mouvement — arrêt MediaMTX")
                     stop_stream()

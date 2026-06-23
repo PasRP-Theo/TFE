@@ -8,6 +8,7 @@ import CameraFeed  from './components/CameraFeed';
 import Settings    from './components/Settings';
 import SystemInfo  from './components/SystemInfo';
 import AlertsPage  from './components/AlertsPage';
+import HomePage    from './components/HomePage';
 import BrandLogo from './components/BrandLogo.tsx';
 import { registerSW } from 'virtual:pwa-register';
 import { apiUrl, readJsonResponse } from './lib/api';
@@ -281,7 +282,8 @@ function getSystemStatus(
   const navLinks = [
     { to: '/videos',   label: 'Caméras',    shortLabel: 'Caméras',  icon: '◉', show: true    },
     { to: '/alerts',   label: 'Alertes',    shortLabel: 'Alertes',  icon: '⚠', show: true, badge: pendingAlertsCount > 0 ? String(pendingAlertsCount) : '' },
-    { to: '/system',   label: 'Système',    shortLabel: 'Système', icon: '⌁', show: true },
+    { to: '/home',     label: 'Maison',     shortLabel: 'Maison',   icon: '⌂', show: true    },
+    { to: '/system',   label: 'Système',    shortLabel: 'Système',  icon: '⌁', show: true    },
     { to: '/settings', label: 'Paramètres', shortLabel: 'Réglages', icon: '⚙', show: isAdmin },
   ].filter(l => l.show);
 
@@ -291,15 +293,15 @@ function getSystemStatus(
     <div className={`app app--density-${config.uiDensity} ${isInstalledMode ? 'app--installed' : ''}`}>
       <header className="app-header">
         <div className="app-header-inner">
-          <div className="app-logo" style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
+          <div className="app-logo">
             <BrandLogo
               wrapperClassName="app-logo-mark"
               imageClassName="app-logo-icon"
               fallbackClassName="app-logo-fallback"
               fallbackText={config.appName.charAt(0) || 'A'}
             />
-            <span className="app-logo-text" style={{ display: 'inline-block', fontSize: '0.8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{config.appName}</span>
-            {config.showSystemVersion && <span className="app-logo-version" style={{ display: 'inline-block', fontSize: '0.6rem', whiteSpace: 'nowrap' }}>{config.systemVersion}</span>}
+            <span className="app-logo-text">{config.appName}</span>
+            {config.showSystemVersion && <span className="app-logo-version">{config.systemVersion}</span>}
           </div>
 
           <nav className="app-nav" aria-label="Navigation principale">
@@ -316,8 +318,8 @@ function getSystemStatus(
 
           {config.showStatusPanel && (
             <div className="app-status-group">
-              <div className="app-status" style={{ color: systemLedColor }}>
-                <span className="app-status-dot" style={{ background: systemLedColor, boxShadow: `0 0 8px ${systemLedColor}` }} />
+              <div className="app-status" style={{ '--status-color': systemLedColor } as React.CSSProperties}>
+                <span className="app-status-dot" />
                 {systemLedText}
               </div>
             </div>
@@ -331,16 +333,16 @@ function getSystemStatus(
           </div>
 
           {isKioskMode && (
-            <button className="app-theme-btn" onClick={() => { logout(); window.localStorage.removeItem('token'); window.location.reload(); }} title="Verrouiller l'écran">🔒</button>
+            <button type="button" className="app-theme-btn" onClick={() => { logout(); window.localStorage.removeItem('token'); window.location.reload(); }} title="Verrouiller l'écran">🔒</button>
           )}
 
-          <button className="app-theme-btn"
+          <button type="button" className="app-theme-btn"
             onClick={toggleTheme}
             title={settings.theme === 'dark' ? 'Passer en clair' : 'Passer en sombre'}>
             {settings.theme === 'dark' ? '☀️' : '🌙'}
           </button>
 
-          <button className="app-logout-btn" onClick={() => {
+          <button type="button" className="app-logout-btn" onClick={() => {
             logout();
             window.localStorage.removeItem('token');
             window.location.reload();
@@ -353,6 +355,7 @@ function getSystemStatus(
           <Route path="/" element={<Navigate to="/videos" replace />} />
           <Route path="/videos"  element={<CameraFeed onStatusChange={setCameraStatus} />} />
           <Route path="/alerts"  element={<AlertsPage />} />
+          <Route path="/home"    element={<HomePage />} />
           <Route path="/system"  element={<SystemInfo />} />
           <Route path="/settings" element={
             <AdminRoute>

@@ -185,6 +185,20 @@ export async function initDB() {
         user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS shopping_items (
+        id         SERIAL PRIMARY KEY,
+        text       VARCHAR(255) NOT NULL,
+        checked    BOOLEAN      NOT NULL DEFAULT FALSE,
+        position   INTEGER      NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS home_notes (
+        id         SERIAL PRIMARY KEY,
+        text       TEXT         NOT NULL,
+        created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      );
     `);
 
     await client.query(`

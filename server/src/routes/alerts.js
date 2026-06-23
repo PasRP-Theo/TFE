@@ -101,11 +101,15 @@ router.get('/analytics', requireAuth, async (_req, res) => {
          LIMIT 5`
       ),
       pool.query(
-        `SELECT EXTRACT(HOUR FROM detected_at)::int AS hour, COUNT(*)::int AS events
-         FROM camera_node_motion_events
-         WHERE detected_at >= NOW() - INTERVAL '7 days'
-         GROUP BY hour
-         ORDER BY hour ASC`
+        `SELECT g.hour, COALESCE(agg.events, 0) AS events
+         FROM generate_series(0, 23) AS g(hour)
+         LEFT JOIN (
+           SELECT EXTRACT(HOUR FROM detected_at)::int AS hour, COUNT(*)::int AS events
+           FROM camera_node_motion_events
+           WHERE detected_at >= NOW() - INTERVAL '7 days'
+           GROUP BY hour
+         ) agg USING (hour)
+         ORDER BY g.hour ASC`
       ),
       pool.query(
         `SELECT COUNT(*)::int AS offline_nodes
@@ -114,10 +118,7 @@ router.get('/analytics', requireAuth, async (_req, res) => {
       ),
     ]);
 
-    const hours = Array.from({ length: 24 }, (_, hour) => {
-      const match = hourlyActivityResult.rows.find((row) => row.hour === hour);
-      return { hour, events: match?.events || 0 };
-    });
+    const hours = hourlyActivityResult.rows;
 
     res.json({
       overview: {
