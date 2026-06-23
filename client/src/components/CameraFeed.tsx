@@ -1020,7 +1020,6 @@ export default function CameraFeed({ onStatusChange }: {
                     {isAdmin && <span style={{ opacity: 0.5, marginLeft: '6px', fontSize: '0.85em' }}>✎</span>}
                   </span>
                 )}
-                {focusedCam.location && <span className="cam-card-loc" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>· {focusedCam.location}</span>}
               </div>
               <div className="cam-card-actions cam-card-actions--wide-gap" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <StatusBadge status={focusedCam.status} />
