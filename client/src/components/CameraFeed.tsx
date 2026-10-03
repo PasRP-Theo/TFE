@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { io as ioClient } from "socket.io-client";
-import { apiUrl, apiFetch, API_BASE_URL } from "../lib/api";
+import { apiUrl, apiFetch, API_BASE_URL, readJsonResponse } from "../lib/api";
 import { WebRTCPlayer } from "./WebRTCPlayer";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -106,20 +106,10 @@ function getHistoryGroupLabel(value: string) {
 }
 
 // lecteur HLS
-function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string }) {
+function HlsPlayer({ cameraId, streamKey }: { cameraId: number; streamKey: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   // cache-bust manifest
   const mountTokenRef = useRef(Date.now());
-
-  let pathOnly = hlsUrl;
-  try {
-    if (hlsUrl && hlsUrl.startsWith('http')) {
-      pathOnly = new URL(hlsUrl).pathname;
-    }
-  } catch {
-    // ignore
-  }
-  const fullUrl = apiUrl(`${pathOnly}?v=${encodeURIComponent(streamKey)}&_=${mountTokenRef.current}`);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -143,6 +133,19 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
     }
 
     const loadStream = async () => {
+      // URL signée (liée à l'utilisateur, durée limitée) : pas de flux accessible sans session
+      let fullUrl: string;
+      try {
+        const res = await apiFetch(apiUrl(`/api/cameras/${cameraId}/hls-url`));
+        if (!res.ok) throw new Error(`hls-url ${res.status}`);
+        const { url } = await readJsonResponse<{ url: string }>(res);
+        fullUrl = apiUrl(`${url}?v=${encodeURIComponent(streamKey)}&_=${mountTokenRef.current}`);
+      } catch {
+        if (!disposed) {
+          retryTimer = setTimeout(() => { if (!disposed) setRetryCount(c => c + 1); }, 2000);
+        }
+        return;
+      }
       const { default: HlsLib } = await import('hls.js');
       if (disposed) return;
 
@@ -164,8 +167,14 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
 
         hls.on(HlsLib.Events.ERROR, (_event, data: ErrorData) => {
           if (data.fatal) {
-            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
+            const status = (data.response as { code?: number } | undefined)?.code;
+            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR && status !== 401 && status !== 403) {
               hls?.startLoad();
+            } else if (status === 401 || status === 403) {
+              // lien expiré : on redemande une URL signée
+              hls?.destroy();
+              hls = null;
+              if (!disposed) setRetryCount(c => c + 1);
             } else if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
               hls?.recoverMediaError();
             } else {
@@ -225,7 +234,7 @@ function HlsPlayer({ hlsUrl, streamKey }: { hlsUrl: string; streamKey: string })
       if (hls) hls.destroy();
       nativeCleanup?.();
     };
-  }, [fullUrl, retryCount]);
+  }, [cameraId, streamKey, retryCount]);
 
   function retry() {
     setStalled(false);
@@ -262,7 +271,7 @@ function CameraPlayer({ cam, streamKey }: { cam: Camera; streamKey: string }) {
   const handleError = useCallback(() => setUseHls(true), []);
 
   if (useHls || !cam.hlsUrl) {
-    return <HlsPlayer hlsUrl={cam.hlsUrl!} streamKey={streamKey} />;
+    return <HlsPlayer cameraId={cam.id} streamKey={streamKey} />;
   }
   return <WebRTCPlayer cameraId={cam.id} onError={handleError} />;
 }
@@ -1212,7 +1221,7 @@ export default function CameraFeed({ onStatusChange }: {
                               Ouvrir
                             </a>
                             <a
-                              href={apiUrl(entry.url)}
+                              href={apiUrl(`${entry.url}&download=1`)}
                               download
                               className="cam-history-link cam-history-link--secondary"
                             >

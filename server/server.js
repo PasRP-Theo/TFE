@@ -19,6 +19,7 @@ import pushRoutes            from "./src/routes/push.js";
 import webrtcRoutes          from "./src/routes/webrtc.js";
 import homeRoutes            from "./src/routes/home.js";
 import authRoutes            from "./src/routes/auth.js";
+import { createHlsRouter, createRecordingsRouter } from "./src/routes/media.js";
 import { requireAuth, requireAdmin } from "./src/middleware/auth.js";
 import { ensureSetupState } from "./src/auth/setup.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
@@ -88,13 +89,13 @@ const apiLimiter = rateLimit({
 });
 app.use("/api/", apiLimiter);
 
-// HLS statique
+// médias : accès uniquement par URL signée (voir src/routes/media.js)
 const hlsDir = process.env.HLS_DIR || path.join(__dirname, '..', 'hls');
 if (!existsSync(hlsDir)) mkdirSync(hlsDir, { recursive: true });
-app.use('/hls', express.static(hlsDir));
+app.use('/hls', createHlsRouter(hlsDir));
 const recordingsDir = process.env.RECORDINGS_DIR || path.join(__dirname, '..', 'recordings');
 if (!existsSync(recordingsDir)) mkdirSync(recordingsDir, { recursive: true });
-app.use('/recordings', express.static(recordingsDir));
+app.use('/recordings', createRecordingsRouter(recordingsDir));
 
 // routes
 app.use("/auth", authRoutes);

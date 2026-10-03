@@ -22,8 +22,15 @@ import { createAlert } from '../alerts/service.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from '../utils/streamUtils.js';
+import { signLivePrefix, signRecordingUrl, LIVE_URL_TTL_SECONDS } from '../security/urlSigning.js';
 
 const router = Router();
+
+// identifiant numérique uniquement (empêche « .. » dans les chemins de fichiers)
+router.param('id', (_req, res, next, id) => {
+  if (!/^d+$/.test(String(id))) return res.status(400).json({ error: 'Identifiant invalide' });
+  next();
+});
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
 const ENABLE_SCAN_FALLBACK = process.env.CAMERA_DISCOVERY_ENABLE_SCAN_FALLBACK !== 'false';
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
@@ -484,6 +491,17 @@ router.post('/:id/start', requireAuth, async (req, res) => {
   }
 });
 
+// URL signée du flux live (valable LIVE_URL_TTL_SECONDS, liée à l'utilisateur)
+router.get('/:id/hls-url', requireAuth, (req, res) => {
+  if (!/^d+$/.test(String(req.params.id))) return res.status(400).json({ error: 'Identifiant invalide' });
+  const state = getState(req.params.id);
+  if (!state?.hlsUrl) return res.status(409).json({ error: 'Flux non démarré' });
+  res.json({
+    url: `${signLivePrefix(req.params.id, req.user.id)}/index.m3u8`,
+    expiresIn: LIVE_URL_TTL_SECONDS,
+  });
+});
+
 // heartbeat
 router.post('/:id/stream/heartbeat', requireAuth, (req, res) => {
   const ok = heartbeatStream(req.params.id);
@@ -544,7 +562,7 @@ router.post('/:id/stop', requireAuth, async (req, res) => {
 });
 
 // archives orphelines
-router.get('/archives', requireAuth, async (_req, res) => {
+router.get('/archives', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT id FROM cameras');
     const existingIds = new Set(rows.map(r => String(r.id)));
@@ -567,7 +585,7 @@ router.get('/archives', requireAuth, async (_req, res) => {
         if (!fstat?.isFile()) continue;
         recordings.push({
           filename,
-          url: `/recordings/${folder}/${encodeURIComponent(filename)}`,
+          url: signRecordingUrl(`/recordings/${folder}/${encodeURIComponent(filename)}`, req.user.id),
           createdAt: fstat.mtime.toISOString(),
           size: fstat.size,
         });
@@ -739,7 +757,7 @@ router.get('/:id/history', requireAuth, async (req, res) => {
       if (!stats.isFile()) continue;
       recordings.push({
         filename,
-        url: `/recordings/${cameraId}/${encodeURIComponent(filename)}`,
+        url: signRecordingUrl(`/recordings/${cameraId}/${encodeURIComponent(filename)}`, req.user.id),
         createdAt: stats.mtime.toISOString(),
         size: stats.size,
       });

@@ -2,6 +2,7 @@ import { Router }   from 'express';
 import { negotiate, isReady, registerStream, unregisterStream } from '../go2rtc/manager.js';
 import { pool }      from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { logAudit } from '../audit/log.js';
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.post(
           throw firstErr;
         }
       }
+      logAudit(req.user.username, 'VIDEO_LIVE_VIEW', `Caméra ${cameraId} (WebRTC)`, req.ip);
       res.type('application/sdp').send(sdpAnswer);
     } catch (err) {
       console.error(`[WEBRTC] Négociation cam ${cameraId} échouée :`, err.message);
