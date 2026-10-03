@@ -19,6 +19,7 @@ import pushRoutes            from "./src/routes/push.js";
 import webrtcRoutes          from "./src/routes/webrtc.js";
 import homeRoutes            from "./src/routes/home.js";
 import authRoutes            from "./src/routes/auth.js";
+import meRoutes              from "./src/routes/me.js";
 import { createHlsRouter, createRecordingsRouter } from "./src/routes/media.js";
 import { requireAuth, requireAdmin } from "./src/middleware/auth.js";
 import { ensureSetupState } from "./src/auth/setup.js";
@@ -95,6 +96,7 @@ app.use('/recordings', createRecordingsRouter(recordingsDir));
 
 // routes
 app.use("/auth", authRoutes);
+app.use("/api/me",      meRoutes);
 app.use("/api/users",   userRoutes);
 app.use("/api/system",  systemRoutes);
 app.use("/api/camera-nodes", cameraNodeRoutes);

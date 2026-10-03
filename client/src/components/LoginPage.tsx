@@ -6,7 +6,7 @@ import { apiUrl, readJsonResponse } from '../lib/api';
 import BrandLogo from './BrandLogo';
 
 export default function LoginPage() {
-  const { login, completeSetup } = useAuth();
+  const { login, verifyMfa, completeSetup } = useAuth();
   const { config } = useAppConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +19,8 @@ export default function LoginPage() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [setupToken, setSetupToken] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -66,15 +68,22 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      if (needsSetup) {
+      if (mfaToken) {
+        await verifyMfa(mfaToken, mfaCode);
+      } else if (needsSetup) {
         if (password !== passwordConfirm) throw new Error('Les mots de passe ne correspondent pas');
         await completeSetup(setupToken, username, password);
       } else {
-        await login(username, password);
+        const result = await login(username, password);
+        if (result.mfaToken) {
+          setMfaToken(result.mfaToken);
+          setPassword('');
+        }
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
       setError(errorMessage);
+      if (errorMessage.includes('expirée')) { setMfaToken(null); setMfaCode(''); }
       if (errorMessage.includes('Trop de tentatives')) {
         const lockoutEndsAt = Date.now() + 15 * 60 * 1000;
         setLockoutUntil(lockoutEndsAt);
@@ -133,6 +142,26 @@ export default function LoginPage() {
 
 
             <form onSubmit={handleSubmit}>
+              {mfaToken ? (
+                <div className="lp-field">
+                  <label className="lp-label">CODE DE VÉRIFICATION (APPLICATION OU CODE DE RÉCUPÉRATION)</label>
+                  <div className="lp-input-wrap">
+                    <span className="lp-input-prefix">#</span>
+                    <input
+                      className="lp-input"
+                      type="text"
+                      inputMode="text"
+                      value={mfaCode}
+                      onChange={e => setMfaCode(e.target.value)}
+                      placeholder="123456"
+                      required
+                      disabled={loading}
+                      autoFocus
+                      autoComplete="one-time-code"
+                    />
+                  </div>
+                </div>
+              ) : (<>
               {needsSetup && (
                 <>
                   <div className="lp-login-message">
@@ -211,6 +240,8 @@ export default function LoginPage() {
               </div>
             )}
 
+            </>)}
+
             {isLockedOut ? (
               <div className="lp-error">
                 <span>⚠</span>
@@ -224,7 +255,7 @@ export default function LoginPage() {
 
             <button className="lp-btn" type="submit" disabled={loading || isLockedOut}>
               {loading ? `AUTHENTIFICATION${dots}` : 
-               isLockedOut ? 'SYSTÈME VERROUILLÉ' : needsSetup ? '→ CRÉER LE COMPTE ADMINISTRATEUR' : '→ ACCÉDER AU SYSTÈME'}
+               isLockedOut ? 'SYSTÈME VERROUILLÉ' : mfaToken ? '→ VÉRIFIER' : needsSetup ? '→ CRÉER LE COMPTE ADMINISTRATEUR' : '→ ACCÉDER AU SYSTÈME'}
             </button>
           </form>
         </div>

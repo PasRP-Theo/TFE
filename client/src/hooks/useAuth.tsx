@@ -12,7 +12,8 @@ type User = SessionUser;
 interface AuthContextType {
   user:    User | null;
   token:   string | null;
-  login:   (username: string, password: string) => Promise<void>;
+  login:   (username: string, password: string) => Promise<{ mfaToken?: string }>;
+  verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   completeSetup: (setupToken: string, username: string, password: string) => Promise<void>;
   logout:  () => void;
   logoutAll: () => Promise<void>;
@@ -83,11 +84,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  // renvoie un mfaToken si un second facteur est requis
   async function login(username: string, password: string) {
-    const data = await postAuth<{ token: string; user: User }>('/auth/login', {
+    const data = await postAuth<{ token?: string; user?: User; mfaRequired?: boolean; mfaToken?: string }>('/auth/login', {
       username: username.toLowerCase().trim(),
       password,
     });
+    if (data.mfaRequired && data.mfaToken) return { mfaToken: data.mfaToken };
+    setAccessToken(data.token ?? null);
+    setUser(data.user ?? null);
+    return {};
+  }
+
+  async function verifyMfa(mfaToken: string, code: string) {
+    const data = await postAuth<{ token: string; user: User }>('/auth/mfa', { mfaToken, code: code.trim() });
     setAccessToken(data.token);
     setUser(data.user);
   }
@@ -103,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, completeSetup, logout, logoutAll, loading }}>
+    <AuthContext.Provider value={{ user, token, login, verifyMfa, completeSetup, logout, logoutAll, loading }}>
       {children}
     </AuthContext.Provider>
   );

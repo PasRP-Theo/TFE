@@ -11,6 +11,8 @@ import {
   getUserState, readCookie, setRefreshCookie, clearRefreshCookie, REFRESH_COOKIE,
 } from '../auth/tokens.js';
 import { isTrustedOrigin } from '../security/origins.js';
+import { verifySecondFactor } from '../auth/mfa.js';
+import { verifyAccessToken } from '../auth/tokens.js';
 
 const router = Router();
 
@@ -122,7 +124,7 @@ router.post('/setup', loginLimiter, requireTrustedOrigin, async (req, res) => {
 export async function checkCredentials(req, username, password) {
   const cleanUsername = username.toLowerCase().trim().slice(0, 255);
   const { rows } = await pool.query(
-    `SELECT id, username, role, password, failed_login_count, token_version,
+    `SELECT id, username, role, password, failed_login_count, token_version, totp_enabled,
             (locked_until IS NOT NULL AND locked_until > NOW()) AS locked
      FROM users WHERE username = $1`,
     [cleanUsername]
@@ -165,10 +167,44 @@ router.post('/login', loginLimiter, requireTrustedOrigin, async (req, res) => {
   try {
     const user = await checkCredentials(req, username, password);
     if (!user) return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+    // second facteur : jeton intermédiaire de 5 min, inutilisable comme jeton d'accès
+    if (user.totp_enabled) {
+      const mfaToken = signAccessToken(user, { mfa: 'pending' }, { expiresIn: '5m' });
+      return res.json({ mfaRequired: true, mfaToken });
+    }
     await logAudit(user.username, 'LOGIN_SUCCESS', user.migratedHash ? 'Connexion réussie (hachage migré)' : 'Connexion réussie', req.ip);
     res.json(await startSession(req, res, user));
   } catch (err) {
     console.error('[LOGIN]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// second facteur (TOTP ou code de récupération)
+router.post('/mfa', loginLimiter, requireTrustedOrigin, async (req, res) => {
+  const { mfaToken, code } = req.body || {};
+  let claims;
+  try {
+    claims = verifyAccessToken(String(mfaToken || ''));
+  } catch {
+    return res.status(401).json({ error: 'Étape de vérification expirée, reconnectez-vous' });
+  }
+  if (claims.mfa !== 'pending') return res.status(401).json({ error: 'Étape de vérification expirée, reconnectez-vous' });
+  try {
+    const user = await getUserState(claims.id);
+    if (!user || Number(user.token_version) !== Number(claims.tv)) {
+      return res.status(401).json({ error: 'Étape de vérification expirée, reconnectez-vous' });
+    }
+    const method = await verifySecondFactor(user.id, code);
+    if (!method) {
+      await registerFailedLogin(user.id);
+      await logAudit(user.username, 'MFA_FAILED', 'Code de vérification incorrect', req.ip);
+      return res.status(401).json({ error: 'Code incorrect' });
+    }
+    await logAudit(user.username, 'LOGIN_SUCCESS', method === 'recovery' ? 'Connexion MFA (code de récupération)' : 'Connexion MFA (TOTP)', req.ip);
+    res.json(await startSession(req, res, user));
+  } catch (err) {
+    console.error('[MFA]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

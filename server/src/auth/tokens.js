@@ -11,13 +11,13 @@ const REFRESH_COOKIE_PATH = '/auth';
 
 // ── jeton d'accès (ES256, 15 min) ───────────────────────────────────────────
 
-export function signAccessToken(user, extraClaims = {}) {
+export function signAccessToken(user, extraClaims = {}, { expiresIn = ACCESS_TOKEN_TTL } = {}) {
   return jwt.sign(
     { username: user.username, role: user.role, tv: user.token_version ?? 0, ...extraClaims },
     JWT_PRIVATE_KEY,
     {
       algorithm: JWT_ALGORITHM,
-      expiresIn: ACCESS_TOKEN_TTL,
+      expiresIn,
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
       subject: String(user.id),

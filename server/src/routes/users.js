@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { hashPassword } from '../auth/passwords.js';
 import { validatePassword } from '../auth/passwordPolicy.js';
 import { revokeAllSessions, invalidateUserState } from '../auth/tokens.js';
+import { disableMfa } from '../auth/mfa.js';
 import { pool }    from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logAudit } from '../audit/log.js';
@@ -17,7 +18,7 @@ async function getAdminCount(client = pool) {
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, username, role, created_at FROM users ORDER BY created_at'
+      'SELECT id, username, role, created_at, totp_enabled AS mfa_enabled FROM users ORDER BY created_at'
     );
     res.json(rows);
   } catch {
@@ -135,6 +136,23 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Identifiant deja utilise' });
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// MFA perdu (téléphone) : réinitialisation par un admin, sessions fermées
+router.post('/:id/mfa/reset', requireAuth, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Identifiant invalide' });
+  try {
+    const { rows } = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    await disableMfa(userId);
+    await revokeAllSessions(userId);
+    await logAudit(req.user.username, 'MFA_RESET', `Double authentification réinitialisée pour ${rows[0].username}`, req.ip);
+    res.json({ message: 'Double authentification réinitialisée' });
+  } catch (err) {
+    console.error('[MFA RESET]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

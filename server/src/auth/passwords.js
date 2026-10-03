@@ -16,6 +16,11 @@ function prehash(password) {
   return createHmac('sha256', PEPPER).update(String(password).normalize('NFKC')).digest('base64');
 }
 
+// empreinte à clé (poivre) pour les secrets à forte entropie : codes de récupération
+export function pepperedDigest(value) {
+  return createHmac('sha256', PEPPER).update(String(value)).digest('hex');
+}
+
 export async function hashPassword(password) {
   return PEPPERED_PREFIX + await bcrypt.hash(prehash(password), BCRYPT_COST);
 }

@@ -508,6 +508,7 @@ interface User {
   username: string;
   role: string;
   created_at: string;
+  mfa_enabled?: boolean;
 }
 
 function TabUsers() {
@@ -549,6 +550,21 @@ function TabUsers() {
       if (isMounted.current) setLoading(false);
     }
   }, [authHeaders]);
+
+  async function resetUserMfa(entry: User) {
+    if (!window.confirm(`Désactiver la double authentification de ${entry.username} et fermer ses sessions ?`)) return;
+    setError('');
+    setSuccess('');
+    try {
+      const res = await apiFetch(apiUrl(`/api/users/${entry.id}/mfa/reset`), { method: 'POST' });
+      const data = await readJsonResponse<{ error?: string; message?: string }>(res);
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      setSuccess(`Double authentification réinitialisée pour ${entry.username}.`);
+      await fetchUsers();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur serveur');
+    }
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -703,6 +719,9 @@ function TabUsers() {
                     <td className="ui-td"><span className="ui-type">{new Date(entry.created_at).toLocaleDateString("fr-FR")}</span></td>
                     <td className="ui-td"><span className="ui-type">{currentUser?.id === entry.id ? 'Connecté' : 'Utilisateur'}</span></td>
                     <td className="ui-td ui-td--right">
+                      {entry.mfa_enabled && currentUser?.id !== entry.id && (
+                        <button className="ui-link-btn" style={{ marginRight: '8px' }} onClick={() => resetUserMfa(entry)} title="Téléphone perdu : désactive la double authentification et ferme les sessions">Réinit. 2FA</button>
+                      )}
                       <button className="ui-link-btn" style={{ marginRight: '8px' }} onClick={() => startEditUser(entry)} title="Modifier">Éditer</button>
                       <button className="ui-delete-btn" onClick={() => { setDeleteUserTarget(entry); setDeleteError(''); }} title="Supprimer">✕</button>
                     </td>
@@ -980,6 +999,153 @@ function TabArchives() {
   );
 }
 
+// compte de l'utilisateur connecté : mot de passe, double authentification, sessions
+function TabAccount() {
+  const { user, logout, logoutAll } = useAuth();
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [recoveryRemaining, setRecoveryRemaining] = useState(0);
+  const [enrollment, setEnrollment] = useState<{ secret: string; otpauthUrl: string } | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [code, setCode] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const loadSecurity = useCallback(async () => {
+    const res = await apiFetch(apiUrl('/api/me/security'));
+    if (!res.ok) return;
+    const data = await readJsonResponse<{ mfaEnabled: boolean; recoveryCodesRemaining: number }>(res);
+    setMfaEnabled(data.mfaEnabled);
+    setRecoveryRemaining(data.recoveryCodesRemaining);
+  }, []);
+
+  useEffect(() => { void loadSecurity(); }, [loadSecurity]);
+
+  async function call(path: string, body: unknown) {
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const res = await apiFetch(apiUrl(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await readJsonResponse<Record<string, unknown> & { error?: string }>(res);
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      return data;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur serveur');
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startMfa() {
+    const data = await call('/api/me/mfa/setup', {});
+    if (data) setEnrollment(data as unknown as { secret: string; otpauthUrl: string });
+  }
+
+  async function confirmMfa() {
+    const data = await call('/api/me/mfa/enable', { code });
+    if (!data) return;
+    setRecoveryCodes(data.recoveryCodes as string[]);
+    setEnrollment(null);
+    setCode('');
+    await loadSecurity();
+  }
+
+  async function disableMfa() {
+    const data = await call('/api/me/mfa/disable', { password: currentPassword, code });
+    if (!data) return;
+    setMessage('Double authentification désactivée.');
+    setCode('');
+    setCurrentPassword('');
+    await loadSecurity();
+  }
+
+  async function newRecoveryCodes() {
+    const data = await call('/api/me/mfa/recovery-codes', { code });
+    if (!data) return;
+    setRecoveryCodes(data.recoveryCodes as string[]);
+    setCode('');
+    await loadSecurity();
+  }
+
+  async function changePassword() {
+    const data = await call('/api/me/password', { currentPassword, newPassword });
+    if (!data) return;
+    // toutes les sessions ont été fermées côté serveur
+    logout();
+  }
+
+  return (
+    <div>
+      {error && <div className="settings-msg settings-msg--error">⚠ {error}</div>}
+      {message && <div className="settings-msg settings-msg--success">✓ {message}</div>}
+
+      <div className="settings-section">
+        <div className="settings-section-label">DOUBLE AUTHENTIFICATION (TOTP)</div>
+        {mfaEnabled ? (
+          <>
+            <p className="settings-field-hint">Active — {recoveryRemaining} code(s) de récupération restant(s).</p>
+            <div className="settings-config-grid">
+              <input className="ui-input" type="text" inputMode="numeric" placeholder="Code de l'application" value={code} onChange={e => setCode(e.target.value)} autoComplete="one-time-code" />
+              <input className="ui-input" type="password" placeholder="Mot de passe (pour désactiver)" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button type="button" className="ui-confirm-btn" disabled={busy || !code} onClick={newRecoveryCodes}>Nouveaux codes de récupération</button>
+              <button type="button" className="ui-delete-btn ui-delete-btn--danger" disabled={busy || !code || !currentPassword} onClick={disableMfa}>Désactiver</button>
+            </div>
+          </>
+        ) : enrollment ? (
+          <>
+            <p className="settings-field-hint">
+              Dans votre application d'authentification (Aegis, 2FAS, Google Authenticator…), ajoutez un compte
+              « saisie manuelle » avec cette clé, puis entrez le code affiché.
+            </p>
+            <code style={{ display: 'block', wordBreak: 'break-all', margin: '8px 0', fontSize: '15px', letterSpacing: '2px' }}>{enrollment.secret.match(/.{1,4}/g)?.join(' ')}</code>
+            <a className="ui-link-btn" href={enrollment.otpauthUrl}>Ouvrir dans l'application (mobile)</a>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <input className="ui-input" type="text" inputMode="numeric" placeholder="Code à 6 chiffres" value={code} onChange={e => setCode(e.target.value)} autoComplete="one-time-code" />
+              <button type="button" className="ui-confirm-btn" disabled={busy || code.trim().length < 6} onClick={confirmMfa}>Activer</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="settings-field-hint">Recommandé pour tout accès depuis Internet. Avec la double authentification, 8 caractères de mot de passe suffisent.</p>
+            <button type="button" className="ui-confirm-btn" disabled={busy} onClick={startMfa}>Configurer</button>
+          </>
+        )}
+        {recoveryCodes && (
+          <div className="settings-msg settings-msg--success" style={{ marginTop: '12px' }}>
+            Codes de récupération (affichés une seule fois, à conserver hors ligne — chacun n'est utilisable qu'une fois) :
+            <pre style={{ marginTop: '8px' }}>{recoveryCodes.join('\n')}</pre>
+          </div>
+        )}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label">MOT DE PASSE</div>
+        <div className="settings-config-grid">
+          <input className="ui-input" type="password" placeholder="Mot de passe actuel" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+          <input className="ui-input" type="password" placeholder={mfaEnabled ? 'Nouveau (8 caractères min.)' : 'Nouveau (15 caractères min.)'} value={newPassword} onChange={e => setNewPassword(e.target.value)} autoComplete="new-password" />
+        </div>
+        <button type="button" className="ui-confirm-btn" style={{ marginTop: '8px' }} disabled={busy || !currentPassword || !newPassword} onClick={changePassword}>Changer le mot de passe</button>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label">SESSIONS</div>
+        <p className="settings-field-hint">Connecté en tant que {user?.username}. Ferme toutes les sessions ouvertes, sur tous les appareils.</p>
+        <button type="button" className="ui-delete-btn ui-delete-btn--danger" onClick={() => { void logoutAll(); }}>Déconnecter toutes les sessions</button>
+      </div>
+    </div>
+  );
+}
+
 interface DeviceNode {
   device_id: string;
   name: string;
@@ -1092,7 +1258,7 @@ function TabDevices() {
 
 export default function Settings() {
   const { config } = useAppConfig();
-  const [tab, setTab] = useState<"settings" | "users" | "devices" | "audit" | "archives" | "help">("settings");
+  const [tab, setTab] = useState<"settings" | "account" | "users" | "devices" | "audit" | "archives" | "help">("settings");
 
   return (
     <div className="settings-wrapper">
@@ -1103,6 +1269,7 @@ export default function Settings() {
 
       <div className="settings-tabs">
         <button className={`ui-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
+        <button className={`ui-tab-btn ${tab === "account" ? "active" : ""}`} onClick={() => setTab("account")}>MON COMPTE</button>
         <button className={`ui-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
         <button className={`ui-tab-btn ${tab === "devices" ? "active" : ""}`} onClick={() => setTab("devices")}>APPAREILS</button>
         <button className={`ui-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
@@ -1110,7 +1277,7 @@ export default function Settings() {
         <button className={`ui-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>À PROPOS</button>
       </div>
 
-      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "devices" ? <TabDevices /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
+      {tab === "settings" ? <TabSettings /> : tab === "account" ? <TabAccount /> : tab === "users" ? <TabUsers /> : tab === "devices" ? <TabDevices /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
     </div>
   );
 }

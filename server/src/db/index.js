@@ -323,6 +323,23 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
     `);
 
+    // E3 : MFA TOTP (secret chiffré AES-256-GCM) et codes de récupération hachés
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret_enc TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_pending_enc TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_counter BIGINT;
+
+      CREATE TABLE IF NOT EXISTS mfa_recovery_codes (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code_hash  CHAR(64)  NOT NULL,
+        used_at    TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_mfa_recovery_user ON mfa_recovery_codes(user_id);
+    `);
+
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {
