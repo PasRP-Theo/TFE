@@ -7,6 +7,8 @@ import { EventEmitter }           from 'events';
 import ffmpegPath                 from 'ffmpeg-static';
 import { pool }                   from '../db/index.js';
 import { sendPushNotification }   from '../routes/push.js';
+import { buildChildEnv }          from '../utils/childEnv.js';
+import { getInternalToken }       from '../security/deviceAuth.js';
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
@@ -608,7 +610,15 @@ export async function startHlsStream(camera) {
   if (existsSync(aiScript)) {
     const venvPython = path.join(PROJECT_ROOT, 'venv', 'bin', 'python');
     const pythonBin  = os.platform() === 'win32' ? 'python' : (existsSync(venvPython) ? venvPython : 'python3');
-    aiProc = spawn(pythonBin, [aiScript], { env: { ...process.env, CAMERA_ID: id, RTSP_URL: sourceUrl } });
+    aiProc = spawn(pythonBin, [aiScript], {
+      env: buildChildEnv({
+        CAMERA_ID: id,
+        RTSP_URL: sourceUrl,
+        SERVER_HOST: '127.0.0.1',
+        SERVER_PORT: String(process.env.PORT || 4000),
+        SENTYS_INTERNAL_TOKEN: getInternalToken(),
+      }),
+    });
     aiProc.stdout.on('data', d => console.log(`[CAM ${id} IA] ${redactText(d.toString().trim())}`));
     aiProc.stderr.on('data', d => {
       const msg = d.toString().trim();

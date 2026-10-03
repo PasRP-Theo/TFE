@@ -4,6 +4,7 @@ import { networkInterfaces } from 'os';
 import { Socket } from 'net';
 import { existsSync, promises as fs, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
+import { Transform } from 'stream';
 import { spawn } from 'child_process';
 import { pool } from '../db/index.js';
 import {
@@ -24,6 +25,8 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from '../utils/streamUtils.js';
 import { signLivePrefix, signRecordingUrl, LIVE_URL_TTL_SECONDS } from '../security/urlSigning.js';
 import { numericIdParam } from '../utils/validators.js';
+import { requireDevice, requireDeviceIfPaired } from '../security/deviceAuth.js';
+import { lanOnly } from '../security/networkZone.js';
 
 const router = Router();
 router.param('id', numericIdParam);
@@ -31,6 +34,7 @@ router.param('id', numericIdParam);
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
 const ENABLE_SCAN_FALLBACK = process.env.CAMERA_DISCOVERY_ENABLE_SCAN_FALLBACK !== 'false';
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
+const MAX_DEVICE_UPLOAD_BYTES = Number(process.env.MAX_DEVICE_UPLOAD_MB || 200) * 1024 * 1024;
 
 function normalizeDiscoveryPayload(body = {}) {
   const host = String(body.host || body.ip || '').trim();
@@ -206,7 +210,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // annonce ESP32
-router.post('/announce', async (req, res) => {
+router.post('/announce', lanOnly, requireDeviceIfPaired(req => normalizeDiscoveryPayload(req.body)?.deviceId || ''), async (req, res) => {
   const payload = normalizeDiscoveryPayload(req.body);
   if (!payload) {
     return res.status(400).json({ error: 'deviceId, host et streamUrl sont requis' });
@@ -618,7 +622,8 @@ router.get('/:id/state', requireAuth, (req, res) => {
 });
 
 // webhook IA
-router.post('/:id/motion', async (req, res) => {
+// webhook du détecteur IA (jeton interne) ou d'un appareil appairé
+router.post('/:id/motion', lanOnly, requireDevice({ allowInternal: true }), async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT rtsp_url, name FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
@@ -686,19 +691,36 @@ router.post('/:id/motion', async (req, res) => {
 });
 
 // upload hors ligne
-router.post('/:id/upload-offline', async (req, res) => {
+router.post('/:id/upload-offline', lanOnly, requireDevice(), async (req, res) => {
+  let filePath = null;
   try {
     const cameraId = String(req.params.id);
+    const { rows: camRows } = await pool.query('SELECT id FROM cameras WHERE id = $1', [cameraId]);
+    if (!camRows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
+
+    const declaredSize = Number(req.headers['content-length'] || 0);
+    if (declaredSize > MAX_DEVICE_UPLOAD_BYTES) {
+      return res.status(413).json({ error: 'Fichier trop volumineux' });
+    }
+
     const camDir = path.join(RECORDINGS_DIR, cameraId);
     if (!existsSync(camDir)) {
       await fs.mkdir(camDir, { recursive: true });
     }
 
     const filename = `offline_sync_${Date.now()}.mp4`;
-    const filePath = path.join(camDir, filename);
+    filePath = path.join(camDir, filename);
 
-    // stream binaire
-    await pipeline(req, createWriteStream(filePath));
+    // stream binaire borné (le Content-Length peut être absent ou faux)
+    let received = 0;
+    const limiter = new Transform({
+      transform(chunk, _encoding, callback) {
+        received += chunk.length;
+        if (received > MAX_DEVICE_UPLOAD_BYTES) return callback(Object.assign(new Error('too large'), { code: 'TOO_LARGE' }));
+        callback(null, chunk);
+      },
+    });
+    await pipeline(req, limiter, createWriteStream(filePath));
 
     res.json({ message: 'Fichier hors-ligne reçu avec succès', filename });
 
@@ -732,8 +754,13 @@ router.post('/:id/upload-offline', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[OFFLINE SYNC ERROR]', err);
-    res.status(500).json({ error: 'Erreur lors de la réception du fichier' });
+    if (filePath) await fs.unlink(filePath).catch(() => {});
+    if (err?.code === 'TOO_LARGE') {
+      if (!res.headersSent) res.status(413).json({ error: 'Fichier trop volumineux' });
+      return;
+    }
+    console.error('[OFFLINE SYNC ERROR]', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur lors de la réception du fichier' });
   }
 });
 

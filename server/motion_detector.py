@@ -21,6 +21,8 @@ CONF_VEHICLE = 0.52
 
 SERVER_HOST  = os.getenv("SERVER_HOST", "127.0.0.1")
 SERVER_PORT  = os.getenv("SERVER_PORT", "4000")
+# jeton interne fourni par le serveur Node au lancement (webhook /api/cameras/:id/motion)
+WEBHOOK_HEADERS = {"Authorization": f"Bearer {os.getenv('SENTYS_INTERNAL_TOKEN', '')}"} if os.getenv("SENTYS_INTERNAL_TOKEN") else {}
 
 # ── CHARGEMENT YOLO (optionnel) ──────────────────────────────────────────────
 USE_YOLO = False
@@ -173,7 +175,7 @@ def run_detector(camera_id: str, rtsp_url: str):
                 "type":       final_type,
                 "label":      final_label,
                 "confidence": round(final_conf, 2),
-            }, timeout=2)
+            }, headers=WEBHOOK_HEADERS, timeout=2)
         except Exception as e:
             print(f"[CAM {camera_id}] Erreur webhook: {e}")
 

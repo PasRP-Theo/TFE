@@ -967,7 +967,7 @@ function TabArchives() {
                     <td className="ui-td">{formatArchiveSize(rec.size)}</td>
                     <td className="ui-td">
                       <a href={apiUrl(rec.url)} target="_blank" rel="noreferrer" className="ui-link-btn" style={{ marginRight: '6px' }}>Ouvrir</a>
-                      <a href={apiUrl(rec.url)} download className="ui-link-btn">Télécharger</a>
+                      <a href={apiUrl(`${rec.url}&download=1`)} download className="ui-link-btn">Télécharger</a>
                     </td>
                   </tr>
                 ))}
@@ -980,9 +980,119 @@ function TabArchives() {
   );
 }
 
+interface DeviceNode {
+  device_id: string;
+  name: string;
+  host: string;
+  model: string;
+  last_seen_at: string;
+  paired: boolean;
+}
+
+// appairage des appareils (Pi, ESP32) : jeton affiché une seule fois
+function TabDevices() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [nodes, setNodes] = useState<DeviceNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [issued, setIssued] = useState<{ deviceId: string; token: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await apiFetch(apiUrl('/api/camera-nodes'));
+      const data = await readJsonResponse<{ nodes?: DeviceNode[]; error?: string }>(res);
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      setNodes(data.nodes || []);
+      setError('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Impossible de charger les appareils');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function issueToken(deviceId: string) {
+    setBusy(deviceId);
+    try {
+      const res = await apiFetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(deviceId)}/token`), { method: 'POST' });
+      const data = await readJsonResponse<{ token?: string; error?: string }>(res);
+      if (!res.ok || !data.token) throw new Error(data.error || 'Erreur serveur');
+      setIssued({ deviceId, token: data.token });
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur serveur');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function revokeToken(deviceId: string) {
+    setBusy(deviceId);
+    try {
+      await apiFetch(apiUrl(`/api/camera-nodes/${encodeURIComponent(deviceId)}/token`), { method: 'DELETE' });
+      if (issued?.deviceId === deviceId) setIssued(null);
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!isAdmin) return <div className="settings-msg settings-msg--error">Accès réservé aux administrateurs.</div>;
+  if (loading) return <div className="settings-loading">Chargement des appareils…</div>;
+
+  return (
+    <div className="settings-section">
+      <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
+        Chaque appareil doit présenter un jeton pour envoyer mouvements et enregistrements.
+        Copiez-le dans <code>~/device.conf</code> du Pi (<code>DEVICE_TOKEN=…</code>) puis redémarrez l'agent.
+      </p>
+      {error && <div className="settings-msg settings-msg--error">⚠ {error}</div>}
+      {issued && (
+        <div className="settings-msg settings-msg--success" style={{ wordBreak: 'break-all' }}>
+          Jeton de <strong>{issued.deviceId}</strong> (affiché une seule fois) :<br />
+          <code>DEVICE_TOKEN={issued.token}</code>
+        </div>
+      )}
+      {nodes.length === 0 ? (
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Aucun appareil ne s'est encore annoncé.</p>
+      ) : (
+        <div className="table-scroll-container">
+          <table className="ui-table">
+            <thead><tr><th>Appareil</th><th>Adresse</th><th>Vu</th><th>Jeton</th><th></th></tr></thead>
+            <tbody>
+              {nodes.map(node => (
+                <tr key={node.device_id}>
+                  <td className="ui-td">{node.name}<br /><small>{node.device_id}</small></td>
+                  <td className="ui-td">{node.host}</td>
+                  <td className="ui-td">{new Date(node.last_seen_at).toLocaleString('fr-FR')}</td>
+                  <td className="ui-td">{node.paired ? 'Actif' : 'Aucun'}</td>
+                  <td className="ui-td">
+                    <button type="button" className="ui-confirm-btn" disabled={busy === node.device_id} onClick={() => issueToken(node.device_id)} style={{ marginRight: '6px' }}>
+                      {node.paired ? 'Régénérer' : 'Générer'}
+                    </button>
+                    {node.paired && (
+                      <button type="button" className="ui-delete-btn ui-delete-btn--danger" disabled={busy === node.device_id} onClick={() => revokeToken(node.device_id)}>
+                        Révoquer
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
   const { config } = useAppConfig();
-  const [tab, setTab] = useState<"settings" | "users" | "audit" | "archives" | "help">("settings");
+  const [tab, setTab] = useState<"settings" | "users" | "devices" | "audit" | "archives" | "help">("settings");
 
   return (
     <div className="settings-wrapper">
@@ -994,12 +1104,13 @@ export default function Settings() {
       <div className="settings-tabs">
         <button className={`ui-tab-btn ${tab === "settings" ? "active" : ""}`} onClick={() => setTab("settings")}>GÉNÉRAL</button>
         <button className={`ui-tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>UTILISATEURS</button>
+        <button className={`ui-tab-btn ${tab === "devices" ? "active" : ""}`} onClick={() => setTab("devices")}>APPAREILS</button>
         <button className={`ui-tab-btn ${tab === "audit" ? "active" : ""}`} onClick={() => setTab("audit")}>JOURNAL</button>
         <button className={`ui-tab-btn ${tab === "archives" ? "active" : ""}`} onClick={() => setTab("archives")}>ARCHIVES</button>
         <button className={`ui-tab-btn ${tab === "help" ? "active" : ""}`} onClick={() => setTab("help")}>À PROPOS</button>
       </div>
 
-      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
+      {tab === "settings" ? <TabSettings /> : tab === "users" ? <TabUsers /> : tab === "devices" ? <TabDevices /> : tab === "audit" ? <TabAudit /> : tab === "archives" ? <TabArchives /> : <TabHelp />}
     </div>
   );
 }

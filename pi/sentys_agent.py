@@ -66,6 +66,15 @@ _conf           = _load_device_conf()
 DEVICE_ID       = _conf.get("DEVICE_ID") or f"pi-{socket.gethostname()}"   # ex: "pi-salon"
 DEVICE_NAME     = _conf.get("DEVICE_NAME") or socket.gethostname()
 DEVICE_LOCATION = _conf.get("DEVICE_LOCATION", "")
+# jeton d'appareil généré par un admin (Réglages → Appareils), à placer dans device.conf
+DEVICE_TOKEN    = _conf.get("DEVICE_TOKEN", "").strip()
+
+# session HTTP vers le serveur Sentys uniquement (le jeton n'est jamais envoyé ailleurs)
+SERVER = requests.Session()
+if DEVICE_TOKEN:
+    SERVER.headers["Authorization"] = f"Bearer {DEVICE_TOKEN}"
+else:
+    print("[AUTH] DEVICE_TOKEN absent de device.conf — le serveur refusera mouvements et uploads")
 
 RECORD_DIR.mkdir(parents=True, exist_ok=True)
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -80,7 +89,7 @@ def fetch_remote_config():
     global ANNOUNCE_INTERVAL, RTSP_PORT, RTSP_PATH
     global MOTION_SNAPSHOT_INTERVAL, MOTION_THRESHOLD, MOTION_MIN_PIXELS, STREAM_IDLE_TIMEOUT, WAKE_STREAM_TIMEOUT
     try:
-        r = requests.get(f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/config", timeout=5)
+        r = SERVER.get(f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/config", timeout=5)
         if r.status_code == 200:
             cfg = r.json()
             DEVICE_NAME              = cfg.get("name",             DEVICE_NAME)
@@ -138,7 +147,7 @@ def get_local_ip():
 def server_reachable():
     """Vérifie si le serveur Node.js répond sur /api/health (timeout 3s)."""
     try:
-        r = requests.get(f"{SERVER_URL}/api/health", timeout=3)
+        r = SERVER.get(f"{SERVER_URL}/api/health", timeout=3)
         return r.status_code < 500
     except Exception:
         return False
@@ -157,7 +166,7 @@ def announce(ip):
         "source":    "pi-node",
     }
     try:
-        r = requests.post(f"{SERVER_URL}/api/camera-nodes/announce", json=payload, timeout=5)
+        r = SERVER.post(f"{SERVER_URL}/api/camera-nodes/announce", json=payload, timeout=5)
         if r.status_code == 200:
             print(f"[ANNOUNCE] Noeud annoncé ({ip})")
         else:
@@ -166,7 +175,7 @@ def announce(ip):
         print(f"[ANNOUNCE] {e}")
     try:
         # Double annonce aussi dans camera_discoveries (table de staging)
-        requests.post(f"{SERVER_URL}/api/cameras/announce", json=payload, timeout=5)
+        SERVER.post(f"{SERVER_URL}/api/cameras/announce", json=payload, timeout=5)
     except Exception:
         pass
 
@@ -279,7 +288,7 @@ def notify_motion(active: bool):
     """Notifie le serveur qu'un mouvement a été détecté (ou terminé).
     Le serveur met à jour camera_nodes.last_motion_at et affiche le badge dans le dashboard."""
     try:
-        r = requests.post(
+        r = SERVER.post(
             f"{SERVER_URL}/api/camera-nodes/motion",
             json={"deviceId": DEVICE_ID, "motion": active},
             timeout=5,
@@ -296,7 +305,7 @@ def check_wake_signal() -> bool:
     """Vérifie si l'interface web a demandé le réveil du Pi (clic sur Start).
     Le serveur maintient un flag en mémoire par device_id."""
     try:
-        r = requests.get(
+        r = SERVER.get(
             f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/wake",
             timeout=3,
         )
@@ -310,7 +319,7 @@ def check_wake_signal() -> bool:
 def check_sleep_signal() -> bool:
     """Vérifie si l'interface web a demandé l'arrêt du stream (clic sur Stop)."""
     try:
-        r = requests.get(
+        r = SERVER.get(
             f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/sleep",
             timeout=3,
         )
@@ -434,7 +443,7 @@ def upload_pending():
             detected_at = datetime.now().isoformat()
         try:
             with open(f, "rb") as video:
-                r = requests.post(
+                r = SERVER.post(
                     f"{SERVER_URL}/api/camera-nodes/{DEVICE_ID}/upload-recording",
                     files={"recording": (f.name, video, "video/mp4")},
                     data={"detectedAt": detected_at, "offlineRecording": "true"},

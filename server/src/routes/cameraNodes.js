@@ -11,6 +11,14 @@ import { createAlert } from '../alerts/service.js';
 import { sendPushNotification } from './push.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
+import { requireDevice, requireDeviceIfPaired, issueDeviceToken, revokeDeviceToken } from '../security/deviceAuth.js';
+import { lanOnly } from '../security/networkZone.js';
+import { logAudit } from '../audit/log.js';
+import { buildChildEnv } from '../utils/childEnv.js';
+
+const MAX_DEVICE_UPLOAD_BYTES = Number(process.env.MAX_DEVICE_UPLOAD_MB || 200) * 1024 * 1024;
+const deviceFromParam = req => String(req.params.deviceId || '').trim();
+const deviceFromBody  = req => String(req.body?.deviceId || req.body?.device_id || '').trim();
 
 // flags réveil/sommeil Pi
 const streamWakeRequests  = new Map();
@@ -37,7 +45,7 @@ const offlineStorage = multer.diskStorage({
 });
 const uploadOffline = multer({
   storage: offlineStorage,
-  limits: { fileSize: 500 * 1024 * 1024 },
+  limits: { fileSize: MAX_DEVICE_UPLOAD_BYTES, files: 1 },
   fileFilter: (_req, file, cb) => {
     if (['video/mp4', 'video/quicktime', 'application/octet-stream'].includes(file.mimetype)) {
       cb(null, true);
@@ -51,7 +59,7 @@ function classifyNodeMotion(rtspUrl) {
   return new Promise((resolve) => {
     const pythonBin = os.platform() === 'win32' ? 'python' : (existsSync(VENV_PYTHON) ? VENV_PYTHON : 'python3');
     const child = spawn(pythonBin, [AI_SCRIPT, '--analyze'], {
-      env: { ...process.env, RTSP_URL: rtspUrl, CUDA_VISIBLE_DEVICES: '' },
+      env: buildChildEnv({ RTSP_URL: rtspUrl }),
     });
 
     let stdout = '';
@@ -158,7 +166,8 @@ router.get('/', requireAuth, async (_req, res) => {
     const { rows } = await pool.query(
       `SELECT cn.id, cn.device_id, cn.name, cn.host, cn.stream_url, cn.location, cn.model,
               cn.source, cn.motion_detected, cn.last_motion_at, cn.last_seen_at, cn.created_at,
-              (c.id IS NOT NULL) AS connected
+              (c.id IS NOT NULL) AS connected,
+              EXISTS (SELECT 1 FROM device_tokens dt WHERE dt.device_id = cn.device_id AND dt.revoked_at IS NULL) AS paired
        FROM camera_nodes cn
        LEFT JOIN cameras c ON c.rtsp_url = cn.stream_url
        ORDER BY cn.last_seen_at DESC, cn.created_at DESC`
@@ -175,7 +184,7 @@ router.get('/', requireAuth, async (_req, res) => {
 });
 
 // réveil
-router.get('/:deviceId/wake', (req, res) => {
+router.get('/:deviceId/wake', lanOnly, requireDevice({ getDeviceId: deviceFromParam }), (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const wake = streamWakeRequests.get(deviceId) || false;
   if (wake) streamWakeRequests.delete(deviceId);
@@ -183,7 +192,7 @@ router.get('/:deviceId/wake', (req, res) => {
 });
 
 // sommeil
-router.get('/:deviceId/sleep', (req, res) => {
+router.get('/:deviceId/sleep', lanOnly, requireDevice({ getDeviceId: deviceFromParam }), (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   const sleep = streamSleepRequests.get(deviceId) || false;
   if (sleep) streamSleepRequests.delete(deviceId);
@@ -191,7 +200,7 @@ router.get('/:deviceId/sleep', (req, res) => {
 });
 
 // annonce Pi
-router.post('/announce', async (req, res) => {
+router.post('/announce', lanOnly, requireDeviceIfPaired(req => normalizeNodePayload(req.body)?.deviceId || ''), async (req, res) => {
   const payload = normalizeNodePayload(req.body);
   if (!payload) {
     return res.status(400).json({ error: 'deviceId, host et streamUrl sont requis' });
@@ -211,7 +220,7 @@ router.post('/announce', async (req, res) => {
 });
 
 // mouvement Pi
-router.post('/motion', async (req, res) => {
+router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), async (req, res) => {
   const deviceId = String(req.body.deviceId || req.body.device_id || '').trim();
   const motion = Boolean(req.body.motion) !== false && req.body.motion !== false;
   const detectedAtInput = String(req.body.detectedAt || req.body.detected_at || '').trim();
@@ -414,7 +423,7 @@ router.post('/:deviceId/connect', requireAuth, requireAdmin, async (req, res) =>
 });
 
 // upload hors ligne
-router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), async (req, res) => {
+router.post('/:deviceId/upload-recording', lanOnly, requireDevice({ getDeviceId: deviceFromParam }), uploadOffline.single('recording'), async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId || !req.file) return res.status(400).json({ error: 'deviceId et fichier requis' });
   if (req.file.size < 50 * 1024) {
@@ -497,7 +506,7 @@ router.post('/:deviceId/upload-recording', uploadOffline.single('recording'), as
 });
 
 // config lecture
-router.get('/:deviceId/config', async (req, res) => {
+router.get('/:deviceId/config', lanOnly, requireDevice({ getDeviceId: deviceFromParam }), async (req, res) => {
   const deviceId = String(req.params.deviceId || '').trim();
   if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
   try {
@@ -557,6 +566,32 @@ router.patch('/:deviceId/config', requireAuth, requireAdmin, async (req, res) =>
     res.json({ message: 'Configuration mise à jour', node: rows[0] });
   } catch (err) {
     console.error('[NODE CONFIG PATCH]', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// jeton d'appareil : affiché une seule fois, à copier dans device.conf (DEVICE_TOKEN=…)
+router.post('/:deviceId/token', requireAuth, requireAdmin, async (req, res) => {
+  const deviceId = deviceFromParam(req);
+  if (!deviceId) return res.status(400).json({ error: 'deviceId requis' });
+  try {
+    const token = await issueDeviceToken(deviceId, String(req.body?.label || '').slice(0, 120));
+    await logAudit(req.user.username, 'DEVICE_TOKEN_ISSUED', `Appareil ${deviceId}`, req.ip);
+    res.status(201).json({ deviceId, token });
+  } catch (err) {
+    console.error('[DEVICE TOKEN]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+router.delete('/:deviceId/token', requireAuth, requireAdmin, async (req, res) => {
+  const deviceId = deviceFromParam(req);
+  try {
+    const revoked = await revokeDeviceToken(deviceId);
+    if (revoked) await logAudit(req.user.username, 'DEVICE_TOKEN_REVOKED', `Appareil ${deviceId}`, req.ip);
+    res.json({ revoked });
+  } catch (err) {
+    console.error('[DEVICE TOKEN REVOKE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

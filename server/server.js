@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express         from "express";
 import { createServer } from "http";
+import { createServer as createTcpServer } from "net";
 import { Server }      from "socket.io";
 import cors            from "cors";
 import path            from "path";
@@ -22,6 +23,7 @@ import authRoutes            from "./src/routes/auth.js";
 import { createHlsRouter, createRecordingsRouter } from "./src/routes/media.js";
 import { requireAuth, requireAdmin } from "./src/middleware/auth.js";
 import { ensureSetupState } from "./src/auth/setup.js";
+import { lanOnly, PUBLIC_PORT } from "./src/security/networkZone.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates, setSocketIO } from "./src/camera/manager.js";
 import { JWT_SECRET } from "./src/config/auth.js";
@@ -122,7 +124,7 @@ app.get("/api/audit-logs", requireAuth, requireAdmin, async (req, res) => {
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
 // agent Pi
-app.get("/api/agent/sentys_agent.py", (_, res) => {
+app.get("/api/agent/sentys_agent.py", lanOnly, (_, res) => {
   const agentPath = path.join(__dirname, "../pi/sentys_agent.py");
   if (existsSync(agentPath)) {
     res.setHeader("Content-Type", "text/x-python");
@@ -299,8 +301,18 @@ async function start() {
   scheduleDiscoveryCleanup(10, 5 * 60 * 1000);
   scheduleAlertsCleanup(90);
 
-  const PORT = process.env.PORT || 4000;
-  httpServer.listen(PORT, "0.0.0.0", () => console.log("Serveur sur http://0.0.0.0:" + PORT));
+  // listener LAN : interface locale + appareils (Pi, ESP32) — à filtrer au pare-feu
+  const PORT = Number(process.env.PORT || 4000);
+  const HOST = process.env.HOST || "0.0.0.0";
+  httpServer.listen(PORT, HOST, () => console.log(`[NET] Listener LAN sur http://${HOST}:${PORT}`));
+
+  // listener public : cible du tunnel (Tailscale Funnel), boucle locale uniquement,
+  // les routes des appareils y sont invisibles (lanOnly)
+  if (PUBLIC_PORT) {
+    // même serveur HTTP (et Socket.IO) : seules les connexions sont relayées
+    const publicServer = createTcpServer(socket => httpServer.emit("connection", socket));
+    publicServer.listen(PUBLIC_PORT, "127.0.0.1", () => console.log(`[NET] Listener public (tunnel) sur http://127.0.0.1:${PUBLIC_PORT}`));
+  }
 }
 
 start().catch(err => { console.error(err); process.exit(1); });

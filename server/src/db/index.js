@@ -277,6 +277,19 @@ export async function initDB() {
        WHERE stream_url ~ '//[^/@[:space:]]+@'`
     );
 
+    // C7 : jetons d'appareils (Pi, ESP32), stockés hachés, révocables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS device_tokens (
+        id           SERIAL PRIMARY KEY,
+        device_id    VARCHAR(120) UNIQUE NOT NULL,
+        token_hash   CHAR(64)     UNIQUE NOT NULL,
+        label        VARCHAR(120) NOT NULL DEFAULT '',
+        created_at   TIMESTAMP    NOT NULL DEFAULT NOW(),
+        last_used_at TIMESTAMP,
+        revoked_at   TIMESTAMP
+      )
+    `);
+
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {
