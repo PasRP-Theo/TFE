@@ -652,7 +652,7 @@ function TabUsers() {
         {showAdd && (
           <form className="ui-add-form settings-add-form" onSubmit={e => { e.preventDefault(); createUser(); }}>
             <input className="ui-input" type="text" placeholder="Identifiant" value={newUsername} onChange={event => setNewUsername(event.target.value)} autoFocus autoComplete="off" />
-            <input className="ui-input" type="password" placeholder="Mot de passe" value={newPass} onChange={event => setNewPass(event.target.value)} autoComplete="new-password" />
+            <input className="ui-input" type="password" placeholder="Mot de passe (15 caractères min., phrase de passe conseillée)" value={newPass} onChange={event => setNewPass(event.target.value)} autoComplete="new-password" />
             <div style={{ flex: 1 }}>
               <SettingsDropdown
                 value={newRole}
@@ -756,7 +756,7 @@ function TabUsers() {
             <div className="settings-modal-title">MODIFIER LE COMPTE</div>
             <form className="settings-modal-form" onSubmit={e => { e.preventDefault(); saveUserEdits(); }}>
               <input className="ui-input" type="text" value={editUsername} onChange={event => setEditUsername(event.target.value)} placeholder="Identifiant" autoComplete="off" />
-              <input className="ui-input" type="password" value={editPassword} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe (laisser vide pour conserver)" autoComplete="new-password" />
+              <input className="ui-input" type="password" value={editPassword} onChange={event => setEditPassword(event.target.value)} placeholder="Nouveau mot de passe, 15 caractères min. (vide = inchangé)" autoComplete="new-password" />
             </form>
             <div className="settings-modal-warning">Le mot de passe initial root/root devient inactif dès que tu modifies ce compte bootstrap.</div>
             <div className="settings-modal-actions">

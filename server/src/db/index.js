@@ -296,6 +296,13 @@ export async function initDB() {
       )
     `);
 
+    // E3/E4 : verrouillage progressif par compte
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
+    `);
+
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {

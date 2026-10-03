@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'crypto';
-import bcrypt from 'bcryptjs';
+import { verifyPassword } from './passwords.js';
 import { pool } from '../db/index.js';
 
 // installation initiale sans mot de passe par défaut (ETSI EN 303 645 §5.1-1)
@@ -23,7 +23,7 @@ export async function neutralizeLegacyDefaultAdmin(client = pool) {
   );
   const legacy = rows[0];
   if (!legacy) return false;
-  const usesDefault = await bcrypt.compare(LEGACY_DEFAULT_PASSWORD, legacy.password).catch(() => false);
+  const { valid: usesDefault } = await verifyPassword(LEGACY_DEFAULT_PASSWORD, legacy.password).catch(() => ({ valid: false }));
   if (!usesDefault) return false;
 
   await client.query('DELETE FROM users WHERE id = $1', [legacy.id]);

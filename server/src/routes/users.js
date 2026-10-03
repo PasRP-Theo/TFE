@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import bcrypt      from 'bcryptjs';
+import { hashPassword } from '../auth/passwords.js';
+import { validatePassword } from '../auth/passwordPolicy.js';
 import { pool }    from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logAudit } from '../audit/log.js';
@@ -26,14 +27,14 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 // ajout
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { username, password, role = 'user' } = req.body;
-  if (!username || !password)
+  if (typeof username !== 'string' || !username.trim() || !password)
     return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
-  if (password.length < 8)
-    return res.status(400).json({ error: 'Mot de passe trop court (8 caracteres min)' });
+  const passwordError = validatePassword(password, { username });
+  if (passwordError) return res.status(400).json({ error: passwordError });
   if (!['user', 'admin'].includes(role))
     return res.status(400).json({ error: 'Role invalide' });
   try {
-    const hash = await bcrypt.hash(password, 12);
+    const hash = await hashPassword(password);
     const { rows } = await pool.query(
       'INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role, created_at',
       [username.toLowerCase().trim(), hash, role]
@@ -60,8 +61,10 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Role invalide' });
   if (nextUsername !== undefined && !nextUsername)
     return res.status(400).json({ error: 'Identifiant requis' });
-  if (nextPassword !== undefined && nextPassword.length > 0 && nextPassword.length < 6)
-    return res.status(400).json({ error: 'Mot de passe trop court (6 caracteres min)' });
+  if (nextPassword !== undefined && nextPassword.length > 0) {
+    const passwordError = validatePassword(nextPassword, { username: nextUsername });
+    if (passwordError) return res.status(400).json({ error: passwordError });
+  }
 
   try {
     const currentResult = await pool.query(
@@ -92,9 +95,11 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
 
     if (nextPassword !== undefined && nextPassword.length > 0) {
-      const hash = await bcrypt.hash(nextPassword, 12);
+      const hash = await hashPassword(nextPassword);
       values.push(hash);
-      updates.push(`password = $${values.length}`);
+      updates.push(`password = ${values.length}`);
+      // réinitialisation par un admin : déverrouille le compte
+      updates.push('failed_login_count = 0', 'locked_until = NULL', 'password_changed_at = NOW()');
     }
 
     if (updates.length === 0) {
