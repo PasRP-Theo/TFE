@@ -21,3 +21,18 @@ export function maskStreamUrl(streamUrl) {
     return value.replace(/\/\/([^:@/]+):([^@/]+)@/g, '//***:***@');
   }
 }
+
+// retire user:pass@ d'une URL de flux (identifiants jamais stockés hors table cameras)
+export function stripStreamCredentials(streamUrl) {
+  const value = String(streamUrl || '').trim();
+  if (!value) return value;
+  try {
+    const parsed = /^[a-z]+:/i.test(value) ? new URL(value) : new URL(`http://${value}`);
+    if (!parsed.username && !parsed.password) return value;
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return value.replace(/\/\/[^/@\s]+@/g, '//');
+  }
+}

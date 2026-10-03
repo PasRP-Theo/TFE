@@ -21,7 +21,7 @@ import {
 import { createAlert } from '../alerts/service.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
+import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from '../utils/streamUtils.js';
 
 const router = Router();
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
@@ -106,7 +106,7 @@ async function upsertDiscovery(payload) {
        source = EXCLUDED.source,
        last_seen_at = NOW()
      RETURNING *`,
-    [normalized.deviceId, normalized.name, normalized.host, normalized.streamUrl, normalized.location, normalized.model, normalized.source]
+    [normalized.deviceId, normalized.name, normalized.host, stripStreamCredentials(normalized.streamUrl), normalized.location, normalized.model, normalized.source]
   );
 
   return rows[0] || null;
@@ -149,7 +149,7 @@ async function deleteExpiredDiscoveries() {
 }
 
 // liste
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const [camerasResult, nodeMap] = await Promise.all([
       pool.query('SELECT * FROM cameras ORDER BY id'),
@@ -222,7 +222,7 @@ router.post('/announce', async (req, res) => {
 });
 
 // découvertes
-router.get('/discoveries', async (_req, res) => {
+router.get('/discoveries', requireAuth, async (_req, res) => {
   try {
     await deleteExpiredDiscoveries();
     const [discResult, nodesResult] = await Promise.all([
@@ -246,6 +246,7 @@ router.get('/discoveries', async (_req, res) => {
       .map(r => ({ ...r, source: r.source || 'pi-node' }));
 
     const devices = [...discResult.rows, ...piNodes]
+      .map(d => ({ ...d, stream_url: maskStreamUrl(d.stream_url) }))
       .sort((a, b) => new Date(b.last_seen_at) - new Date(a.last_seen_at));
 
     res.json({ ttlMinutes: DISCOVERY_TTL_MINUTES, devices });
@@ -597,7 +598,7 @@ router.delete('/archives/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // état
-router.get('/:id/state', (req, res) => {
+router.get('/:id/state', requireAuth, (req, res) => {
   res.json(getState(req.params.id));
 });
 

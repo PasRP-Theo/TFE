@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getHostFromStreamUrl, maskStreamUrl } from './streamUtils.js';
+import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from './streamUtils.js';
 
 describe('getHostFromStreamUrl', () => {
   it('extrait le hostname d\'une URL RTSP', () => {
@@ -58,5 +58,19 @@ describe('maskStreamUrl', () => {
     const malformed = 'not-a-url://admin:pass@somewhere';
     const result = maskStreamUrl(malformed);
     expect(typeof result).toBe('string');
+  });
+});
+
+describe('stripStreamCredentials', () => {
+  it('retire les identifiants d\'une URL RTSP', () => {
+    expect(stripStreamCredentials('rtsp://admin:secret@192.168.1.10:554/h264')).toBe('rtsp://192.168.1.10:554/h264');
+  });
+
+  it('laisse intacte une URL sans identifiants', () => {
+    expect(stripStreamCredentials('rtsp://192.168.1.10:8554/cam1')).toBe('rtsp://192.168.1.10:8554/cam1');
+  });
+
+  it('gère un mot de passe contenant des caractères spéciaux', () => {
+    expect(stripStreamCredentials('rtsp://admin:p%40ss@cam.local/live')).toBe('rtsp://cam.local/live');
   });
 });

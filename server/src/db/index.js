@@ -270,6 +270,13 @@ export async function initDB() {
     // défaut discover
     await client.query("UPDATE app_settings SET default_camera_add_mode = 'discover' WHERE id = 1");
 
+    // C4 : aucun identifiant de caméra dans les découvertes
+    await client.query(
+      `UPDATE camera_discoveries
+       SET stream_url = regexp_replace(stream_url, '//[^/@[:space:]]+@', '//')
+       WHERE stream_url ~ '//[^/@[:space:]]+@'`
+    );
+
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {

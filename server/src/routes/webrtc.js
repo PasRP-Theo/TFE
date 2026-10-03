@@ -1,17 +1,19 @@
 import { Router }   from 'express';
 import { negotiate, isReady, registerStream, unregisterStream } from '../go2rtc/manager.js';
 import { pool }      from '../db/index.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
 // statut
-router.get('/status', (_req, res) => {
+router.get('/status', requireAuth, (_req, res) => {
   res.json({ available: isReady() });
 });
 
 // négociation SDP
 router.post(
   '/:cameraId',
+  requireAuth,
   (req, res, next) => {
     // SDP texte brut
     let body = '';
@@ -57,7 +59,7 @@ router.post(
 );
 
 // enregistrement stream
-router.post('/:cameraId/register', async (req, res) => {
+router.post('/:cameraId/register', requireAuth, requireAdmin, async (req, res) => {
   const cameraId = parseInt(req.params.cameraId, 10);
   if (isNaN(cameraId)) return res.status(400).json({ error: 'cameraId invalide' });
 
@@ -72,7 +74,7 @@ router.post('/:cameraId/register', async (req, res) => {
 });
 
 // suppression stream
-router.delete('/:cameraId', async (req, res) => {
+router.delete('/:cameraId', requireAuth, requireAdmin, async (req, res) => {
   const cameraId = parseInt(req.params.cameraId, 10);
   if (isNaN(cameraId)) return res.status(400).json({ error: 'cameraId invalide' });
   await unregisterStream(cameraId);
