@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { warnIfWeak } from '../config/secrets.js';
 import { hashPin, isValidPinFormat, LEGACY_DEFAULT_PIN } from '../security/pin.js';
+import { splitStreamCredentials, encryptCameraCredentials } from '../camera/credentials.js';
 const { Pool } = pg;
 
 const required = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
@@ -364,6 +365,20 @@ export async function initDB() {
       }
       await client.query('UPDATE app_settings SET kiosk_pin = NULL WHERE id = 1');
     }
+
+    // M2b : identifiants RTSP chiffrés (AES-256-GCM) ; migration des URLs existantes
+    await client.query('ALTER TABLE cameras ADD COLUMN IF NOT EXISTS credentials_enc TEXT');
+    const { rows: legacyCameras } = await client.query(
+      `SELECT id, rtsp_url FROM cameras WHERE rtsp_url ~ '^[a-zA-Z]+://[^/@]+@'`
+    );
+    for (const camera of legacyCameras) {
+      const { cleanUrl, username, password } = splitStreamCredentials(camera.rtsp_url);
+      await client.query(
+        'UPDATE cameras SET rtsp_url = $2, credentials_enc = $3 WHERE id = $1',
+        [camera.id, cleanUrl, encryptCameraCredentials(camera.id, { username, password })]
+      );
+    }
+    if (legacyCameras.length) console.log(`[DB] Identifiants RTSP chiffrés pour ${legacyCameras.length} caméra(s)`);
 
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');

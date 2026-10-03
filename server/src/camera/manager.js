@@ -10,6 +10,7 @@ import { broadcastPush }          from '../routes/push.js';
 import { buildChildEnv }          from '../utils/childEnv.js';
 import { getInternalToken }       from '../security/deviceAuth.js';
 import { getRetentionPolicy }     from '../retention/policy.js';
+import { resolveCameraSourceUrl } from './credentials.js';
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
@@ -510,7 +511,7 @@ export async function startCamera(camera) {
   if (cur?.status === 'running' || cur?.status === 'watching') return;
   if (cur?.aiProc) { cur.aiProc.kill('SIGKILL'); }
 
-  let sourceUrl = String(camera.rtsp_url || '').trim();
+  let sourceUrl = resolveCameraSourceUrl(camera);
   const isRtsp  = /^rtsp:/i.test(sourceUrl);
   if (!isRtsp && sourceUrl) sourceUrl = await resolveHttpStreamUrl(sourceUrl);
 
@@ -569,7 +570,7 @@ export async function startHlsStream(camera) {
   const hlsIndex = path.join(hlsDir, 'index.m3u8');
 
   // réutilise sourceUrl du mode veille si dispo
-  let sourceUrl = cur?.sourceUrl || String(camera.rtsp_url || '').trim();
+  let sourceUrl = cur?.sourceUrl || resolveCameraSourceUrl(camera);
   const isRtsp  = /^rtsp:/i.test(sourceUrl);
   if (!isRtsp && sourceUrl && !cur?.sourceUrl) sourceUrl = await resolveHttpStreamUrl(sourceUrl);
 

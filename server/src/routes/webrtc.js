@@ -4,6 +4,7 @@ import { pool }      from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logAudit } from '../audit/log.js';
 import { maskStreamUrl } from '../utils/streamUtils.js';
+import { resolveCameraSourceUrl } from '../camera/credentials.js';
 
 const router = Router();
 
@@ -44,9 +45,9 @@ router.post(
         sdpAnswer = await negotiate(cameraId, sdpOffer);
       } catch (firstErr) {
         // enregistrement à la volée si stream inconnu
-        const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id = $1', [cameraId]);
+        const { rows } = await pool.query('SELECT id, rtsp_url, credentials_enc FROM cameras WHERE id = $1', [cameraId]);
         if (rows[0]) {
-          await registerStream(cameraId, rows[0].rtsp_url);
+          await registerStream(cameraId, resolveCameraSourceUrl(rows[0]));
           sdpAnswer = await negotiate(cameraId, sdpOffer);
         } else {
           throw firstErr;
@@ -67,9 +68,9 @@ router.post('/:cameraId/register', requireAuth, requireAdmin, async (req, res) =
   if (isNaN(cameraId)) return res.status(400).json({ error: 'cameraId invalide' });
 
   try {
-    const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id = $1', [cameraId]);
+    const { rows } = await pool.query('SELECT id, rtsp_url, credentials_enc FROM cameras WHERE id = $1', [cameraId]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
-    const ok = await registerStream(cameraId, rows[0].rtsp_url);
+    const ok = await registerStream(cameraId, resolveCameraSourceUrl(rows[0]));
     res.json({ registered: ok });
   } catch (err) {
     console.error('[WEBRTC REGISTER]', maskStreamUrl(err.message));

@@ -15,6 +15,7 @@ import { requireDevice, requireDeviceIfPaired, issueDeviceToken, revokeDeviceTok
 import { lanOnly } from '../security/networkZone.js';
 import { logAudit } from '../audit/log.js';
 import { buildChildEnv } from '../utils/childEnv.js';
+import { publicCameraFields } from '../camera/credentials.js';
 
 const MAX_DEVICE_UPLOAD_BYTES = Number(process.env.MAX_DEVICE_UPLOAD_MB || 200) * 1024 * 1024;
 const deviceFromParam = req => String(req.params.deviceId || '').trim();
@@ -127,7 +128,7 @@ function serializeNode(row, connectedHosts = new Set()) {
 
 function serializeCamera(camera) {
   return {
-    ...camera,
+    ...publicCameraFields(camera),
     rtsp_url: maskStreamUrl(camera.rtsp_url),
     ...getState(camera.id),
   };

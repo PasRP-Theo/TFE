@@ -2,6 +2,7 @@ import { spawn }           from 'child_process';
 import path                from 'path';
 import { fileURLToPath }   from 'url';
 import { maskStreamUrl }   from '../utils/streamUtils.js';
+import { resolveCameraSourceUrl } from '../camera/credentials.js';
 
 const __dirname    = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH  = path.join(__dirname, '..', '..', 'go2rtc.yaml');
@@ -134,9 +135,9 @@ export async function syncCamerasFromDB(pool, { retries = 5, delayMs = 2000 } = 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const { rows } = await pool.query(
-        "SELECT id, rtsp_url FROM cameras WHERE active = true"
+        "SELECT id, rtsp_url, credentials_enc FROM cameras WHERE active = true"
       );
-      await Promise.all(rows.map((cam) => registerStream(cam.id, cam.rtsp_url)));
+      await Promise.all(rows.map((cam) => registerStream(cam.id, resolveCameraSourceUrl(cam))));
       console.log(`[go2rtc] ${rows.length} caméra(s) synchronisée(s) depuis la base`);
       return;
     } catch (err) {

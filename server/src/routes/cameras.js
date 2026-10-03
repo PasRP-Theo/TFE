@@ -21,6 +21,7 @@ import {
   holdRecordingAsEvidence,
 } from '../camera/manager.js';
 import { logAudit } from '../audit/log.js';
+import { splitStreamCredentials, encryptCameraCredentials, resolveCameraSourceUrl, publicCameraFields } from '../camera/credentials.js';
 import { createAlert } from '../alerts/service.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
@@ -69,7 +70,7 @@ function isMotionActive(lastMotionAt) {
 
 function serializeCamera(camera, node = null) {
   return {
-    ...camera,
+    ...publicCameraFields(camera),
     rtsp_url: maskStreamUrl(camera.rtsp_url),
     motionActive: node ? isMotionActive(node.last_motion_at) : false,
     lastMotionAt: node?.last_motion_at || null,
@@ -184,14 +185,21 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
   const { name, rtspUrl, location, discoverySource } = normalized;
   try {
+    // identifiants retirés de l'URL et chiffrés (AES-256-GCM, liés à la caméra)
+    const { cleanUrl, username, password } = splitStreamCredentials(rtspUrl);
+    const { rows: inserted } = await pool.query(
+      'INSERT INTO cameras (name, rtsp_url, location) VALUES ($1,$2,$3) RETURNING id',
+      [name, cleanUrl, location || '']
+    );
     const { rows } = await pool.query(
-      'INSERT INTO cameras (name, rtsp_url, location) VALUES ($1,$2,$3) RETURNING *',
-      [name, rtspUrl, location || '']
+      'UPDATE cameras SET credentials_enc = $2 WHERE id = $1 RETURNING *',
+      [inserted[0].id, encryptCameraCredentials(inserted[0].id, { username, password })]
     );
     const camera = rows[0];
+    await logAudit(req.user.username, 'CAMERA_CREATE', `Caméra ${camera.id} « ${name} »${username ? ' (identifiants chiffrés)' : ''}`, req.ip);
     // veille
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
-    req.app.get('go2rtc:register')?.(camera.id, rtspUrl)
+    req.app.get('go2rtc:register')?.(camera.id, resolveCameraSourceUrl(camera))
       .catch(err => console.error('[go2rtc ADD]', err));
     const host = getHostFromStreamUrl(rtspUrl);
     if (host) {
@@ -422,7 +430,8 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     );
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
 
-    res.json({ message: 'Caméra renommée', camera: rows[0] });
+    await logAudit(req.user.username, 'CAMERA_UPDATE', `Caméra ${req.params.id} renommée`, req.ip);
+    res.json({ message: 'Caméra renommée', camera: publicCameraFields(rows[0]) });
   } catch (err) {
     console.error('[CAM UPDATE]', err);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -436,6 +445,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     req.app.get('go2rtc:unregister')?.(req.params.id)
       .catch(err => console.error('[go2rtc DEL]', err));
     await pool.query('DELETE FROM cameras WHERE id=$1', [req.params.id]);
+    await logAudit(req.user.username, 'CAMERA_DELETE', `Caméra ${req.params.id} supprimée`, req.ip);
     res.json({ message: 'Supprimée' });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
@@ -627,12 +637,12 @@ router.get('/:id/state', requireAuth, (req, res) => {
 // webhook du détecteur IA (jeton interne) ou d'un appareil appairé
 router.post('/:id/motion', lanOnly, requireDevice({ allowInternal: true }), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT rtsp_url, name FROM cameras WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT id, rtsp_url, credentials_enc, name FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
 
     const detectionLabel = req.body?.label || null;
     const detectionType  = req.body?.type  || null;
-    triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name, rows[0].rtsp_url);
+    triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name, resolveCameraSourceUrl(rows[0]));
 
     // badge mouvement
     if (rows[0]) {
