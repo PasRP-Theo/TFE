@@ -6,32 +6,39 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# moindre privilège : lecture seule du dépôt
+permissions:
+  contents: read
+
+# Actions épinglées par SHA de commit (tag entre parenthèses) — mises à jour par Dependabot
 jobs:
   test-client:
     name: Test Client (Frontend)
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [22, 24]
     defaults:
       run:
         working-directory: ./client
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
           cache-dependency-path: './client/package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci || npm install
+      - name: Install dependencies (lockfile strict)
+        run: npm ci
 
-      - name: Check types (TypeScript)
-        run: npx tsc --noEmit
+      - name: Check types (TypeScript, projets référencés)
+        run: npx tsc -b --noEmit
 
       - name: Run linter
         run: npm run lint --if-present
@@ -49,23 +56,25 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [22, 24]
     defaults:
       run:
         working-directory: ./server
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
           cache-dependency-path: './server/package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci || npm install
+      - name: Install dependencies (lockfile strict, sans scripts d'installation)
+        run: npm ci --ignore-scripts
 
       - name: Run linter
         run: npm run lint --if-present
@@ -75,3 +84,56 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
           NODE_ENV: "test"
+
+  # CRA annexe I / OWASP A06 : vulnérabilités connues et inventaire des composants
+  dependencies:
+    name: Audit des dépendances & SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: npm audit (production, seuil élevé)
+        run: |
+          for dir in server client; do
+            echo "::group::$dir"
+            (cd "$dir" && npm audit --omit=dev --audit-level=high)
+            echo "::endgroup::"
+          done
+
+      - name: SBOM CycloneDX (npm sbom)
+        run: |
+          mkdir -p sbom
+          (cd server && npm sbom --sbom-format cyclonedx --omit=dev --package-lock-only > ../sbom/sentys-server.cdx.json)
+          (cd client && npm sbom --sbom-format cyclonedx --omit=dev --package-lock-only > ../sbom/sentys-client.cdx.json)
+
+      - name: Publier le SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom/
+          retention-days: 90
+
+  # aucun secret dans le dépôt ni dans l'historique
+  secrets-scan:
+    name: Scan de secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (historique complet)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"

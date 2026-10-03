@@ -1,0 +1,12 @@
+# Configuration gitleaks : règles par défaut + exceptions documentées
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Faux positifs connus (valeurs de test, exemples volontairement vides)"
+paths = [
+  '''server/src/.*\.test\.js''',
+  '''client/src/components/test/.*''',
+  '''server/\.env\.example''',
+  '''client/\.env\.example''',
+]

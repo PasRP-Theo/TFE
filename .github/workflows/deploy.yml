@@ -4,12 +4,25 @@ on:
   push:
     branches: [ main ]
 
+# moindre privilège : le runner ne peut que lire le dépôt
+permissions:
+  contents: read
+
+# un seul déploiement à la fois
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PM2_APP_NAME: sentys
   DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
   REPOSITORY_URL: https://github.com/${{ github.repository }}.git
 
+# Runner self-hosted : ne JAMAIS déclencher ce workflow sur pull_request
+# (code non relu exécuté sur la machine de production).
+# Le runner doit tourner sous un utilisateur dédié sans accès à ~/.sentys ni à .env
+# (voir docs/securite/GUIDE-RESEAU-ET-HEBERGEMENT.md).
 jobs:
   deploy:
     runs-on: [self-hosted, linux, x64]
@@ -18,7 +31,9 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Validate deploy path
         run: |
@@ -56,27 +71,24 @@ jobs:
       - name: Stop application to free RAM for build
         run: pm2 stop "$PM2_APP_NAME" > /dev/null 2>&1 || true
 
+      # interface LAN (même origine) : conservée en secours si Internet ou Vercel est indisponible
       - name: Install & build client on host
         working-directory: ${{ vars.DEPLOY_PATH }}/client
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run build
 
       - name: Record deployed version
         run: |
           printf '%s\n' "$GITHUB_SHA" > "$DEPLOY_PATH/.deploy-commit"
           printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEPLOY_PATH/.deploy-time"
-          cat > "$DEPLOY_PATH/client/dist/deploy-info.json" <<EOF
-          {
-            "commit": "$GITHUB_SHA",
-            "runNumber": "$GITHUB_RUN_NUMBER",
-            "deployedAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          }
-          EOF
 
+      # scripts d'installation désactivés ; seul ffmpeg-static (binaire) est autorisé explicitement
       - name: Install production server deps on host
         working-directory: ${{ vars.DEPLOY_PATH }}/server
-        run: npm ci --omit=dev
+        run: |
+          npm ci --omit=dev --ignore-scripts
+          npm rebuild ffmpeg-static
 
       - name: Setup Python venv & AI dependencies
         run: |
@@ -84,7 +96,7 @@ jobs:
             python3 -m venv "$DEPLOY_PATH/venv"
           fi
           "$DEPLOY_PATH/venv/bin/pip" install --quiet --upgrade pip
-          "$DEPLOY_PATH/venv/bin/pip" install --quiet ultralytics opencv-python psycopg2-binary requests
+          "$DEPLOY_PATH/venv/bin/pip" install --quiet -r "$DEPLOY_PATH/requirements.txt"
 
       - name: Restart
         working-directory: ${{ vars.DEPLOY_PATH }}/server
