@@ -10,6 +10,8 @@ import {
   getMfaState, beginTotpEnrollment, confirmTotpEnrollment, verifySecondFactor,
   regenerateRecoveryCodes, disableMfa,
 } from '../auth/mfa.js';
+import { exportUserData, deleteUserAccount, countAdmins } from '../privacy/userData.js';
+import { clearRefreshCookie } from '../auth/tokens.js';
 
 // actions de l'utilisateur sur son propre compte
 const router = Router();
@@ -118,6 +120,39 @@ router.post('/mfa/recovery-codes', sensitiveLimiter, async (req, res) => {
     res.json({ recoveryCodes });
   } catch (err) {
     console.error('[MFA RECOVERY]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// RGPD art. 15 / 20 : export des données du compte
+router.get('/export', sensitiveLimiter, async (req, res) => {
+  try {
+    const data = await exportUserData(req.user.id);
+    if (!data) return res.status(404).json({ error: 'Compte introuvable' });
+    await logAudit(req.user.username, 'DATA_EXPORT', 'Export des données personnelles', req.ip);
+    res.setHeader('Content-Disposition', `attachment; filename="sentys-mes-donnees-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.json(data);
+  } catch (err) {
+    console.error('[ME EXPORT]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// RGPD art. 17 : suppression de son propre compte (mot de passe exigé)
+router.delete('/', sensitiveLimiter, async (req, res) => {
+  try {
+    if (!(await checkCurrentPassword(req.user.id, req.body?.password))) {
+      return res.status(403).json({ error: 'Mot de passe incorrect' });
+    }
+    if (req.user.role === 'admin' && (await countAdmins()) <= 1) {
+      return res.status(400).json({ error: 'Vous êtes le dernier administrateur : nommez-en un autre avant de supprimer votre compte.' });
+    }
+    const result = await deleteUserAccount(req.user.id);
+    await logAudit(result?.pseudonym || 'inconnu', 'ACCOUNT_SELF_DELETED', 'Compte supprimé à la demande de la personne (art. 17)', req.ip);
+    clearRefreshCookie(res);
+    res.json({ message: 'Compte supprimé' });
+  } catch (err) {
+    console.error('[ME DELETE]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

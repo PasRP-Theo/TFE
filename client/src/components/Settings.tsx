@@ -1016,6 +1016,7 @@ function TabAccount() {
   const [code, setCode] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1082,6 +1083,46 @@ function TabAccount() {
     await loadSecurity();
   }
 
+  async function exportData() {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await apiFetch(apiUrl('/api/me/export'));
+      if (!res.ok) throw new Error('Export impossible');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sentys-mes-donnees-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Export impossible');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (!window.confirm('Supprimer définitivement votre compte ? Cette action est irréversible.')) return;
+    setError('');
+    setBusy(true);
+    try {
+      const res = await apiFetch(apiUrl('/api/me'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await readJsonResponse<{ error?: string }>(res);
+      if (!res.ok) throw new Error(data.error || 'Suppression impossible');
+      logout();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Suppression impossible');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function changePassword() {
     const data = await call('/api/me/password', { currentPassword, newPassword });
     if (!data) return;
@@ -1142,6 +1183,19 @@ function TabAccount() {
           <input className="ui-input" type="password" placeholder={mfaEnabled ? 'Nouveau (8 caractères min.)' : 'Nouveau (15 caractères min.)'} value={newPassword} onChange={e => setNewPassword(e.target.value)} autoComplete="new-password" />
         </div>
         <button type="button" className="ui-confirm-btn" style={{ marginTop: '8px' }} disabled={busy || !currentPassword || !newPassword} onClick={changePassword}>Changer le mot de passe</button>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label">MES DONNÉES (RGPD)</div>
+        <p className="settings-field-hint">
+          Téléchargez les données associées à votre compte (art. 15 et 20), ou supprimez définitivement votre compte (art. 17).
+          La suppression ferme vos sessions, désactive vos notifications et pseudonymise votre nom dans le journal de sécurité.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button type="button" className="ui-confirm-btn" disabled={busy} onClick={() => { void exportData(); }}>Exporter mes données</button>
+          <input className="ui-input" type="password" placeholder="Mot de passe (pour supprimer)" value={deletePassword} onChange={e => setDeletePassword(e.target.value)} autoComplete="current-password" style={{ maxWidth: '240px' }} />
+          <button type="button" className="ui-delete-btn ui-delete-btn--danger" disabled={busy || !deletePassword} onClick={() => { void deleteAccount(); }}>Supprimer mon compte</button>
+        </div>
       </div>
 
       <div className="settings-section">

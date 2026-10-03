@@ -3,6 +3,7 @@ import { hashPassword } from '../auth/passwords.js';
 import { validatePassword } from '../auth/passwordPolicy.js';
 import { revokeAllSessions, invalidateUserState } from '../auth/tokens.js';
 import { disableMfa } from '../auth/mfa.js';
+import { deleteUserAccount } from '../privacy/userData.js';
 import { pool }    from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logAudit } from '../audit/log.js';
@@ -174,10 +175,10 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
       }
     }
 
-    const { rowCount } = await pool.query('DELETE FROM users WHERE id=$1', [userId]);
-    invalidateUserState(userId);
-    if (!rowCount) return res.status(404).json({ error: 'Utilisateur introuvable' });
-    await logAudit(req.user?.username || 'admin', 'USER_DELETE', `Suppression de l'utilisateur ${currentUser.username}`, req.ip);
+    // effacement effectif : cascade (sessions, MFA, push) + journal pseudonymisé
+    const result = await deleteUserAccount(userId);
+    if (!result) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    await logAudit(req.user?.username || 'admin', 'USER_DELETE', `Suppression du compte ${result.pseudonym}`, req.ip);
     res.json({ message: 'Supprime' });
   } catch {
     res.status(500).json({ error: 'Erreur serveur' });
