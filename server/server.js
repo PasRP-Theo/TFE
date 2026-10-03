@@ -131,6 +131,17 @@ app.get("/api/agent/sentys_agent.py", lanOnly, (_, res) => {
   }
 });
 
+// signature Ed25519 de l'agent (vérifiée par pi/auto_update.sh avant installation)
+app.get("/api/agent/sentys_agent.py.sig", lanOnly, (_, res) => {
+  const sigPath = path.join(__dirname, "../pi/sentys_agent.py.sig");
+  if (existsSync(sigPath)) {
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.sendFile(sigPath);
+  } else {
+    res.status(404).send("Signature introuvable");
+  }
+});
+
 // frontend
 const distPath = path.join(__dirname, "../client/dist");
 app.use(spaCsp, express.static(distPath));

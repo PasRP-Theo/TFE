@@ -121,6 +121,29 @@ jobs:
           path: sbom/
           retention-days: 90
 
+  # ETSI EN 303 645 §5.3 : l'agent distribué aux Pi doit être signé
+  agent-signature:
+    name: Signature de l'agent Pi
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Vérifier la signature Ed25519
+        run: |
+          if [ ! -f pi/agent_signing_pub.pem ]; then
+            echo "::warning::pi/agent_signing_pub.pem absent : signature non vérifiée (voir pi/sign_agent.sh)"
+            exit 0
+          fi
+          if [ ! -f pi/sentys_agent.py.sig ]; then
+            echo "::error::pi/sentys_agent.py.sig manquant : exécuter pi/sign_agent.sh"
+            exit 1
+          fi
+          openssl pkeyutl -verify -pubin -inkey pi/agent_signing_pub.pem -rawin \
+            -in pi/sentys_agent.py -sigfile pi/sentys_agent.py.sig
+
   # aucun secret dans le dépôt ni dans l'historique
   secrets-scan:
     name: Scan de secrets (gitleaks)
