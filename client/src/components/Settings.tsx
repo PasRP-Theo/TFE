@@ -455,7 +455,7 @@ function TabSettings() {
                 {showPin ? 'Cacher' : 'Voir'}
               </button>
             </div>
-            <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et l'accès Admin.</span>
+            <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et le désarmement de la surveillance.</span>
           </label>
         </div>
         {securityError && <div className="settings-msg settings-msg--error">⚠ {securityError}</div>}

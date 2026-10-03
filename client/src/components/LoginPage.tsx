@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
@@ -13,26 +13,8 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false);
   const [dots,     setDots]     = useState('');
   const [time,     setTime]     = useState(new Date());
-  const autoLoginAttempted = useRef(false);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
-
-  const isControlPanel = useMemo(() => {
-    // kiosk=off
-    if (window.location.search.includes('kiosk=off')) {
-      window.localStorage.removeItem('sentys:kiosk_mode');
-      window.sessionStorage.removeItem('sentys:control_panel');
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return false;
-    }
-    if (window.location.pathname === '/controlpanel') {
-      window.sessionStorage.setItem('sentys:control_panel', 'true');
-      return true;
-    }
-    return window.sessionStorage.getItem('sentys:control_panel') === 'true' || window.localStorage.getItem('sentys:kiosk_mode') === 'true';
-  }, []);
-  const [showPinPrompt, setShowPinPrompt] = useState(false);
-  const [pinInput, setPinInput] = useState('');
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -59,20 +41,6 @@ export default function LoginPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [lockoutUntil]);
-
-  useEffect(() => {
-    const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true';
-
-    if (isKioskMode && config.defaultAdminActive && !autoLoginAttempted.current) {
-      autoLoginAttempted.current = true;
-      setLoading(true);
-      login(config.defaultAdminUsername, 'root').catch(() => {
-        console.warn("Auto-login Kiosk avec le compte bootstrap a échoué.");
-        setError("L'auto-login Kiosk a échoué. Le compte 'root' est peut-être désactivé.");
-        setLoading(false);
-      });
-    }
-  }, [login, config.defaultAdminActive, config.defaultAdminUsername]);
 
   const locale = config.interfaceLanguage;
   const use12HourClock = config.timeFormat === '12h';
@@ -103,61 +71,6 @@ export default function LoginPage() {
   const dateStr = time.toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   const lockoutMinutes = Math.floor(lockoutSecondsLeft / 60);
   const lockoutSeconds = String(lockoutSecondsLeft % 60).padStart(2, '0');
-
-  function handleGuestLogin() {
-    if (isLockedOut) return;
-    setError('');
-    setLoading(true);
-    login('kiosk_guest', '').catch(err => {
-      setError(err instanceof Error ? err.message : 'Erreur Invité');
-      setLoading(false);
-    });
-  }
-
-  function handleAdminLogin() {
-    if (isLockedOut) return;
-    setShowPinPrompt(true);
-    setError('');
-  }
-
-  async function handlePinPress(digit: string) {
-    if (isLockedOut || pinInput.length >= 4) return;
-    const nextPin = pinInput + digit;
-    setPinInput(nextPin);
-    setError('');
-
-    if (nextPin.length === 4) {
-      try {
-        const res = await fetch('/api/app-config/verify-pin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: nextPin }),
-        });
-        if (res.status === 429) {
-          const lockoutEndsAt = Date.now() + 15 * 60 * 1000;
-          setLockoutUntil(lockoutEndsAt);
-          setLockoutSecondsLeft(15 * 60);
-          setPinInput('');
-          return;
-        }
-        const data = await res.json();
-        if (data.valid) {
-          setLoading(true);
-          login('kiosk_admin', '').catch(err => {
-            setError(err instanceof Error ? err.message : 'Erreur Admin');
-            setLoading(false);
-            setPinInput('');
-          });
-        } else {
-          setError('Code PIN incorrect');
-          setTimeout(() => setPinInput(''), 500);
-        }
-      } catch {
-        setError('Erreur réseau');
-        setTimeout(() => setPinInput(''), 500);
-      }
-    }
-  }
 
   return (
     <div className="lp-root">
@@ -201,71 +114,6 @@ export default function LoginPage() {
           <div className="lp-sep" />
 
 
-          {isControlPanel ? (
-            showPinPrompt ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ marginBottom: '16px', fontSize: '14px', letterSpacing: '2px', color: 'var(--accent-blue)', fontWeight: 'bold' }}>
-                  CODE PIN (ADMIN)
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '20px' }}>
-                  {[0, 1, 2, 3].map(i => (
-                    <div key={i} style={{ width: '16px', height: '16px', borderRadius: '50%', background: pinInput.length > i ? 'var(--accent-blue)' : 'transparent', border: '2px solid var(--accent-blue)', transition: 'all 0.2s' }} />
-                  ))}
-                </div>
-                {isLockedOut ? (
-                  <div className="lp-error" style={{ marginBottom: '15px', width: '100%' }}>
-                    <span>⚠</span>
-                    <span>Trop de tentatives. Réessayez dans {lockoutMinutes}m {lockoutSeconds}s.</span>
-                  </div>
-                ) : error && (
-                  <div className="lp-error" style={{ marginBottom: '15px', width: '100%' }}>
-                    <span>⚠</span><span>{error}</span>
-                  </div>
-                )}
-                {loading ? (
-                  <button className="lp-btn" type="button" disabled>VÉRIFICATION{dots}</button>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%', maxWidth: '280px', opacity: isLockedOut ? 0.5 : 1, pointerEvents: isLockedOut ? 'none' : 'auto' }}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                      <button key={num} type="button" onClick={() => handlePinPress(num.toString())} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '20px', padding: '15px 0', borderRadius: '8px', cursor: 'pointer' }}>{num}</button>
-                    ))}
-                    <button type="button" onClick={() => { setPinInput(""); setError(""); }} style={{ background: 'var(--accent-red-bg)', border: '1px solid var(--accent-red-border)', color: 'var(--accent-red)', fontSize: '18px', borderRadius: '8px', cursor: 'pointer' }}>C</button>
-                    <button type="button" onClick={() => handlePinPress('0')} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '20px', padding: '15px 0', borderRadius: '8px', cursor: 'pointer' }}>0</button>
-                    <button type="button" onClick={() => setPinInput(p => p.slice(0, -1))} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', color: 'var(--accent-amber)', fontSize: '18px', borderRadius: '8px', cursor: 'pointer' }}>⌫</button>
-                  </div>
-                )}
-                <button 
-                  className="lp-btn" 
-                  type="button" 
-                  onClick={() => { setShowPinPrompt(false); setError(''); setPinInput(''); }} 
-                  disabled={loading}
-                  style={{ marginTop: '20px', background: 'transparent', border: '1px dashed var(--border-subtle)', color: 'var(--text-muted)' }}
-                >
-                  RETOUR
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <button className="lp-btn" type="button" onClick={handleAdminLogin} disabled={loading || isLockedOut}>
-                  {loading ? `CONNEXION${dots}` : '🛡️ CONNEXION ADMIN'}
-                </button>
-                <button 
-                  className="lp-btn" 
-                  type="button" 
-                  onClick={handleGuestLogin} 
-                  disabled={loading || isLockedOut} 
-                  style={{ background: 'transparent', border: '1px dashed var(--border-subtle)', color: 'var(--text-muted)' }}
-                >
-                  👁️ CONNEXION INVITÉ
-                </button>
-                {error && (
-                  <div className="lp-error" style={{ marginTop: '0' }}>
-                    <span>⚠</span><span>{error}</span>
-                  </div>
-                )}
-              </div>
-            )
-          ) : (
             <form onSubmit={handleSubmit}>
               <div className="lp-field">
                 <label className="lp-label">IDENTIFIANT</label>
@@ -320,7 +168,6 @@ export default function LoginPage() {
                isLockedOut ? 'SYSTÈME VERROUILLÉ' : '→ ACCÉDER AU SYSTÈME'}
             </button>
           </form>
-          )}
         </div>
 
         <div className="lp-card-footer">

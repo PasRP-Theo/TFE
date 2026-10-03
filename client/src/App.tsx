@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { AppConfigProvider, useAppConfig } from './hooks/useAppConfig';
@@ -231,31 +231,6 @@ function getSystemStatus(
     };
   }, [user]);
 
-  const isKioskMode = window.localStorage.getItem('sentys:kiosk_mode') === 'true' || window.sessionStorage.getItem('sentys:control_panel') === 'true';
-
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetInactivityTimer = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (isKioskMode) {
-      timerRef.current = setTimeout(() => {
-        logout();
-        window.localStorage.removeItem('token');
-        window.location.reload();
-      }, 5 * 60 * 1000); // 5 minutes
-    }
-  }, [isKioskMode, logout]);
-
-  useEffect(() => {
-    resetInactivityTimer();
-    const events = ['mousemove', 'touchstart', 'keydown', 'click'];
-    events.forEach(e => window.addEventListener(e, resetInactivityTimer));
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      events.forEach(e => window.removeEventListener(e, resetInactivityTimer));
-    };
-  }, [resetInactivityTimer]);
-
 
   if (loading) {
     return (
@@ -331,10 +306,6 @@ function getSystemStatus(
               {isAdmin ? 'ADMIN' : 'USER'}
             </span>
           </div>
-
-          {isKioskMode && (
-            <button type="button" className="app-theme-btn" onClick={() => { logout(); window.localStorage.removeItem('token'); window.location.reload(); }} title="Verrouiller l'écran">🔒</button>
-          )}
 
           <button type="button" className="app-theme-btn"
             onClick={toggleTheme}

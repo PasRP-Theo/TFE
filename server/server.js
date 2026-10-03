@@ -145,38 +145,6 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", loginLimiter, async (req, res) => {
   const { username, password } = req.body;
 
-  // kiosk login
-  const isKioskAdmin = username.toLowerCase().trim() === 'kiosk_admin' && !password;
-  const isKioskGuest = username.toLowerCase().trim() === 'kiosk_guest' && !password;
-  const ipStr = req.ip ? req.ip.replace(/^.*:/, '') : '';
-  const isLocalNetwork = ipStr === '127.0.0.1' || ipStr === '1' || ipStr.startsWith('192.168.') || ipStr.startsWith('10.') || ipStr.startsWith('172.');
-
-  if ((isKioskAdmin || isKioskGuest) && isLocalNetwork) {
-    try {
-      const roleTarget = isKioskAdmin ? 'admin' : 'user';
-      const { rows } = await pool.query("SELECT * FROM users WHERE role = $1 ORDER BY created_at ASC LIMIT 1", [roleTarget]);
-      let user = rows[0];
-
-      if (!user && isKioskGuest) {
-        // fallback invité
-        user = { id: 9999, username: 'invité', role: 'user' };
-      } else if (!user) {
-        return res.status(401).json({ error: `Aucun compte ${roleTarget} disponible pour le panneau de contrôle.` });
-      }
-
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
-      );
-      await logAudit(user.username, 'LOGIN_SUCCESS', `Connexion Control Panel (${roleTarget})`, req.ip);
-      return res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-    } catch (err) {
-      console.error('[CONTROL PANEL LOGIN]', err);
-      return res.status(500).json({ error: "Erreur serveur lors de la connexion Control Panel" });
-    }
-  }
-
   if (!username || !password) return res.status(400).json({ error: "Champs manquants" });
   try {
     const { rows } = await pool.query("SELECT * FROM users WHERE username = $1", [username.toLowerCase().trim()]);
