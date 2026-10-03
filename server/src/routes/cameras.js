@@ -18,7 +18,9 @@ import {
   getRecordingsRetentionDays,
   triggerMotionRecording,
   setPiWaiting,
+  holdRecordingAsEvidence,
 } from '../camera/manager.js';
+import { logAudit } from '../audit/log.js';
 import { createAlert } from '../alerts/service.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
@@ -801,6 +803,24 @@ router.delete('/:id/history', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[CAM HISTORY DELETE ALL]', err);
     res.status(500).json({ error: "Impossible de supprimer l'historique" });
+  }
+});
+
+// conservation comme preuve (loi caméras : au-delà d'un mois uniquement pour prouver une
+// infraction, un dommage ou identifier un auteur) — motif obligatoire, journalisé
+router.post('/:id/history/:filename/evidence', requireAuth, requireAdmin, async (req, res) => {
+  const reason = String(req.body?.reason || '').trim().slice(0, 500);
+  if (reason.length < 10) return res.status(400).json({ error: 'Motif requis (10 caractères minimum)' });
+  try {
+    const result = await holdRecordingAsEvidence(req.params.id, req.params.filename);
+    if (!result.held) {
+      return res.status(result.reason === 'not-found' ? 404 : 400).json({ error: 'Enregistrement introuvable ou nom invalide' });
+    }
+    await logAudit(req.user.username, 'EVIDENCE_HOLD', `Caméra ${req.params.id} — ${req.params.filename} → _preuves/${result.filename} — motif : ${reason}`, req.ip);
+    res.json({ message: 'Enregistrement conservé comme preuve (exclu de la purge automatique)', filename: result.filename });
+  } catch (err) {
+    console.error('[EVIDENCE HOLD]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

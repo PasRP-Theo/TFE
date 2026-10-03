@@ -703,6 +703,27 @@ export default function CameraFeed({ onStatusChange }: {
     }
   }
 
+  // loi caméras : conservation au-delà d'un mois uniquement comme preuve, motif journalisé
+  async function holdAsEvidence(entry: RecordingEntry) {
+    if (historyCameraId === null) return;
+    const reason = window.prompt('Motif de conservation (infraction, dommage, identification d\'un auteur…) :');
+    if (!reason || reason.trim().length < 10) {
+      if (reason !== null) setHistoryDeleteError('Motif requis (10 caractères minimum).');
+      return;
+    }
+    const res = await apiFetch(apiUrl(`/api/cameras/${historyCameraId}/history/${encodeURIComponent(entry.filename)}/evidence`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    const data = await readJsonResponse<{ error?: string }>(res).catch(() => ({ error: undefined }));
+    if (!res.ok) {
+      setHistoryDeleteError(data.error || 'Impossible de conserver cet enregistrement');
+      return;
+    }
+    await loadCameraHistory(historyCameraId);
+  }
+
   async function confirmDeleteRecording() {
     if (historyCameraId === null || !recordDeleteTarget) return;
     setHistoryDeleteLoading(true);
@@ -1230,6 +1251,16 @@ export default function CameraFeed({ onStatusChange }: {
                             >
                               Télécharger
                             </a>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  className="cam-history-link cam-history-link--secondary"
+                                  title="Exclure de la purge automatique (preuve d'une infraction ou d'un dommage)"
+                                  onClick={() => { void holdAsEvidence(entry); }}
+                                >
+                                  Conserver (preuve)
+                                </button>
+                              )}
                               {isAdmin && (
                                 <button
                                   type="button"

@@ -8,7 +8,8 @@ import path            from "path";
 import { fileURLToPath } from "url";
 import rateLimit       from "express-rate-limit";
 import { existsSync, mkdirSync } from "fs";
-import { initDB, pool, scheduleDiscoveryCleanup, scheduleAlertsCleanup } from "./src/db/index.js";
+import { initDB, pool, scheduleDiscoveryCleanup } from "./src/db/index.js";
+import { scheduleRetention } from "./src/retention/scheduler.js";
 import userRoutes            from "./src/routes/users.js";
 import systemRoutes          from "./src/routes/system.js";
 import cameraRoutes          from "./src/routes/cameras.js";
@@ -26,7 +27,7 @@ import { ensureSetupState } from "./src/auth/setup.js";
 import { lanOnly, PUBLIC_PORT } from "./src/security/networkZone.js";
 import { securityHeaders, spaCsp, buildCorsOptions } from "./src/security/httpHeaders.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
-import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates, setSocketIO } from "./src/camera/manager.js";
+import { startCamera, stopAllCameras, getAllStates, setSocketIO } from "./src/camera/manager.js";
 import { authenticateAccessToken } from "./src/auth/tokens.js";
 import { ALLOWED_ORIGINS } from "./src/security/origins.js";
 import { createAlert } from "./src/alerts/service.js";
@@ -290,12 +291,11 @@ async function start() {
     console.warn('[CAM] Pas de caméras à démarrer:', e.message);
   }
 
-  cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err));
-  setInterval(() => cleanupOldRecordings().catch(err => console.error('[REC CLEANUP]', err)), 24 * 60 * 60 * 1000);
   runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err));
   setInterval(() => runOfflineAlertsCheck().catch(err => console.error('[ALERT OFFLINE MONITOR]', err)), 30 * 1000);
   scheduleDiscoveryCleanup(10, 5 * 60 * 1000);
-  scheduleAlertsCleanup(90);
+  // conservation : images, alertes, mouvements, audit, sessions (src/retention/policy.js)
+  scheduleRetention();
 
   // listener LAN : interface locale + appareils (Pi, ESP32) — à filtrer au pare-feu
   const PORT = Number(process.env.PORT || 4000);

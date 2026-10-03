@@ -9,6 +9,7 @@ import { pool }                   from '../db/index.js';
 import { broadcastPush }          from '../routes/push.js';
 import { buildChildEnv }          from '../utils/childEnv.js';
 import { getInternalToken }       from '../security/deviceAuth.js';
+import { getRetentionPolicy }     from '../retention/policy.js';
 
 const __dirname     = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT  = path.resolve(__dirname, '..', '..', '..');
@@ -312,8 +313,22 @@ function getCameraRecordingDir(cameraId) {
 }
 
 export function getRecordingsRetentionDays() {
-  const days = Number(process.env.RECORDINGS_RETENTION_DAYS || 30);
-  return Number.isFinite(days) && days > 0 ? days : 30;
+  return getRetentionPolicy().recordingsDays;
+}
+
+// dossier des enregistrements conservés comme preuve (exclu de la purge automatique)
+export const EVIDENCE_DIR_NAME = '_preuves';
+
+export async function holdRecordingAsEvidence(cameraId, filename) {
+  const safeName = path.basename(String(filename || '')).trim();
+  if (!safeName || safeName !== String(filename || '').trim()) return { held: false, reason: 'invalid-filename' };
+  const source = path.join(getCameraRecordingDir(cameraId), safeName);
+  if (!existsSync(source)) return { held: false, reason: 'not-found' };
+  const evidenceDir = path.join(RECORDINGS_DIR, EVIDENCE_DIR_NAME);
+  ensureDir(evidenceDir);
+  const target = path.join(evidenceDir, `cam${cameraId}_${safeName}`);
+  await fsPromises.rename(source, target);
+  return { held: true, filename: path.basename(target) };
 }
 
 let _io = null;
@@ -781,7 +796,7 @@ export function stopCamera(cameraId) {
 }
 
 // suppression clips expirés
-export async function cleanupOldRecordings({ retentionDays = Number(process.env.RECORDINGS_RETENTION_DAYS || 30) } = {}) {
+export async function cleanupOldRecordings({ retentionDays = getRecordingsRetentionDays() } = {}) {
   const days = Number(retentionDays);
   if (!Number.isFinite(days) || days <= 0) return;
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -789,7 +804,8 @@ export async function cleanupOldRecordings({ retentionDays = Number(process.env.
 
   const cameraDirs = await readdir(RECORDINGS_DIR, { withFileTypes: true });
   for (const cameraDir of cameraDirs) {
-    if (!cameraDir.isDirectory()) continue;
+    // preuves (_preuves) : conservation décidée par un admin, motif journalisé
+    if (!cameraDir.isDirectory() || cameraDir.name.startsWith('_')) continue;
     const camPath = path.join(RECORDINGS_DIR, cameraDir.name);
     const files = await readdir(camPath, { withFileTypes: true });
     for (const file of files) {
