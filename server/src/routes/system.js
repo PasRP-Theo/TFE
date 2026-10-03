@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import si from 'systeminformation';
-import bcrypt from 'bcryptjs';
+import { issueSetupToken } from '../auth/setup.js';
+import { logAudit } from '../audit/log.js';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { stopAllCameras } from '../camera/manager.js';
@@ -94,7 +95,7 @@ router.get('/info', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/reset', requireAuth, requireAdmin, async (_req, res) => {
+router.post('/reset', requireAuth, requireAdmin, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -105,30 +106,25 @@ router.post('/reset', requireAuth, requireAdmin, async (_req, res) => {
     await client.query('TRUNCATE TABLE camera_node_motion_events RESTART IDENTITY');
     await client.query('TRUNCATE TABLE camera_nodes RESTART IDENTITY');
     await client.query('TRUNCATE TABLE camera_discoveries RESTART IDENTITY');
-    await client.query('TRUNCATE TABLE cameras RESTART IDENTITY');
-    await client.query('TRUNCATE TABLE users RESTART IDENTITY');
-
-    const rootHash = await bcrypt.hash('root', 12);
-    const insertedAdmin = await client.query(
-      `INSERT INTO users (username, password, role)
-       VALUES ($1, $2, 'admin')
-       RETURNING id, username, role, created_at`,
-      ['root', rootHash]
-    );
+    // DELETE (et non TRUNCATE) : respecte les clés étrangères ON DELETE
+    await client.query('DELETE FROM cameras');
+    await client.query('DELETE FROM push_subscriptions');
+    await client.query('DELETE FROM users');
 
     await client.query(
       `UPDATE app_settings
-       SET app_name = 'AUBEPINES',
+       SET app_name = 'SENTYS',
            app_subtitle = 'Système de surveillance',
            system_version = 'v2.4.1',
-           bootstrap_admin_user_id = $1,
-           default_admin_active = true,
+           bootstrap_admin_user_id = NULL,
+           default_admin_active = false,
            updated_at = NOW()
-       WHERE id = 1`,
-      [insertedAdmin.rows[0].id]
+       WHERE id = 1`
     );
 
     await client.query('COMMIT');
+    await logAudit(req.user.username, 'SYSTEM_RESET', 'Réinitialisation complète (comptes et caméras)', req.ip);
+    issueSetupToken();
 
     res.json({
       message: 'Réinitialisation effectuée',
@@ -140,7 +136,7 @@ router.post('/reset', requireAuth, requireAdmin, async (_req, res) => {
         cameraNodes: 'reset',
         recordings: 'unchanged',
       },
-      bootstrapAdmin: { created: true },
+      needsSetup: true,
     });
   } catch (err) {
     await client.query('ROLLBACK');

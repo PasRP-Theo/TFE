@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAppConfig } from '../hooks/useAppConfig';
+import { apiUrl, readJsonResponse } from '../lib/api';
 import BrandLogo from './BrandLogo';
 
 export default function LoginPage() {
-  const { login }  = useAuth();
+  const { login, completeSetup } = useAuth();
   const { config } = useAppConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -15,6 +16,18 @@ export default function LoginPage() {
   const [time,     setTime]     = useState(new Date());
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupToken, setSetupToken] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(apiUrl('/auth/setup-status'))
+      .then(r => readJsonResponse<{ needsSetup?: boolean }>(r))
+      .then(data => { if (!cancelled) setNeedsSetup(Boolean(data.needsSetup)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -53,7 +66,12 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(username, password);
+      if (needsSetup) {
+        if (password !== passwordConfirm) throw new Error('Les mots de passe ne correspondent pas');
+        await completeSetup(setupToken, username, password);
+      } else {
+        await login(username, password);
+      }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur de connexion';
       setError(errorMessage);
@@ -115,6 +133,29 @@ export default function LoginPage() {
 
 
             <form onSubmit={handleSubmit}>
+              {needsSetup && (
+                <>
+                  <div className="lp-login-message">
+                    Première installation : créez le compte administrateur. Le jeton d'installation
+                    est affiché dans la console du serveur (<code>pm2 logs</code>).
+                  </div>
+                  <div className="lp-field">
+                    <label className="lp-label">JETON D'INSTALLATION</label>
+                    <div className="lp-input-wrap">
+                      <span className="lp-input-prefix">#</span>
+                      <input
+                        className="lp-input"
+                        type="text"
+                        value={setupToken}
+                        onChange={e => setSetupToken(e.target.value)}
+                        required
+                        disabled={loading || isLockedOut}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="lp-field">
                 <label className="lp-label">IDENTIFIANT</label>
                 <div className="lp-input-wrap">
@@ -146,11 +187,29 @@ export default function LoginPage() {
                   placeholder="••••••••••••"
                   disabled={loading || isLockedOut}
                   required
-                  autoComplete="current-password"
+                  autoComplete={needsSetup ? 'new-password' : 'current-password'}
 
                 />
               </div>
             </div>
+
+            {needsSetup && (
+              <div className="lp-field">
+                <label className="lp-label">CONFIRMATION (15 CARACTÈRES MIN.)</label>
+                <div className="lp-input-wrap">
+                  <span className="lp-input-prefix">⬥</span>
+                  <input
+                    className="lp-input"
+                    type="password"
+                    value={passwordConfirm}
+                    onChange={e => setPasswordConfirm(e.target.value)}
+                    disabled={loading || isLockedOut}
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+            )}
 
             {isLockedOut ? (
               <div className="lp-error">
@@ -165,7 +224,7 @@ export default function LoginPage() {
 
             <button className="lp-btn" type="submit" disabled={loading || isLockedOut}>
               {loading ? `AUTHENTIFICATION${dots}` : 
-               isLockedOut ? 'SYSTÈME VERROUILLÉ' : '→ ACCÉDER AU SYSTÈME'}
+               isLockedOut ? 'SYSTÈME VERROUILLÉ' : needsSetup ? '→ CRÉER LE COMPTE ADMINISTRATEUR' : '→ ACCÉDER AU SYSTÈME'}
             </button>
           </form>
         </div>

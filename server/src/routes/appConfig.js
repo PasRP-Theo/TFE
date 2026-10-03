@@ -42,8 +42,6 @@ function serializeConfig(row) {
     alertsDailySummaryEnabled: row.alerts_daily_summary_enabled,
     alertsSoundEnabled: row.alerts_sound_enabled,
     alertsDisconnectEnabled: row.alerts_disconnect_enabled,
-    defaultAdminUsername: 'root',
-    defaultAdminActive: row.default_admin_active,
     kioskPin: row.kiosk_pin,
     surveillanceMode: row.surveillance_mode,
   };
@@ -58,7 +56,7 @@ async function getConfigRow() {
             default_camera_add_mode, camera_discovery_interval_seconds,
             alerts_realtime_enabled, alerts_daily_summary_enabled,
             alerts_sound_enabled, alerts_disconnect_enabled,
-            default_admin_active, kiosk_pin, surveillance_mode
+            kiosk_pin, surveillance_mode
      FROM app_settings
      WHERE id = 1`
   );
@@ -224,7 +222,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
                  default_camera_add_mode, camera_discovery_interval_seconds,
                  alerts_realtime_enabled, alerts_daily_summary_enabled,
                  alerts_sound_enabled, alerts_disconnect_enabled,
-                 default_admin_active, kiosk_pin, surveillance_mode`,
+                 kiosk_pin, surveillance_mode`,
       [
         values.appName,
         values.appSubtitle,

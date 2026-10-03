@@ -24,8 +24,6 @@ export interface AppConfig {
   alertsDailySummaryEnabled: boolean;
   alertsSoundEnabled: boolean;
   alertsDisconnectEnabled: boolean;
-  defaultAdminUsername: string;
-  defaultAdminActive: boolean;
   kioskPin: string;
   surveillanceMode: boolean;
 }
@@ -57,8 +55,6 @@ const DEFAULT_CONFIG: AppConfig = {
   alertsDailySummaryEnabled: false,
   alertsSoundEnabled: true,
   alertsDisconnectEnabled: true,
-  defaultAdminUsername: 'root',
-  defaultAdminActive: false,
   kioskPin: '1234',
   surveillanceMode: true,
 };
@@ -89,8 +85,6 @@ function sanitizeConfig(value: unknown): AppConfig {
     alertsDailySummaryEnabled: typeof candidate.alertsDailySummaryEnabled === 'boolean' ? candidate.alertsDailySummaryEnabled : DEFAULT_CONFIG.alertsDailySummaryEnabled,
     alertsSoundEnabled: typeof candidate.alertsSoundEnabled === 'boolean' ? candidate.alertsSoundEnabled : DEFAULT_CONFIG.alertsSoundEnabled,
     alertsDisconnectEnabled: typeof candidate.alertsDisconnectEnabled === 'boolean' ? candidate.alertsDisconnectEnabled : DEFAULT_CONFIG.alertsDisconnectEnabled,
-    defaultAdminUsername: typeof candidate.defaultAdminUsername === 'string' && candidate.defaultAdminUsername.trim() ? candidate.defaultAdminUsername.trim() : DEFAULT_CONFIG.defaultAdminUsername,
-    defaultAdminActive: Boolean(candidate.defaultAdminActive),
     kioskPin: typeof candidate.kioskPin === 'string' && candidate.kioskPin.trim().length === 4 ? candidate.kioskPin.trim() : DEFAULT_CONFIG.kioskPin,
     surveillanceMode: typeof candidate.surveillanceMode === 'boolean' ? candidate.surveillanceMode : DEFAULT_CONFIG.surveillanceMode,
   };

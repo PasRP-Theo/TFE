@@ -1,5 +1,4 @@
 import pg from 'pg';
-import bcrypt from 'bcryptjs';
 const { Pool } = pg;
 
 const required = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
@@ -271,30 +270,7 @@ export async function initDB() {
     // défaut discover
     await client.query("UPDATE app_settings SET default_camera_add_mode = 'discover' WHERE id = 1");
 
-    const userCountResult = await client.query('SELECT COUNT(*)::int AS count FROM users');
-    const userCount = userCountResult.rows[0]?.count ?? 0;
-
-    if (userCount === 0) {
-      const passwordHash = await bcrypt.hash('root', 12);
-      const { rows } = await client.query(
-        `INSERT INTO users (username, password, role)
-         VALUES ($1, $2, 'admin')
-         RETURNING id`,
-        ['root', passwordHash]
-      );
-
-      await client.query(
-        `UPDATE app_settings
-         SET bootstrap_admin_user_id = $1,
-             default_admin_active = true,
-             updated_at = NOW()
-         WHERE id = 1`,
-        [rows[0].id]
-      );
-
-      console.log('[DB] Compte administrateur initial créé (root)');
-    }
-
+    // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {
     client.release();

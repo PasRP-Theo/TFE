@@ -2,20 +2,13 @@ import { Router } from 'express';
 import bcrypt      from 'bcryptjs';
 import { pool }    from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { logAudit } from '../../server.js';
+import { logAudit } from '../audit/log.js';
 
 const router = Router();
 
 async function getAdminCount(client = pool) {
   const { rows } = await client.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
   return rows[0]?.count ?? 0;
-}
-
-async function getAppSettings(client = pool) {
-  const { rows } = await client.query(
-    'SELECT bootstrap_admin_user_id, default_admin_active FROM app_settings WHERE id = 1'
-  );
-  return rows[0] || { bootstrap_admin_user_id: null, default_admin_active: false };
 }
 
 // liste
@@ -46,15 +39,6 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       [username.toLowerCase().trim(), hash, role]
     );
     await logAudit(req.user?.username || 'admin', 'USER_CREATE', `Création de l'utilisateur ${username} (Rôle: ${role})`, req.ip);
-
-    if (role === 'admin') {
-      const settings = await getAppSettings();
-      if (settings.default_admin_active && settings.bootstrap_admin_user_id) {
-        await pool.query('DELETE FROM users WHERE id = $1', [settings.bootstrap_admin_user_id]);
-        await pool.query(`UPDATE app_settings SET default_admin_active = false, bootstrap_admin_user_id = NULL, updated_at = NOW() WHERE id = 1`);
-        await logAudit(req.user?.username || 'admin', 'USER_DELETE', 'Suppression automatique du compte administrateur initial (root)', req.ip);
-      }
-    }
 
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -133,20 +117,6 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (nextPassword !== undefined && nextPassword.length > 0) changes.push(`mot de passe modifié`);
     if (changes.length > 0) {
       await logAudit(req.user?.username || 'admin', 'USER_UPDATE', `Modification de l'utilisateur ${currentUser.username} (${changes.join(', ')})`, req.ip);
-    }
-
-    const settings = await getAppSettings();
-    const editedBootstrapAdmin = settings.bootstrap_admin_user_id === userId
-      && settings.default_admin_active
-      && ((nextUsername !== undefined && nextUsername !== 'root') || (nextPassword !== undefined && nextPassword.length > 0));
-
-    if (editedBootstrapAdmin) {
-      await pool.query(
-        `UPDATE app_settings
-         SET default_admin_active = false,
-             updated_at = NOW()
-         WHERE id = 1`
-      );
     }
 
     if (!rows[0]) return res.status(404).json({ error: 'Utilisateur introuvable' });

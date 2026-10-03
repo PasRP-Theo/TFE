@@ -5,7 +5,6 @@ import { Server }      from "socket.io";
 import cors            from "cors";
 import path            from "path";
 import { fileURLToPath } from "url";
-import bcrypt          from "bcryptjs";
 import jwt             from "jsonwebtoken";
 import rateLimit       from "express-rate-limit";
 import { existsSync, mkdirSync } from "fs";
@@ -19,9 +18,12 @@ import alertsRoutes          from "./src/routes/alerts.js";
 import pushRoutes            from "./src/routes/push.js";
 import webrtcRoutes          from "./src/routes/webrtc.js";
 import homeRoutes            from "./src/routes/home.js";
+import authRoutes            from "./src/routes/auth.js";
+import { requireAuth, requireAdmin } from "./src/middleware/auth.js";
+import { ensureSetupState } from "./src/auth/setup.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates, setSocketIO } from "./src/camera/manager.js";
-import { JWT_SECRET, JWT_EXPIRES_IN } from "./src/config/auth.js";
+import { JWT_SECRET } from "./src/config/auth.js";
 import { createAlert } from "./src/alerts/service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,17 +62,6 @@ io.on("connection", (socket) => {
 app.set('io', io);
 setSocketIO(io);
 
-export async function logAudit(username, action, details, ip) {
-  try {
-    await pool.query(
-      "INSERT INTO audit_logs (username, action, details, ip_address) VALUES ($1, $2, $3, $4)",
-      [username, action, details, ip]
-    );
-  } catch (err) {
-    console.error('[AUDIT LOG ERROR]', err);
-  }
-}
-
 // CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -90,90 +81,12 @@ app.use(express.json());
 app.set('trust proxy', 'loopback');
 
 // rate limiting
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'development' ? 50 : 8,
-  message: { error: "Trop de tentatives, reessayez dans 15 minutes." },
-  standardHeaders: true, legacyHeaders: false,
-});
-
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, max: 200,
   message: { error: "Trop de requetes." },
   standardHeaders: true, legacyHeaders: false,
 });
 app.use("/api/", apiLimiter);
-
-function getRequestUser(req) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return null;
-  try {
-    return jwt.verify(header.slice(7), JWT_SECRET);
-  } catch {
-    return null;
-  }
-}
-
-// auth
-app.post("/auth/register", async (req, res) => {
-  const { username, password, role = "user" } = req.body;
-  if (!username || !password) return res.status(400).json({ error: "Identifiant et mot de passe requis" });
-  if (password.length < 8) return res.status(400).json({ error: "Mot de passe trop court (8 caracteres min)" });
-  try {
-    const existingUserResult = await pool.query('SELECT COUNT(*)::int AS count FROM users');
-    const hasUsers = (existingUserResult.rows[0]?.count ?? 0) > 0;
-    const requestUser = getRequestUser(req);
-
-    if (hasUsers && requestUser?.role !== 'admin') {
-      return res.status(403).json({ error: 'Acces reserve aux administrateurs' });
-    }
-
-    const hash = await bcrypt.hash(password, 12);
-    const { rows } = await pool.query(
-      "INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role",
-      [username.toLowerCase().trim(), hash, hasUsers ? role : 'admin']
-    );
-    await logAudit(requestUser ? requestUser.username : 'system', 'USER_REGISTER', `Création de l'utilisateur ${username} avec le rôle ${hasUsers ? role : 'admin'}`, req.ip);
-    res.status(201).json({ message: "Utilisateur cree", user: rows[0] });
-  } catch (err) {
-    if (err.code === "23505") return res.status(409).json({ error: "Identifiant deja utilise" });
-    console.error(err);
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-
-app.post("/auth/login", loginLimiter, async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) return res.status(400).json({ error: "Champs manquants" });
-  try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE username = $1", [username.toLowerCase().trim()]);
-    const user  = rows[0];
-    const valid = user ? await bcrypt.compare(password, user.password) : false;
-    if (!valid) {
-      await logAudit(username, 'LOGIN_FAILED', 'Échec de connexion (identifiants incorrects)', req.ip);
-      return res.status(401).json({ error: "Identifiant ou mot de passe incorrect" });
-    }
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
-    await logAudit(user.username, 'LOGIN_SUCCESS', 'Connexion réussie', req.ip);
-    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-  } catch (err) { console.error(err); res.status(500).json({ error: "Erreur serveur" }); }
-});
-
-app.get("/auth/me", async (req, res) => {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return res.status(401).json({ error: "Non authentifie" });
-  try {
-    const decoded = jwt.verify(header.slice(7), JWT_SECRET);
-    const { rows } = await pool.query("SELECT id, username, role FROM users WHERE id = $1", [decoded.id]);
-    if (!rows[0]) return res.status(404).json({ error: "Introuvable" });
-    res.json({ user: rows[0] });
-  } catch { res.status(401).json({ error: "Token invalide ou expire" }); }
-});
 
 // HLS statique
 const hlsDir = process.env.HLS_DIR || path.join(__dirname, '..', 'hls');
@@ -184,6 +97,7 @@ if (!existsSync(recordingsDir)) mkdirSync(recordingsDir, { recursive: true });
 app.use('/recordings', express.static(recordingsDir));
 
 // routes
+app.use("/auth", authRoutes);
 app.use("/api/users",   userRoutes);
 app.use("/api/system",  systemRoutes);
 app.use("/api/camera-nodes", cameraNodeRoutes);
@@ -194,9 +108,7 @@ app.use("/api/notifications", pushRoutes);
 app.use("/api/webrtc", webrtcRoutes);
 app.use("/api/home",   homeRoutes);
 
-app.get("/api/audit-logs", async (req, res) => {
-  const user = getRequestUser(req);
-  if (!user || user.role !== 'admin') return res.status(403).json({ error: "Accès refusé" });
+app.get("/api/audit-logs", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 150");
     res.json(rows);
@@ -234,6 +146,7 @@ app.get("/*", (_, res) => {
 // démarrage
 async function start() {
   await initDB();
+  await ensureSetupState();
 
   // go2rtc
   startGo2rtc().then(ok => {

@@ -5,15 +5,16 @@ import type { ReactNode } from 'react';
 import { apiUrl, readJsonResponse } from '../lib/api';
 
 interface User {
-  id:    number;
-  email: string;
-  role:  string;
+  id:       number;
+  username: string;
+  role:     string;
 }
 
 interface AuthContextType {
   user:    User | null;
   token:   string | null;
   login:   (username: string, password: string) => Promise<void>;
+  completeSetup: (setupToken: string, username: string, password: string) => Promise<void>;
   logout:  () => void;
   loading: boolean;
 }
@@ -90,8 +91,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   }
 
+  async function completeSetup(setupToken: string, username: string, password: string) {
+    const res  = await fetch(apiUrl('/auth/setup'), {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ setupToken: setupToken.trim(), username: username.toLowerCase().trim(), password }),
+    });
+    const data = await readJsonResponse<{ error?: string; token: string; user: User }>(res);
+    if (!res.ok) throw new Error(data.error || "Erreur lors de l'installation");
+    localStorage.setItem('token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, completeSetup, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
