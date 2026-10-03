@@ -23,14 +23,11 @@ import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from '../utils/streamUtils.js';
 import { signLivePrefix, signRecordingUrl, LIVE_URL_TTL_SECONDS } from '../security/urlSigning.js';
+import { numericIdParam } from '../utils/validators.js';
 
 const router = Router();
+router.param('id', numericIdParam);
 
-// identifiant numérique uniquement (empêche « .. » dans les chemins de fichiers)
-router.param('id', (_req, res, next, id) => {
-  if (!/^d+$/.test(String(id))) return res.status(400).json({ error: 'Identifiant invalide' });
-  next();
-});
 const DISCOVERY_TTL_MINUTES = Number(process.env.CAMERA_DISCOVERY_TTL_MINUTES || 10);
 const ENABLE_SCAN_FALLBACK = process.env.CAMERA_DISCOVERY_ENABLE_SCAN_FALLBACK !== 'false';
 const MOTION_ACTIVE_WINDOW_SECONDS = Number(process.env.CAMERA_NODE_MOTION_WINDOW_SECONDS || 20);
@@ -493,7 +490,6 @@ router.post('/:id/start', requireAuth, async (req, res) => {
 
 // URL signée du flux live (valable LIVE_URL_TTL_SECONDS, liée à l'utilisateur)
 router.get('/:id/hls-url', requireAuth, (req, res) => {
-  if (!/^d+$/.test(String(req.params.id))) return res.status(400).json({ error: 'Identifiant invalide' });
   const state = getState(req.params.id);
   if (!state?.hlsUrl) return res.status(409).json({ error: 'Flux non démarré' });
   res.json({
