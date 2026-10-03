@@ -1,10 +1,16 @@
 import pg from 'pg';
+import { warnIfWeak } from '../config/secrets.js';
 const { Pool } = pg;
 
 const required = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 const missing = required.filter(k => !process.env[k]);
 if (missing.length) {
   throw new Error(`[DB] Variables manquantes dans .env : ${missing.join(', ')}`);
+}
+
+warnIfWeak('DB_PASSWORD', process.env.DB_PASSWORD);
+if (process.env.DB_USER === 'postgres') {
+  console.warn('[SECRETS ⚠] DB_USER=postgres (superutilisateur) : utilisez le rôle dédié sentys_app (server/sql/roles.sql).');
 }
 
 export const pool = new Pool({

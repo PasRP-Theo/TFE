@@ -54,26 +54,26 @@ cd TFE
 
 ### 2. Créer la base de données PostgreSQL
 
-```sql
-CREATE DATABASE DEMOTFE;
+Rôles dédiés au moindre privilège (pas de superutilisateur `postgres` pour l'application) :
+
+```bash
+sudo -u postgres psql -v app_password="'$(openssl rand -base64 32)'" -v ai_password="'$(openssl rand -base64 32)'" -f server/sql/roles.sql
 ```
 
 Les tables sont créées automatiquement au premier démarrage.
 
 ### 3. Créer `server/.env`
 
-```env
-PORT=4000
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=DEMOTFE
-DB_USER=postgres
-DB_PASSWORD=admin
-JWT_SECRET=demo_TFE
-HLS_DIR=../hls
-RECORDINGS_DIR=../recordings
-GO2RTC_BIN=go2rtc
+```bash
+cp server/.env.example server/.env
+# puis renseigner DB_USER / DB_PASSWORD (rôle dédié : server/sql/roles.sql)
 ```
+
+Les secrets (`JWT_SECRET`, etc.) sont générés au premier démarrage dans `~/.sentys/secrets.json`.
+Aucune valeur par défaut n'est acceptée : voir [docs/securite/POLITIQUE-SECRETS.md](docs/securite/POLITIQUE-SECRETS.md).
+
+Au premier démarrage, aucun compte n'existe : la console affiche un **jeton d'installation**
+à saisir sur la page de connexion pour créer l'administrateur.
 
 ### 4. Installer les dépendances
 

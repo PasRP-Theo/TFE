@@ -15,6 +15,13 @@ server/node_modules/
 # Environment files
 .env
 .env.*
+!.env.example
+
+# Secrets locaux (générés hors dépôt par défaut, voir docs/securite/POLITIQUE-SECRETS.md)
+secrets.json
+*.pem
+*.key
+.sentys/
 
 # Build outputs
 dist/

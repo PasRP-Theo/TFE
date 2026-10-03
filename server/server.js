@@ -81,7 +81,7 @@ app.use(cors({
 }));
 app.options("/{*path}", cors());
 app.use(express.json());
-app.set('trust proxy', 'loopback');
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
 // rate limiting
 const apiLimiter = rateLimit({
