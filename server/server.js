@@ -24,6 +24,7 @@ import { createHlsRouter, createRecordingsRouter } from "./src/routes/media.js";
 import { requireAuth, requireAdmin } from "./src/middleware/auth.js";
 import { ensureSetupState } from "./src/auth/setup.js";
 import { lanOnly, PUBLIC_PORT } from "./src/security/networkZone.js";
+import { securityHeaders, spaCsp, buildCorsOptions } from "./src/security/httpHeaders.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates, setSocketIO } from "./src/camera/manager.js";
 import { JWT_SECRET } from "./src/config/auth.js";
@@ -31,14 +32,17 @@ import { createAlert } from "./src/alerts/service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.disable("x-powered-by");
+
+// CORS : liste blanche unique (Express, préflights, Socket.IO)
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : ['http://localhost:5173', 'http://localhost:4000'];
+const corsOptions = buildCorsOptions(allowedOrigins);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: {
-    origin: true,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-  }
+  cors: corsOptions
 });
 
 // auth Socket.IO
@@ -65,22 +69,10 @@ io.on("connection", (socket) => {
 app.set('io', io);
 setSocketIO(io);
 
-// CORS
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:4000'];
-
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error(`CORS bloqué : origine non autorisée (${origin})`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
-app.options("/{*path}", cors());
-app.use(express.json());
+// en-têtes de sécurité puis CORS (le middleware cors répond aussi aux préflights)
+app.use(securityHeaders);
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '100kb' }));
 app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
 // rate limiting
@@ -136,8 +128,8 @@ app.get("/api/agent/sentys_agent.py", lanOnly, (_, res) => {
 
 // frontend
 const distPath = path.join(__dirname, "../client/dist");
-app.use(express.static(distPath));
-app.get("/*", (_, res) => {
+app.use(spaCsp, express.static(distPath));
+app.get("/*", spaCsp, (_, res) => {
   const indexPath = path.join(distPath, "index.html");
   if (existsSync(indexPath)) {
     res.sendFile(indexPath);

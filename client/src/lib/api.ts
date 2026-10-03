@@ -1,7 +1,10 @@
-export const configuredBaseUrl = String(import.meta.env.VITE_API_URL || '').trim();
+// URL du backend (tunnel HTTPS) pour le frontend hébergé sur Vercel.
+// Vide = même origine (interface servie par le serveur local sur le LAN).
+export const configuredBaseUrl = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
 const configuredApiPort = String(import.meta.env.VITE_API_PORT || '4000').trim();
 
 function getDefaultApiBaseUrl() {
+  if (configuredBaseUrl) return configuredBaseUrl;
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return `http://${window.location.hostname}:${configuredApiPort}`;
   }

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { apiFetch, apiUrl } from '../lib/api';
 
 interface DiscoveredCamera {
   ip: string;
@@ -15,10 +16,7 @@ export default function Dashboard() {
     setScanning(true);
     setDiscoveredCameras([]);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/cameras/scan', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
+      const response = await apiFetch(apiUrl('/api/cameras/scan'));
       
       if (response.ok) {
         const data = await response.json();

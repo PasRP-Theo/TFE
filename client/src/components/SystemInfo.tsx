@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
+import { apiFetch, apiUrl } from "../lib/api";
 
 // types
 
@@ -179,10 +180,7 @@ export default function SystemInfo() {
 
   const fetchInfo = useCallback(async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/system/info", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await apiFetch(apiUrl("/api/system/info"));
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -219,7 +217,7 @@ export default function SystemInfo() {
 
     if (nextPin.length === 4) {
       try {
-        const res = await fetch('/api/app-config/verify-pin', {
+        const res = await fetch(apiUrl('/api/app-config/verify-pin'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pin: nextPin }),

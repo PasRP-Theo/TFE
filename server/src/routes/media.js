@@ -88,6 +88,8 @@ export function createRecordingsRouter(recordingsDir) {
       return res.status(500).end();
     }
     noStore(res);
+    // le lecteur intégré du navigateur (onglet « Ouvrir ») serait bloqué par la CSP API
+    res.removeHeader('Content-Security-Policy');
     if (req.query.download === '1') {
       res.setHeader('Content-Disposition', `attachment; filename="${path.basename(decodedPath).replace(/"/g, '')}"`);
     }
