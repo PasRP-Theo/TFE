@@ -3,6 +3,7 @@ import { negotiate, isReady, registerStream, unregisterStream } from '../go2rtc/
 import { pool }      from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logAudit } from '../audit/log.js';
+import { maskStreamUrl } from '../utils/streamUtils.js';
 
 const router = Router();
 
@@ -54,8 +55,8 @@ router.post(
       logAudit(req.user.username, 'VIDEO_LIVE_VIEW', `Caméra ${cameraId} (WebRTC)`, req.ip);
       res.type('application/sdp').send(sdpAnswer);
     } catch (err) {
-      console.error(`[WEBRTC] Négociation cam ${cameraId} échouée :`, err.message);
-      res.status(502).json({ error: err.message });
+      console.error(`[WEBRTC] Négociation cam ${cameraId} échouée :`, maskStreamUrl(err.message));
+      res.status(502).json({ error: 'Négociation WebRTC impossible' });
     }
   }
 );
@@ -71,7 +72,8 @@ router.post('/:cameraId/register', requireAuth, requireAdmin, async (req, res) =
     const ok = await registerStream(cameraId, rows[0].rtsp_url);
     res.json({ registered: ok });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[WEBRTC REGISTER]', maskStreamUrl(err.message));
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 

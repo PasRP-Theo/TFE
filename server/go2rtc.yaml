@@ -1,5 +1,15 @@
+# API REST uniquement en local : elle expose les sources (identifiants RTSP)
+# et permet d'ajouter des flux. Le serveur Node est le seul client.
 api:
-  listen: :1984
+  listen: "127.0.0.1:1984"
+
+# serveur RTSP de re-diffusion désactivé (sinon tous les flux sont relus sans authentification sur :8554)
+rtsp:
+  listen: ""
+
+# WebRTC : ouvrir 8555 (TCP/UDP) uniquement vers le LAN / tailnet sur le pare-feu
+webrtc:
+  listen: ":8555"
 
 log:
   level: warn

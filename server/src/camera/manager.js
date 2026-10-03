@@ -59,6 +59,11 @@ function redactStreamUrl(value) {
   }
 }
 
+// masque identifiants dans un texte libre (stderr ffmpeg / python)
+function redactText(text) {
+  return String(text).replace(/\/\/[^/@\s:]+:[^/@\s]+@/g, '//***:***@');
+}
+
 // masque URLs dans args ffmpeg
 function redactCommandArgs(args) {
   return args.map(arg => (/^(rtsp|https?):/i.test(String(arg)) ? redactStreamUrl(String(arg)) : arg));
@@ -245,7 +250,7 @@ export async function scanLocalNetworkForCameraStreams({ stopAfter = SCAN_STOP_A
       })().then(streamUrl => {
         if (streamUrl && results.length < stopAfter) {
           results.push({ host, streamUrl });
-          console.log(`[CAM SCAN] trouvé ${streamUrl} sur ${host} (${results.length}/${stopAfter})`);
+          console.log(`[CAM SCAN] trouvé ${redactStreamUrl(streamUrl)} sur ${host} (${results.length}/${stopAfter})`);
         }
       }).catch(() => {
       }).finally(() => {
@@ -604,11 +609,11 @@ export async function startHlsStream(camera) {
     const venvPython = path.join(PROJECT_ROOT, 'venv', 'bin', 'python');
     const pythonBin  = os.platform() === 'win32' ? 'python' : (existsSync(venvPython) ? venvPython : 'python3');
     aiProc = spawn(pythonBin, [aiScript], { env: { ...process.env, CAMERA_ID: id, RTSP_URL: sourceUrl } });
-    aiProc.stdout.on('data', d => console.log(`[CAM ${id} IA] ${d.toString().trim()}`));
+    aiProc.stdout.on('data', d => console.log(`[CAM ${id} IA] ${redactText(d.toString().trim())}`));
     aiProc.stderr.on('data', d => {
       const msg = d.toString().trim();
       if (!msg.includes('GStreamer warning') && !msg.includes('error while decoding'))
-        console.error(`[CAM ${id} IA] ${msg}`);
+        console.error(`[CAM ${id} IA] ${redactText(msg)}`);
     });
     aiProc.on('error', err => console.error(`[CAM ${id} IA] ${err.message}`));
     console.log(`[CAM ${id}] IA démarrée`);
@@ -654,7 +659,7 @@ export async function startHlsStream(camera) {
 
   proc.stderr.on('data', data => {
     const txt = data.toString();
-    if (txt.includes('Error') || txt.includes('error')) console.error(`[CAM ${id}] ffmpeg: ${txt.slice(0, 200)}`);
+    if (txt.includes('Error') || txt.includes('error')) console.error(`[CAM ${id}] ffmpeg: ${redactText(txt.slice(0, 200))}`);
   });
 
   proc.on('close', code => {
@@ -869,7 +874,7 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
   proc.stderr.on('data', data => {
     const txt = data.toString();
     if (txt.includes('Error') || txt.includes('error') || txt.includes('Invalid')) {
-      console.error(`[CAM ${id} REC] ffmpeg: ${txt.trim()}`);
+      console.error(`[CAM ${id} REC] ffmpeg: ${redactText(txt.trim())}`);
     }
   });
 

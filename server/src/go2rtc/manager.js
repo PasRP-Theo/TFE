@@ -1,6 +1,7 @@
 import { spawn }           from 'child_process';
 import path                from 'path';
 import { fileURLToPath }   from 'url';
+import { maskStreamUrl }   from '../utils/streamUtils.js';
 
 const __dirname    = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH  = path.join(__dirname, '..', '..', 'go2rtc.yaml');
@@ -90,7 +91,7 @@ export async function registerStream(cameraId, rtspUrl) {
       `${GO2RTC_URL}/api/streams?name=${encodeURIComponent(name)}&src=${encodeURIComponent(rtspUrl)}`,
       { method: 'PUT' }
     );
-    if (res.ok) console.log(`[go2rtc] Stream enregistré : ${name} → ${rtspUrl}`);
+    if (res.ok) console.log(`[go2rtc] Stream enregistré : ${name} → ${maskStreamUrl(rtspUrl)}`);
     return res.ok;
   } catch (err) {
     console.error('[go2rtc] registerStream :', err.message);

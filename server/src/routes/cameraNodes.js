@@ -66,7 +66,7 @@ function classifyNodeMotion(rtspUrl) {
     child.stderr.on('data', d => { stderr += d.toString(); });
     child.on('close', () => {
       clearTimeout(timeout);
-      if (stderr) console.warn('[CLASSIFY] stderr:', stderr.slice(0, 300));
+      if (stderr) console.warn('[CLASSIFY] stderr:', stderr.slice(0, 300).replace(/\/\/[^/@\s:]+:[^/@\s]+@/g, '//***:***@'));
       try {
         const lastLine = stdout.trim().split('\n').findLast(l => l.startsWith('{'));
         resolve(lastLine ? JSON.parse(lastLine) : { type: 'motion', label: 'Mouvement détecté', confidence: 0 });
@@ -248,7 +248,7 @@ router.post('/motion', async (req, res) => {
       pool.query('SELECT * FROM cameras WHERE rtsp_url = $1 LIMIT 1', [rows[0].stream_url])
         .then(({ rows: camRows }) => {
           if (!camRows[0]) {
-            console.warn(`[MOTION RECORDING] Aucune caméra liée à stream_url=${rows[0].stream_url} — enregistrement ignoré`);
+            console.warn(`[MOTION RECORDING] Aucune caméra liée à stream_url=${maskStreamUrl(rows[0].stream_url)} — enregistrement ignoré`);
             return;
           }
           startHlsStream(camRows[0]).catch(err => console.error('[MOTION STREAM START]', err.message));

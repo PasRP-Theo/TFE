@@ -281,7 +281,7 @@ router.get('/discover', requireAuth, async (req, res) => {
         streamUrl,
         source: 'probe',
       }).catch(err => console.error('[CAM DISCOVER UPSERT]', err));
-      console.log(`[CAM DISCOVER] flux trouvé pour ${host} en ${Math.round((Date.now() - startedAt) / 1000)}s -> ${streamUrl}`);
+      console.log(`[CAM DISCOVER] flux trouvé pour ${host} en ${Math.round((Date.now() - startedAt) / 1000)}s -> ${maskStreamUrl(streamUrl)}`);
       return res.json({ streamUrl });
     }
 
@@ -611,7 +611,8 @@ router.delete('/archives/:id', requireAuth, requireAdmin, async (req, res) => {
     const result = await deleteAllRecordings(req.params.id);
     res.json({ message: 'Archive supprimée', deletedCount: result.deletedCount });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[ARCHIVE DELETE]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
