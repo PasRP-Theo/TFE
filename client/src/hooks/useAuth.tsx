@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { apiUrl, readJsonResponse } from '../lib/api';
+import { unsubscribeUserFromPush } from '../components/push';
 import {
   getAccessToken, setAccessToken, onAccessTokenChange, refreshSession, decodeTokenExpiry,
   type SessionUser,
@@ -67,10 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [token]);
 
+  // déconnexion : cet appareil ne reçoit plus les alertes, la session est révoquée côté serveur
   const logout = useCallback(() => {
-    fetch(apiUrl('/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => {});
-    setAccessToken(null);
-    setUser(null);
+    unsubscribeUserFromPush()
+      .catch(() => {})
+      .finally(() => {
+        fetch(apiUrl('/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => {});
+        setAccessToken(null);
+        setUser(null);
+      });
   }, []);
 
   const logoutAll = useCallback(async () => {

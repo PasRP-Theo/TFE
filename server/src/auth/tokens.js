@@ -144,6 +144,8 @@ export async function revokeRefreshFamily(presented) {
 export async function revokeAllSessions(userId) {
   await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [userId]);
   await pool.query('UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1', [userId]);
+  // compromission possible : plus aucune alerte vers les appareils de ce compte
+  await pool.query('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
   invalidateUserState(userId);
 }
 

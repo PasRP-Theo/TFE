@@ -23,6 +23,7 @@ export interface AppConfig {
   alertsRealtimeEnabled: boolean;
   alertsDailySummaryEnabled: boolean;
   alertsSoundEnabled: boolean;
+  pushMinimalContent: boolean;
   alertsDisconnectEnabled: boolean;
   kioskPin: string;
   surveillanceMode: boolean;
@@ -54,6 +55,7 @@ const DEFAULT_CONFIG: AppConfig = {
   alertsRealtimeEnabled: true,
   alertsDailySummaryEnabled: false,
   alertsSoundEnabled: true,
+  pushMinimalContent: true,
   alertsDisconnectEnabled: true,
   kioskPin: '1234',
   surveillanceMode: true,
@@ -84,6 +86,7 @@ function sanitizeConfig(value: unknown): AppConfig {
     alertsRealtimeEnabled: typeof candidate.alertsRealtimeEnabled === 'boolean' ? candidate.alertsRealtimeEnabled : DEFAULT_CONFIG.alertsRealtimeEnabled,
     alertsDailySummaryEnabled: typeof candidate.alertsDailySummaryEnabled === 'boolean' ? candidate.alertsDailySummaryEnabled : DEFAULT_CONFIG.alertsDailySummaryEnabled,
     alertsSoundEnabled: typeof candidate.alertsSoundEnabled === 'boolean' ? candidate.alertsSoundEnabled : DEFAULT_CONFIG.alertsSoundEnabled,
+    pushMinimalContent: typeof candidate.pushMinimalContent === 'boolean' ? candidate.pushMinimalContent : DEFAULT_CONFIG.pushMinimalContent,
     alertsDisconnectEnabled: typeof candidate.alertsDisconnectEnabled === 'boolean' ? candidate.alertsDisconnectEnabled : DEFAULT_CONFIG.alertsDisconnectEnabled,
     kioskPin: typeof candidate.kioskPin === 'string' && candidate.kioskPin.trim().length === 4 ? candidate.kioskPin.trim() : DEFAULT_CONFIG.kioskPin,
     surveillanceMode: typeof candidate.surveillanceMode === 'boolean' ? candidate.surveillanceMode : DEFAULT_CONFIG.surveillanceMode,

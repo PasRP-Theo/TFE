@@ -340,6 +340,15 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_mfa_recovery_user ON mfa_recovery_codes(user_id);
     `);
 
+    // E8 : abonnements push rattachés au compte (supprimés avec lui), contenu minimal par défaut
+    await client.query(`
+      DELETE FROM push_subscriptions WHERE user_id IS NULL;
+      ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_fkey;
+      ALTER TABLE push_subscriptions ADD CONSTRAINT push_subscriptions_user_id_fkey
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS push_minimal_content BOOLEAN NOT NULL DEFAULT true;
+    `);
+
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {

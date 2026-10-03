@@ -43,6 +43,7 @@ function serializeConfig(row) {
     alertsDisconnectEnabled: row.alerts_disconnect_enabled,
     kioskPin: row.kiosk_pin,
     surveillanceMode: row.surveillance_mode,
+    pushMinimalContent: row.push_minimal_content,
   };
 }
 
@@ -55,7 +56,7 @@ async function getConfigRow() {
             default_camera_add_mode, camera_discovery_interval_seconds,
             alerts_realtime_enabled, alerts_daily_summary_enabled,
             alerts_sound_enabled, alerts_disconnect_enabled,
-            kiosk_pin, surveillance_mode
+            kiosk_pin, surveillance_mode, push_minimal_content
      FROM app_settings
      WHERE id = 1`
   );
@@ -130,6 +131,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
   const nextAlertsDisconnectEnabled = readBoolean(req.body.alertsDisconnectEnabled);
   const nextKioskPin = readString(req.body.kioskPin);
   const nextSurveillanceMode = readBoolean(req.body.surveillanceMode);
+  const nextPushMinimalContent = readBoolean(req.body.pushMinimalContent);
 
   if (nextAppName !== undefined && !nextAppName) {
     return res.status(400).json({ error: 'Le titre principal ne peut pas être vide' });
@@ -188,6 +190,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
       alertsDisconnectEnabled: nextAlertsDisconnectEnabled ?? current.alerts_disconnect_enabled,
       kioskPin: nextKioskPin ?? current.kiosk_pin,
       surveillanceMode: nextSurveillanceMode ?? current.surveillance_mode,
+      pushMinimalContent: nextPushMinimalContent ?? current.push_minimal_content,
     };
 
     const { rows } = await pool.query(
@@ -212,6 +215,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
            alerts_disconnect_enabled = $18,
            kiosk_pin = $19,
            surveillance_mode = $20,
+           push_minimal_content = $21,
            updated_at = NOW()
        WHERE id = 1
        RETURNING app_name, app_subtitle, system_version,
@@ -221,7 +225,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
                  default_camera_add_mode, camera_discovery_interval_seconds,
                  alerts_realtime_enabled, alerts_daily_summary_enabled,
                  alerts_sound_enabled, alerts_disconnect_enabled,
-                 kiosk_pin, surveillance_mode`,
+                 kiosk_pin, surveillance_mode, push_minimal_content`,
       [
         values.appName,
         values.appSubtitle,
@@ -243,6 +247,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
         values.alertsDisconnectEnabled,
         values.kioskPin,
         values.surveillanceMode,
+        values.pushMinimalContent,
       ]
     );
 

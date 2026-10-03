@@ -220,6 +220,7 @@ function TabSettings() {
         alertsDailySummaryEnabled: draftConfig.alertsDailySummaryEnabled,
         alertsSoundEnabled: draftConfig.alertsSoundEnabled,
         alertsDisconnectEnabled: draftConfig.alertsDisconnectEnabled,
+        pushMinimalContent: draftConfig.pushMinimalContent,
       });
       setDraftConfig(nextConfig);
       setAlertsSuccess('Préférences d’alerte enregistrées.');
@@ -385,6 +386,12 @@ function TabSettings() {
             description="Prépare un résumé quotidien des événements et détections."
             checked={draftConfig.alertsDailySummaryEnabled}
             onChange={(checked) => updateDraft({ alertsDailySummaryEnabled: checked })}
+          />
+          <SettingToggle
+            label="Notifications push discrètes"
+            description="Recommandé : « Nouvelle alerte » sans nom de caméra, zone ni type de détection sur l'écran verrouillé."
+            checked={draftConfig.pushMinimalContent}
+            onChange={(checked) => updateDraft({ pushMinimalContent: checked })}
           />
           <SettingToggle
             label="Alerter si une caméra se déconnecte"

@@ -61,10 +61,17 @@ export async function subscribeUserToPush(): Promise<PushSubscription> {
   return subscription;
 }
 
+// retrait du consentement : supprimé côté serveur puis dans le navigateur
 export async function unsubscribeUserFromPush(): Promise<void> {
+    if (!('serviceWorker' in navigator)) return;
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     if (!subscription) return;
+    await apiFetch(apiUrl('/api/notifications/subscribe'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+    }).catch(() => {});
     await subscription.unsubscribe();
 }
 

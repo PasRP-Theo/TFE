@@ -6,7 +6,7 @@ import { fileURLToPath }          from 'url';
 import { EventEmitter }           from 'events';
 import ffmpegPath                 from 'ffmpeg-static';
 import { pool }                   from '../db/index.js';
-import { sendPushNotification }   from '../routes/push.js';
+import { broadcastPush }          from '../routes/push.js';
 import { buildChildEnv }          from '../utils/childEnv.js';
 import { getInternalToken }       from '../security/deviceAuth.js';
 
@@ -894,28 +894,11 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
 
   const pushTitle = detectionLabel || 'Mouvement détecté';
   const camLabel = cameraName || `CAM ${id}`;
-  const pushPayload = JSON.stringify({
+  broadcastPush({
     title: `${pushTitle} — ${camLabel}`,
     body: detectionLabel ? `${detectionLabel} capté par la caméra.` : 'Un mouvement a été détecté par la caméra.',
-    icon: '/pwa-192.png',
-    data: { url: '/videos' },
-  });
-  pool.query('SELECT endpoint, p256dh, auth FROM push_subscriptions').then(async ({ rows: subs }) => {
-    const stale = [];
-    await Promise.all(subs.map(sub =>
-      sendPushNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        pushPayload
-      ).catch(err => {
-        if (err.statusCode === 410 || err.statusCode === 404) stale.push(sub.endpoint);
-        else console.error(`[PUSH CAM ${id}]`, err.message);
-      })
-    ));
-    if (stale.length > 0) {
-      pool.query('DELETE FROM push_subscriptions WHERE endpoint = ANY($1::text[])', [stale])
-        .catch(err => console.error(`[PUSH CAM ${id}] CLEANUP:`, err.message));
-    }
-  }).catch(err => console.error(`[PUSH CAM ${id}] DB error:`, err.message));
+    url: '/videos',
+  }).catch(err => console.error(`[PUSH CAM ${id}]`, err.message));
 
   const cleanupFailedRecording = () => {
     fsPromises.stat(mp4File)
