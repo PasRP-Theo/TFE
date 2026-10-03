@@ -9,8 +9,14 @@ let weatherCache = null;
 let weatherCacheAt = 0;
 const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
 
-const WEATHER_LAT = process.env.WEATHER_LAT || '50.5745';
-const WEATHER_LON = process.env.WEATHER_LON || '4.5282';
+// pas de coordonnées par défaut dans le code (dépôt public) ; arrondies à ~1 km avant
+// envoi au service météo tiers (minimisation, RGPD art. 5.1.c)
+function coarseCoordinate(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : null;
+}
+const WEATHER_LAT = coarseCoordinate(process.env.WEATHER_LAT);
+const WEATHER_LON = coarseCoordinate(process.env.WEATHER_LON);
 
 const WMO_LABELS = {
   0: 'Ciel dégagé', 1: 'Principalement dégagé', 2: 'Partiellement nuageux', 3: 'Couvert',
@@ -114,6 +120,9 @@ router.delete('/shopping/:id', requireAuth, async (req, res) => {
 // ── MÉTÉO (Open-Meteo, modèle IRM) ────────────────────────────────────────
 
 router.get('/weather', requireAuth, async (_req, res) => {
+  if (!WEATHER_LAT || !WEATHER_LON) {
+    return res.status(404).json({ error: 'Météo non configurée (WEATHER_LAT / WEATHER_LON)' });
+  }
   const now = Date.now();
   if (weatherCache && now - weatherCacheAt < WEATHER_CACHE_TTL_MS) {
     return res.json(weatherCache);

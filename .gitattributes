@@ -1,0 +1,13 @@
+# Fins de ligne LF pour tout ce qui s'exécute sur Linux (serveur, Pi) :
+# un script en CRLF casse bash, et la signature Ed25519 de l'agent doit
+# porter sur les mêmes octets sous Windows et sous Linux.
+* text=auto
+*.sh   text eol=lf
+*.py   text eol=lf
+*.sql  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.pem  text eol=lf
+*.sig  binary
+*.woff2 binary

@@ -55,3 +55,7 @@ __pycache__/
 # Postman
 postman/
 .postman/
+
+# Builds générés (servis depuis client/dist, jamais versionnés)
+client/dev-dist/
+server/public/
