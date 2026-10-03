@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { warnIfWeak } from '../config/secrets.js';
+import { hashPin, isValidPinFormat, LEGACY_DEFAULT_PIN } from '../security/pin.js';
 const { Pool } = pg;
 
 const required = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
@@ -348,6 +349,21 @@ export async function initDB() {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS push_minimal_content BOOLEAN NOT NULL DEFAULT true;
     `);
+
+    // M6 : PIN d'armement haché ; l'ancien PIN en clair est migré puis effacé (1234 = non défini)
+    await client.query(`
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS pin_hash CHAR(64);
+      ALTER TABLE app_settings ALTER COLUMN kiosk_pin DROP NOT NULL;
+      ALTER TABLE app_settings ALTER COLUMN kiosk_pin DROP DEFAULT;
+    `);
+    const { rows: pinRows } = await client.query('SELECT kiosk_pin FROM app_settings WHERE id = 1 AND kiosk_pin IS NOT NULL');
+    if (pinRows[0]) {
+      const legacyPin = pinRows[0].kiosk_pin;
+      if (legacyPin !== LEGACY_DEFAULT_PIN && isValidPinFormat(legacyPin)) {
+        await client.query('UPDATE app_settings SET pin_hash = $1 WHERE id = 1', [hashPin(legacyPin)]);
+      }
+      await client.query('UPDATE app_settings SET kiosk_pin = NULL WHERE id = 1');
+    }
 
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');

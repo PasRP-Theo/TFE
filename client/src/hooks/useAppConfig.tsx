@@ -25,15 +25,18 @@ export interface AppConfig {
   alertsSoundEnabled: boolean;
   pushMinimalContent: boolean;
   alertsDisconnectEnabled: boolean;
-  kioskPin: string;
+  pinConfigured: boolean;
   surveillanceMode: boolean;
 }
+
+// pin : vérification pour armer/désarmer ; newPin : définition du PIN (jamais relu)
+type ConfigPatch = Partial<Omit<AppConfig, 'pinConfigured'>> & { pin?: string; newPin?: string };
 
 interface AppConfigContextType {
   config: AppConfig;
   loading: boolean;
   refreshConfig: () => Promise<void>;
-  updateConfig: (token: string, patch: Partial<AppConfig>) => Promise<AppConfig>;
+  updateConfig: (token: string, patch: ConfigPatch) => Promise<AppConfig>;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -57,7 +60,7 @@ const DEFAULT_CONFIG: AppConfig = {
   alertsSoundEnabled: true,
   pushMinimalContent: true,
   alertsDisconnectEnabled: true,
-  kioskPin: '1234',
+  pinConfigured: false,
   surveillanceMode: true,
 };
 
@@ -88,7 +91,7 @@ function sanitizeConfig(value: unknown): AppConfig {
     alertsSoundEnabled: typeof candidate.alertsSoundEnabled === 'boolean' ? candidate.alertsSoundEnabled : DEFAULT_CONFIG.alertsSoundEnabled,
     pushMinimalContent: typeof candidate.pushMinimalContent === 'boolean' ? candidate.pushMinimalContent : DEFAULT_CONFIG.pushMinimalContent,
     alertsDisconnectEnabled: typeof candidate.alertsDisconnectEnabled === 'boolean' ? candidate.alertsDisconnectEnabled : DEFAULT_CONFIG.alertsDisconnectEnabled,
-    kioskPin: typeof candidate.kioskPin === 'string' && candidate.kioskPin.trim().length === 4 ? candidate.kioskPin.trim() : DEFAULT_CONFIG.kioskPin,
+    pinConfigured: Boolean(candidate.pinConfigured),
     surveillanceMode: typeof candidate.surveillanceMode === 'boolean' ? candidate.surveillanceMode : DEFAULT_CONFIG.surveillanceMode,
   };
 }
@@ -104,7 +107,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     setConfig(sanitizeConfig(data));
   }
 
-  async function updateConfig(token: string, patch: Partial<AppConfig>) {
+  async function updateConfig(token: string, patch: ConfigPatch) {
     void token; // jeton géré par apiFetch (mémoire + renouvellement)
     const response = await apiFetch(apiUrl('/api/app-config'), {
       method: 'PATCH',

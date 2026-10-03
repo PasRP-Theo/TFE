@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { authenticateAccessToken } from '../auth/tokens.js';
+import { isValidPinFormat, hashPin, verifyPin } from '../security/pin.js';
+import { logAudit } from '../audit/log.js';
 import { stopAllCameras, startCamera } from '../camera/manager.js';
 import rateLimit from 'express-rate-limit';
 
@@ -10,6 +11,8 @@ const pinLimiter = rateLimit({
   max: process.env.NODE_ENV === 'development' ? 50 : 8,
   message: { error: 'Trop de tentatives, réessayez dans 15 minutes.' },
   standardHeaders: true, legacyHeaders: false,
+  // seuls les échecs comptent
+  skipSuccessfulRequests: true,
 });
 
 const router = Router();
@@ -41,7 +44,7 @@ function serializeConfig(row) {
     alertsDailySummaryEnabled: row.alerts_daily_summary_enabled,
     alertsSoundEnabled: row.alerts_sound_enabled,
     alertsDisconnectEnabled: row.alerts_disconnect_enabled,
-    kioskPin: row.kiosk_pin,
+    pinConfigured: Boolean(row.pin_hash),
     surveillanceMode: row.surveillance_mode,
     pushMinimalContent: row.push_minimal_content,
   };
@@ -56,7 +59,7 @@ async function getConfigRow() {
             default_camera_add_mode, camera_discovery_interval_seconds,
             alerts_realtime_enabled, alerts_daily_summary_enabled,
             alerts_sound_enabled, alerts_disconnect_enabled,
-            kiosk_pin, surveillance_mode, push_minimal_content
+            pin_hash, surveillance_mode, push_minimal_content
      FROM app_settings
      WHERE id = 1`
   );
@@ -80,15 +83,6 @@ router.get('/', async (req, res) => {
   try {
     const row = await getConfigRow();
     const config = serializeConfig(row);
-    let isAdmin = false;
-    try {
-      const header = req.headers.authorization;
-      if (header?.startsWith('Bearer ')) {
-        const user = await authenticateAccessToken(header.slice(7));
-        isAdmin = user?.role === 'admin';
-      }
-    } catch { /* non authentifié */ }
-    if (!isAdmin) delete config.kioskPin;
     res.json(config);
   } catch (err) {
     console.error('[APP CONFIG GET]', err);
@@ -96,21 +90,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/verify-pin', pinLimiter, async (req, res) => {
-  const { pin } = req.body;
-  if (typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) {
-    return res.status(400).json({ error: 'PIN invalide' });
-  }
-  try {
-    const row = await getConfigRow();
-    res.json({ valid: pin === row.kiosk_pin });
-  } catch (err) {
-    console.error('[VERIFY PIN]', err);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
+// limitation des tentatives uniquement pour les changements d'armement (PIN)
+function limitArmingAttempts(req, res, next) {
+  if (typeof req.body?.surveillanceMode === 'boolean') return pinLimiter(req, res, next);
+  next();
+}
 
-router.patch('/', requireAuth, requireAdmin, async (req, res) => {
+router.patch('/', requireAuth, requireAdmin, limitArmingAttempts, async (req, res) => {
   const nextAppName = readString(req.body.appName);
   const nextAppSubtitle = readString(req.body.appSubtitle);
   const nextLoginMessage = readString(req.body.loginMessage);
@@ -129,7 +115,8 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
   const nextAlertsDailySummaryEnabled = readBoolean(req.body.alertsDailySummaryEnabled);
   const nextAlertsSoundEnabled = readBoolean(req.body.alertsSoundEnabled);
   const nextAlertsDisconnectEnabled = readBoolean(req.body.alertsDisconnectEnabled);
-  const nextKioskPin = readString(req.body.kioskPin);
+  const nextPin = readString(req.body.newPin);
+  const pinAttempt = readString(req.body.pin);
   const nextSurveillanceMode = readBoolean(req.body.surveillanceMode);
   const nextPushMinimalContent = readBoolean(req.body.pushMinimalContent);
 
@@ -163,12 +150,25 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
   if (nextCameraDiscoveryIntervalSeconds !== undefined && (nextCameraDiscoveryIntervalSeconds < 3 || nextCameraDiscoveryIntervalSeconds > 30)) {
     return res.status(400).json({ error: 'L’intervalle de découverte doit être compris entre 3 et 30 secondes' });
   }
-  if (nextKioskPin !== undefined && !/^\d{4}$/.test(nextKioskPin)) {
-    return res.status(400).json({ error: 'Le code PIN doit comporter exactement 4 chiffres' });
+  if (nextPin !== undefined && !isValidPinFormat(nextPin)) {
+    return res.status(400).json({ error: 'Le code PIN doit comporter 4 à 8 chiffres' });
   }
 
   try {
     const current = await getConfigRow();
+
+    // armement / désarmement : PIN vérifié dans la même requête (pas d'oracle séparé)
+    const armingChange = nextSurveillanceMode !== undefined && nextSurveillanceMode !== current.surveillance_mode;
+    if (armingChange) {
+      if (!current.pin_hash) {
+        return res.status(409).json({ error: "Définissez d'abord un code PIN (Réglages → Sécurité locale)." });
+      }
+      if (!verifyPin(pinAttempt, current.pin_hash)) {
+        await logAudit(req.user.username, 'PIN_FAILED', 'Code PIN incorrect (armement)', req.ip);
+        return res.status(403).json({ error: 'Code PIN incorrect' });
+      }
+    }
+
     const values = {
       appName: nextAppName ?? current.app_name,
       appSubtitle: nextAppSubtitle ?? current.app_subtitle,
@@ -188,7 +188,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
       alertsDailySummaryEnabled: nextAlertsDailySummaryEnabled ?? current.alerts_daily_summary_enabled,
       alertsSoundEnabled: nextAlertsSoundEnabled ?? current.alerts_sound_enabled,
       alertsDisconnectEnabled: nextAlertsDisconnectEnabled ?? current.alerts_disconnect_enabled,
-      kioskPin: nextKioskPin ?? current.kiosk_pin,
+      pinHash: nextPin !== undefined ? hashPin(nextPin) : current.pin_hash,
       surveillanceMode: nextSurveillanceMode ?? current.surveillance_mode,
       pushMinimalContent: nextPushMinimalContent ?? current.push_minimal_content,
     };
@@ -213,7 +213,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
            alerts_daily_summary_enabled = $16,
            alerts_sound_enabled = $17,
            alerts_disconnect_enabled = $18,
-           kiosk_pin = $19,
+           pin_hash = $19,
            surveillance_mode = $20,
            push_minimal_content = $21,
            updated_at = NOW()
@@ -225,7 +225,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
                  default_camera_add_mode, camera_discovery_interval_seconds,
                  alerts_realtime_enabled, alerts_daily_summary_enabled,
                  alerts_sound_enabled, alerts_disconnect_enabled,
-                 kiosk_pin, surveillance_mode, push_minimal_content`,
+                 pin_hash, surveillance_mode, push_minimal_content`,
       [
         values.appName,
         values.appSubtitle,
@@ -245,7 +245,7 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
         values.alertsDailySummaryEnabled,
         values.alertsSoundEnabled,
         values.alertsDisconnectEnabled,
-        values.kioskPin,
+        values.pinHash,
         values.surveillanceMode,
         values.pushMinimalContent,
       ]
@@ -257,6 +257,11 @@ router.patch('/', requireAuth, requireAdmin, async (req, res) => {
       const { rows: cameras } = await pool.query('SELECT * FROM cameras WHERE active = true');
       await Promise.all(cameras.map(cam => startCamera(cam).catch(() => {})));
     }
+
+    if (armingChange) {
+      await logAudit(req.user.username, nextSurveillanceMode ? 'SURVEILLANCE_ARMED' : 'SURVEILLANCE_DISARMED', 'Mode surveillance modifié', req.ip);
+    }
+    if (nextPin !== undefined) await logAudit(req.user.username, 'PIN_CHANGED', "Code PIN d'armement modifié", req.ip);
 
     res.json(serializeConfig(rows[0]));
   } catch (err) {

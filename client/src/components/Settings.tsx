@@ -129,6 +129,7 @@ function TabSettings() {
   const [securitySuccess, setSecuritySuccess] = useState('');
   const [securitySaving, setSecuritySaving] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [newPin, setNewPin] = useState('');
 
   useEffect(() => {
     setDraftConfig(config);
@@ -257,18 +258,23 @@ function TabSettings() {
 
   async function saveSecuritySettings() {
     if (!token) return;
-    const pin = draftConfig.kioskPin.trim();
-    if (pin.length !== 4) {
-      alert("Le PIN doit faire exactement 4 chiffres.");
+    const pin = newPin.trim();
+    if (!/^\d{4}$/.test(pin)) {
+      setSecurityError('Le PIN doit faire exactement 4 chiffres.');
+      return;
+    }
+    if (['0000', '1111', '1234', '4321', '2580'].includes(pin)) {
+      setSecurityError('Ce PIN est trop courant, choisissez-en un autre.');
       return;
     }
     setSecurityError('');
     setSecuritySuccess('');
     setSecuritySaving(true);
     try {
-      const nextConfig = await updateConfig(token, { kioskPin: pin });
+      const nextConfig = await updateConfig(token, { newPin: pin });
       setDraftConfig(nextConfig);
-      setSecuritySuccess('Code PIN synchronisé avec succès pour tous les appareils.');
+      setNewPin('');
+      setSecuritySuccess('Code PIN enregistré (stocké sous forme chiffrée irréversible).');
     } catch (err: unknown) {
       setSecurityError(err instanceof Error ? err.message : 'Erreur serveur');
     } finally {
@@ -444,25 +450,26 @@ function TabSettings() {
         </div>
         <div className="settings-config-grid">
           <label className="settings-field">
-            <span className="settings-field-label">Code PIN (4 chiffres)</span>
+            <span className="settings-field-label">
+              Code PIN d'armement (4 chiffres) — {draftConfig.pinConfigured ? 'défini' : 'non défini : armement impossible'}
+            </span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input
                 className="ui-input"
-                type="text"
+                type={showPin ? 'text' : 'password'}
                 inputMode="numeric"
                 maxLength={4}
-                placeholder="Ex: 1234"
-                value={showPin ? (draftConfig.kioskPin ?? '') : '●'.repeat((draftConfig.kioskPin ?? '').length)}
-                readOnly={!showPin}
-                onChange={e => showPin && updateDraft({ kioskPin: e.target.value.replace(/\D/g, '') })}
-                style={{ maxWidth: '200px', letterSpacing: showPin ? 'normal' : '4px' }}
+                placeholder={draftConfig.pinConfigured ? 'Nouveau PIN' : 'Choisir un PIN'}
+                value={newPin}
+                onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                style={{ maxWidth: '200px' }}
                 autoComplete="off"
               />
               <button type="button" className="ui-link-btn" onClick={() => setShowPin(!showPin)}>
                 {showPin ? 'Cacher' : 'Voir'}
               </button>
             </div>
-            <span className="settings-field-hint">Ce code est obligatoire (1234 par défaut) et protège l'armement et le désarmement de la surveillance.</span>
+            <span className="settings-field-hint">Le PIN n'est jamais réaffiché ni stocké en clair. Il est demandé pour armer ou désarmer la surveillance.</span>
           </label>
         </div>
         {securityError && <div className="settings-msg settings-msg--error">⚠ {securityError}</div>}

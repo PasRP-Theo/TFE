@@ -216,35 +216,19 @@ export default function SystemInfo() {
     setPinError("");
 
     if (nextPin.length === 4) {
+      // le PIN est vérifié par le serveur dans la requête d'armement elle-même
       try {
-        const res = await fetch(apiUrl('/api/app-config/verify-pin'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: nextPin }),
-        });
-        if (res.status === 429) {
-          setPinError("TROP DE TENTATIVES");
-          setTimeout(() => setEnteredPin(""), 500);
-          return;
+        if (token && updateConfig) {
+          await updateConfig(token, { surveillanceMode: !surveillanceActive, pin: nextPin });
         }
-        const data = await res.json();
-        if (data.valid) {
-          try {
-            if (token && updateConfig) {
-              await updateConfig(token, { surveillanceMode: !surveillanceActive });
-            }
-            setShowPinPad(false);
-          } catch {
-            setPinError("ERREUR SYSTÈME");
-            setTimeout(() => setEnteredPin(""), 1000);
-          }
-        } else {
-          setPinError("CODE INCORRECT");
-          setTimeout(() => setEnteredPin(""), 500);
-        }
-      } catch {
-        setPinError("ERREUR RÉSEAU");
-        setTimeout(() => setEnteredPin(""), 500);
+        setShowPinPad(false);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : '';
+        if (message.includes('Trop de tentatives')) setPinError("TROP DE TENTATIVES");
+        else if (message.includes('incorrect')) setPinError("CODE INCORRECT");
+        else if (message.includes('Définissez')) setPinError("PIN NON DÉFINI (RÉGLAGES)");
+        else setPinError("ERREUR SYSTÈME");
+        setTimeout(() => setEnteredPin(""), 600);
       }
     }
   };
