@@ -3,6 +3,7 @@ import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
 import { io as ioClient } from "socket.io-client";
 import { apiUrl, apiFetch, API_BASE_URL, readJsonResponse } from "../lib/api";
+import { getAccessToken, refreshSession } from "../lib/session";
 import { WebRTCPlayer } from "./WebRTCPlayer";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -537,12 +538,17 @@ export default function CameraFeed({ onStatusChange }: {
 
   // socket.io : réaction immédiate quand l'état caméra change côté serveur
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token || !user) return;
+    if (!user) return;
+    // jeton relu à chaque (re)connexion : le serveur coupe la socket à l'expiration du jeton
     const socket = ioClient(API_BASE_URL || window.location.origin, {
-      auth: { token },
+      auth: cb => cb({ token: getAccessToken() }),
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
+    });
+    socket.on('disconnect', reason => {
+      if (reason === 'io server disconnect') {
+        refreshSession().then(data => { if (data) socket.connect(); });
+      }
     });
     socket.on('camera_state', () => { fetchCameras().catch(() => {}); });
     return () => { socket.disconnect(); };
@@ -552,10 +558,7 @@ export default function CameraFeed({ onStatusChange }: {
     let stopped = false;
     async function fetchSysInfo() {
       try {
-        const token = localStorage.getItem('token');
-        const res = await apiFetch(apiUrl('/api/system/info'), {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await apiFetch(apiUrl('/api/system/info'));
         if (!res.ok) return;
         const data = await res.json();
         if (!stopped) {

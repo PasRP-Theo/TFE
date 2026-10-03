@@ -6,7 +6,8 @@ Référentiels : RGPD art. 32, ETSI EN 303 645 §5.4, OWASP ASVS V13/V14, CRA an
 
 | Secret | Rôle | Où il vit | Généré automatiquement | Rotation |
 |---|---|---|---|---|
-| `JWT_SECRET` | signature des sessions (remplacé par une paire ES256 à l'étape « sessions ») | `~/.sentys/secrets.json` ou `.env` | oui | à tout moment (déconnecte tout le monde) |
+| Clé privée ES256 (`jwt-es256.pem`) | signature des jetons d'accès (15 min) | `~/.sentys/jwt-es256.pem` (600) ou `JWT_PRIVATE_KEY_FILE` | oui | supprimer le fichier et redémarrer (les sessions se renouvellent via le cookie) |
+| Jetons de rafraîchissement | sessions (7 j glissants, 30 j max) | hachés en base, cookie `HttpOnly` côté navigateur | oui | « Déconnecter toutes les sessions » ou `UPDATE users SET token_version = token_version + 1` |
 | `PASSWORD_PEPPER` | poivre HMAC des mots de passe | `~/.sentys/secrets.json` ou `.env` | oui | **non** sans réinitialisation des mots de passe : à sauvegarder |
 | `DATA_ENCRYPTION_KEY` | AES-256-GCM des identifiants caméras et secrets MFA | `~/.sentys/secrets.json` ou `.env` | oui | `npm run rotate-data-key` |
 | `URL_SIGNING_KEY` | signature des URLs vidéo (10–30 min) | mémoire (aléatoire au démarrage) ou `.env` | oui, éphémère | à chaque redémarrage |
@@ -34,7 +35,7 @@ Référentiels : RGPD art. 32, ETSI EN 303 645 §5.4, OWASP ASVS V13/V14, CRA an
 L'ancien README publiait `JWT_SECRET=demo_TFE` et `DB_PASSWORD=admin`. Si ces valeurs sont en production :
 
 ```bash
-# 1. retirer JWT_SECRET du .env (il sera généré) — tous les utilisateurs devront se reconnecter
+# 1. retirer JWT_SECRET du .env : il n'est plus utilisé (sessions signées en ES256)
 sed -i '/^JWT_SECRET=/d' server/.env
 # 2. créer les rôles dédiés et changer le mot de passe
 sudo -u postgres psql -v app_password="'$(openssl rand -base64 32)'" -v ai_password="'$(openssl rand -base64 32)'" -f server/sql/roles.sql

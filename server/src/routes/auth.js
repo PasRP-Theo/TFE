@@ -1,13 +1,16 @@
 import { Router }       from 'express';
-import jwt              from 'jsonwebtoken';
 import rateLimit        from 'express-rate-limit';
 import { pool }         from '../db/index.js';
 import { requireAuth }  from '../middleware/auth.js';
-import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/auth.js';
 import { logAudit }     from '../audit/log.js';
 import { needsSetup, consumeSetupToken, hasActiveSetupToken, issueSetupToken } from '../auth/setup.js';
 import { validatePassword } from '../auth/passwordPolicy.js';
 import { hashPassword, verifyPassword, burnPasswordCheck } from '../auth/passwords.js';
+import {
+  signAccessToken, issueRefreshToken, rotateRefreshToken, revokeRefreshFamily, revokeAllSessions,
+  getUserState, readCookie, setRefreshCookie, clearRefreshCookie, REFRESH_COOKIE,
+} from '../auth/tokens.js';
+import { isTrustedOrigin } from '../security/origins.js';
 
 const router = Router();
 
@@ -24,12 +27,26 @@ const loginLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
 });
 
-function signToken(user) {
-  return jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+const refreshLimiter = rateLimit({
+  windowMs: 60 * 1000, max: 30,
+  standardHeaders: true, legacyHeaders: false,
+});
+
+// routes à cookie : refus des origines non autorisées (CSRF)
+function requireTrustedOrigin(req, res, next) {
+  if (!isTrustedOrigin(req)) return res.status(403).json({ error: 'Origine non autorisée' });
+  next();
+}
+
+function publicUser(user) {
+  return { id: user.id, username: user.username, role: user.role };
+}
+
+// ouvre une session : jeton d'accès en réponse, jeton de rafraîchissement en cookie HttpOnly
+export async function startSession(req, res, user) {
+  const refreshToken = await issueRefreshToken(user.id, { req });
+  setRefreshCookie(res, refreshToken);
+  return { token: signAccessToken(user), user: publicUser(user) };
 }
 
 async function registerFailedLogin(userId) {
@@ -60,7 +77,7 @@ router.get('/setup-status', async (_req, res) => {
 });
 
 // création du premier administrateur
-router.post('/setup', loginLimiter, async (req, res) => {
+router.post('/setup', loginLimiter, requireTrustedOrigin, async (req, res) => {
   const { setupToken, username, password } = req.body || {};
   const cleanUsername = typeof username === 'string' ? username.toLowerCase().trim() : '';
   if (!cleanUsername) return res.status(400).json({ error: 'Identifiant requis' });
@@ -68,6 +85,7 @@ router.post('/setup', loginLimiter, async (req, res) => {
   if (passwordError) return res.status(400).json({ error: passwordError });
 
   const client = await pool.connect();
+  let user;
   try {
     await client.query('BEGIN');
     // verrou : une seule installation concurrente
@@ -84,83 +102,135 @@ router.post('/setup', loginLimiter, async (req, res) => {
     const hash = await hashPassword(password);
     const { rows } = await client.query(
       `INSERT INTO users (username, password, role, password_changed_at) VALUES ($1, $2, 'admin', NOW())
-       RETURNING id, username, role`,
+       RETURNING id, username, role, token_version`,
       [cleanUsername, hash]
     );
     await client.query('COMMIT');
-    await logAudit(cleanUsername, 'SETUP_ADMIN_CREATED', 'Création du premier administrateur', req.ip);
-    const user = rows[0];
-    res.status(201).json({ token: signToken(user), user });
+    user = rows[0];
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[SETUP]', err.message);
-    res.status(500).json({ error: 'Erreur serveur' });
+    return res.status(500).json({ error: 'Erreur serveur' });
   } finally {
     client.release();
   }
+  await logAudit(cleanUsername, 'SETUP_ADMIN_CREATED', 'Création du premier administrateur', req.ip);
+  res.status(201).json(await startSession(req, res, user));
 });
 
+// vérifie identifiant + mot de passe ; renvoie l'utilisateur ou null (échec déjà journalisé)
+export async function checkCredentials(req, username, password) {
+  const cleanUsername = username.toLowerCase().trim().slice(0, 255);
+  const { rows } = await pool.query(
+    `SELECT id, username, role, password, failed_login_count, token_version,
+            (locked_until IS NOT NULL AND locked_until > NOW()) AS locked
+     FROM users WHERE username = $1`,
+    [cleanUsername]
+  );
+  const user = rows[0];
+
+  if (!user) {
+    await burnPasswordCheck(password);
+    await logAudit(cleanUsername, 'LOGIN_FAILED', 'Identifiant inconnu', req.ip);
+    return null;
+  }
+  if (user.locked) {
+    await burnPasswordCheck(password);
+    await logAudit(user.username, 'LOGIN_LOCKED', 'Tentative sur un compte temporairement verrouillé', req.ip);
+    return null;
+  }
+  const { valid, needsRehash } = await verifyPassword(password, user.password);
+  if (!valid) {
+    await registerFailedLogin(user.id);
+    await logAudit(user.username, 'LOGIN_FAILED', 'Mot de passe incorrect', req.ip);
+    return null;
+  }
+  if (needsRehash) {
+    await pool.query(
+      'UPDATE users SET password = $2, failed_login_count = 0, locked_until = NULL WHERE id = $1',
+      [user.id, await hashPassword(password)]
+    );
+  } else if (user.failed_login_count > 0) {
+    await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id]);
+  }
+  return { ...user, migratedHash: needsRehash };
+}
+
 // connexion
-router.post('/login', loginLimiter, async (req, res) => {
+router.post('/login', loginLimiter, requireTrustedOrigin, async (req, res) => {
   const { username, password } = req.body || {};
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     return res.status(400).json({ error: 'Champs manquants' });
   }
-  const cleanUsername = username.toLowerCase().trim().slice(0, 255);
   try {
-    const { rows } = await pool.query(
-      `SELECT id, username, role, password, failed_login_count,
-              (locked_until IS NOT NULL AND locked_until > NOW()) AS locked
-       FROM users WHERE username = $1`,
-      [cleanUsername]
-    );
-    const user = rows[0];
-
-    if (!user) {
-      await burnPasswordCheck(password);
-      await logAudit(cleanUsername, 'LOGIN_FAILED', 'Identifiant inconnu', req.ip);
-      return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-    }
-
-    if (user.locked) {
-      await burnPasswordCheck(password);
-      await logAudit(user.username, 'LOGIN_LOCKED', 'Tentative sur un compte temporairement verrouillé', req.ip);
-      return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-    }
-
-    const { valid, needsRehash } = await verifyPassword(password, user.password);
-    if (!valid) {
-      await registerFailedLogin(user.id);
-      await logAudit(user.username, 'LOGIN_FAILED', 'Mot de passe incorrect', req.ip);
-      return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
-    }
-
-    if (needsRehash) {
-      await pool.query(
-        'UPDATE users SET password = $2, failed_login_count = 0, locked_until = NULL WHERE id = $1',
-        [user.id, await hashPassword(password)]
-      );
-    } else if (user.failed_login_count > 0) {
-      await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = $1', [user.id]);
-    }
-
-    await logAudit(user.username, 'LOGIN_SUCCESS', needsRehash ? 'Connexion réussie (hachage migré)' : 'Connexion réussie', req.ip);
-    res.json({ token: signToken(user), user: { id: user.id, username: user.username, role: user.role } });
+    const user = await checkCredentials(req, username, password);
+    if (!user) return res.status(401).json({ error: GENERIC_LOGIN_ERROR });
+    await logAudit(user.username, 'LOGIN_SUCCESS', user.migratedHash ? 'Connexion réussie (hachage migré)' : 'Connexion réussie', req.ip);
+    res.json(await startSession(req, res, user));
   } catch (err) {
     console.error('[LOGIN]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// profil
-router.get('/me', requireAuth, async (req, res) => {
+// renouvellement du jeton d'accès (rotation du jeton de rafraîchissement)
+router.post('/refresh', refreshLimiter, requireTrustedOrigin, async (req, res) => {
+  const presented = readCookie(req, REFRESH_COOKIE);
+  if (!presented) return res.status(401).json({ error: 'Session expirée' });
   try {
-    const { rows } = await pool.query('SELECT id, username, role FROM users WHERE id = $1', [req.user.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Introuvable' });
-    res.json({ user: rows[0] });
-  } catch {
+    const result = await rotateRefreshToken(presented, req);
+    if (result.status === 'reused') {
+      clearRefreshCookie(res);
+      const state = await getUserState(result.userId);
+      await logAudit(state?.username || `#${result.userId}`, 'TOKEN_REUSE_DETECTED',
+        'Jeton de rafraîchissement réutilisé : famille de sessions révoquée', req.ip);
+      return res.status(401).json({ error: 'Session expirée' });
+    }
+    if (result.status !== 'ok') {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: 'Session expirée' });
+    }
+    const user = await getUserState(result.userId);
+    if (!user) {
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: 'Session expirée' });
+    }
+    setRefreshCookie(res, result.token);
+    res.json({ token: signAccessToken(user), user: publicUser(user) });
+  } catch (err) {
+    console.error('[REFRESH]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
+});
+
+// déconnexion de cet appareil : révoque la famille de jetons du cookie
+router.post('/logout', requireTrustedOrigin, async (req, res) => {
+  const presented = readCookie(req, REFRESH_COOKIE);
+  try {
+    if (presented) await revokeRefreshFamily(presented);
+  } catch (err) {
+    console.error('[LOGOUT]', err.message);
+  }
+  clearRefreshCookie(res);
+  res.json({ message: 'Déconnecté' });
+});
+
+// déconnexion de tous les appareils
+router.post('/logout-all', requireTrustedOrigin, requireAuth, async (req, res) => {
+  try {
+    await revokeAllSessions(req.user.id);
+    await logAudit(req.user.username, 'LOGOUT_ALL', 'Déconnexion de toutes les sessions', req.ip);
+    clearRefreshCookie(res);
+    res.json({ message: 'Toutes les sessions ont été fermées' });
+  } catch (err) {
+    console.error('[LOGOUT ALL]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// profil
+router.get('/me', requireAuth, (req, res) => {
+  res.json({ user: publicUser(req.user) });
 });
 
 export default router;

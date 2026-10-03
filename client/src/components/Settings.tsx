@@ -173,7 +173,7 @@ function TabSettings() {
   const sendTestNotification = async () => {
     setPushError('');
     try {
-      const res = await fetch(apiUrl('/api/notifications/test'), {
+      const res = await apiFetch(apiUrl('/api/notifications/test'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -235,7 +235,7 @@ function TabSettings() {
     setResetError('');
     setResetLoading(true);
     try {
-      const res = await fetch(apiUrl('/api/system/reset'), {
+      const res = await apiFetch(apiUrl('/api/system/reset'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -537,7 +537,7 @@ function TabUsers() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl('/api/users'), { headers: authHeaders });
+      const res = await apiFetch(apiUrl('/api/users'), { headers: authHeaders });
       const data = await readJsonResponse<Array<User> & { error?: string }>(res);
       if (!isMounted.current) return;
       if (!res.ok) throw new Error(data.error || 'Impossible de charger les utilisateurs');
@@ -560,7 +560,7 @@ function TabUsers() {
     setSuccess("");
     if (!newUsername || !newPass) { setError("Identifiant et mot de passe requis"); return; }
     try {
-      const res = await fetch(apiUrl('/api/users'), {
+      const res = await apiFetch(apiUrl('/api/users'), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(authHeaders || {}) },
         body: JSON.stringify({ username: newUsername, password: newPass, role: newRole }),
@@ -581,7 +581,7 @@ function TabUsers() {
   async function deleteUser(id: number) {
     setDeleteError('');
     try {
-      const res = await fetch(apiUrl(`/api/users/${id}`), { method: "DELETE", headers: authHeaders });
+      const res = await apiFetch(apiUrl(`/api/users/${id}`), { method: "DELETE", headers: authHeaders });
       const data = await readJsonResponse<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error || 'Erreur suppression');
       setUsers(prev => prev.filter(entry => entry.id !== id));
@@ -596,7 +596,7 @@ function TabUsers() {
     if (!confirmUser) return;
     const nextRole = confirmUser.role === "admin" ? "user" : "admin";
     try {
-      const res = await fetch(apiUrl(`/api/users/${confirmUser.id}`), {
+      const res = await apiFetch(apiUrl(`/api/users/${confirmUser.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...(authHeaders || {}) },
         body: JSON.stringify({ role: nextRole }),
@@ -623,7 +623,7 @@ function TabUsers() {
   async function saveUserEdits() {
     if (!editingUser) return;
     try {
-      const res = await fetch(apiUrl(`/api/users/${editingUser.id}`), {
+      const res = await apiFetch(apiUrl(`/api/users/${editingUser.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...(authHeaders || {}) },
         body: JSON.stringify({ username: editUsername, password: editPassword || undefined }),
@@ -788,7 +788,7 @@ function TabAudit() {
   useEffect(() => {
     if (!token) return;
     let isMounted = true;
-    fetch(apiUrl('/api/audit-logs'), { headers: { Authorization: `Bearer ${token}` } })
+    apiFetch(apiUrl('/api/audit-logs'), { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (!isMounted) return;

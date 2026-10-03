@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config/auth.js';
+import { authenticateAccessToken } from '../auth/tokens.js';
 import { stopAllCameras, startCamera } from '../camera/manager.js';
 import rateLimit from 'express-rate-limit';
 
@@ -84,8 +83,8 @@ router.get('/', async (req, res) => {
     try {
       const header = req.headers.authorization;
       if (header?.startsWith('Bearer ')) {
-        const decoded = jwt.verify(header.slice(7), JWT_SECRET);
-        isAdmin = decoded?.role === 'admin';
+        const user = await authenticateAccessToken(header.slice(7));
+        isAdmin = user?.role === 'admin';
       }
     } catch { /* non authentifié */ }
     if (!isAdmin) delete config.kioskPin;

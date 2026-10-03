@@ -1,14 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
-/* eslint-disable react-hooks/set-state-in-effect */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { apiUrl, readJsonResponse } from '../lib/api';
+import {
+  getAccessToken, setAccessToken, onAccessTokenChange, refreshSession, decodeTokenExpiry,
+  type SessionUser,
+} from '../lib/session';
 
-interface User {
-  id:       number;
-  username: string;
-  role:     string;
-}
+type User = SessionUser;
 
 interface AuthContextType {
   user:    User | null;
@@ -16,96 +15,95 @@ interface AuthContextType {
   login:   (username: string, password: string) => Promise<void>;
   completeSetup: (setupToken: string, username: string, password: string) => Promise<void>;
   logout:  () => void;
+  logoutAll: () => Promise<void>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function decodeJWT(token: string): { exp?: number } | null {
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch {
-    return null;
-  }
+// renouvelle le jeton d'accès 60 s avant son expiration
+const REFRESH_MARGIN_MS = 60_000;
+
+async function postAuth<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await readJsonResponse<T & { error?: string }>(res);
+  if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
+  return data;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user,    setUser]    = useState<User | null>(null);
-  const [token,   setToken]   = useState<string | null>(null);
+  const [token,   setToken]   = useState<string | null>(getAccessToken());
   const [loading, setLoading] = useState(true);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-  }, []);
+  // jeton mémoire → état React ; perte du jeton (refresh refusé) → déconnexion
+  useEffect(() => onAccessTokenChange(next => {
+    setToken(next);
+    if (!next) setUser(null);
+  }), []);
 
+  // au chargement : ancien jeton localStorage supprimé, session restaurée via le cookie HttpOnly
   useEffect(() => {
-    const saved = localStorage.getItem('token');
-    if (!saved) { setLoading(false); return; }
-
-    const decoded = decodeJWT(saved);
-    if (decoded?.exp && decoded.exp * 1000 < Date.now()) {
-      localStorage.removeItem('token');
-      setLoading(false);
-      return;
-    }
-
-    fetch(apiUrl('/auth/me'), {
-      headers: { Authorization: `Bearer ${saved}` },
-    })
-      .then(async r => (r.ok ? readJsonResponse<{ user?: User }>(r) : null))
-      .then(data => {
-        if (data?.user) { setUser(data.user); setToken(saved); }
-        else localStorage.removeItem('token');
-      })
-      .catch(() => localStorage.removeItem('token'))
+    try { localStorage.removeItem('token'); } catch { /* stockage indisponible */ }
+    refreshSession()
+      .then(data => { if (data) setUser(data.user); })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!token) return;
-    const decoded = decodeJWT(token);
-    if (!decoded?.exp) return;
-
-    const msLeft = decoded.exp * 1000 - Date.now();
-    if (msLeft <= 0) { logout(); return; }
-
+    const expiresAt = decodeTokenExpiry(token);
+    if (!expiresAt) return;
+    const delay = Math.max(expiresAt - Date.now() - REFRESH_MARGIN_MS, 5_000);
     const timer = setTimeout(() => {
-      logout();
-    }, msLeft);
-
+      refreshSession().then(data => { if (data) setUser(data.user); });
+    }, delay);
     return () => clearTimeout(timer);
-  }, [token, logout]);
+  }, [token]);
+
+  const logout = useCallback(() => {
+    fetch(apiUrl('/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => {});
+    setAccessToken(null);
+    setUser(null);
+  }, []);
+
+  const logoutAll = useCallback(async () => {
+    const current = getAccessToken();
+    await fetch(apiUrl('/auth/logout-all'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: current ? { Authorization: `Bearer ${current}` } : undefined,
+    }).catch(() => {});
+    setAccessToken(null);
+    setUser(null);
+  }, []);
 
   async function login(username: string, password: string) {
-    const res  = await fetch(apiUrl('/auth/login'), {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ username: username.toLowerCase().trim(), password }),
+    const data = await postAuth<{ token: string; user: User }>('/auth/login', {
+      username: username.toLowerCase().trim(),
+      password,
     });
-    const data = await readJsonResponse<{ error?: string; token: string; user: User }>(res);
-    if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
-    localStorage.setItem('token', data.token);
-    setToken(data.token);
+    setAccessToken(data.token);
     setUser(data.user);
   }
 
   async function completeSetup(setupToken: string, username: string, password: string) {
-    const res  = await fetch(apiUrl('/auth/setup'), {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ setupToken: setupToken.trim(), username: username.toLowerCase().trim(), password }),
+    const data = await postAuth<{ token: string; user: User }>('/auth/setup', {
+      setupToken: setupToken.trim(),
+      username: username.toLowerCase().trim(),
+      password,
     });
-    const data = await readJsonResponse<{ error?: string; token: string; user: User }>(res);
-    if (!res.ok) throw new Error(data.error || "Erreur lors de l'installation");
-    localStorage.setItem('token', data.token);
-    setToken(data.token);
+    setAccessToken(data.token);
     setUser(data.user);
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, completeSetup, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, completeSetup, logout, logoutAll, loading }}>
       {children}
     </AuthContext.Provider>
   );

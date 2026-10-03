@@ -303,6 +303,26 @@ export async function initDB() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
     `);
 
+    // E2 : sessions — révocation globale (token_version) et jetons de rafraîchissement rotatifs
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id                SERIAL PRIMARY KEY,
+        user_id           INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        family_id         UUID         NOT NULL,
+        token_hash        CHAR(64)     UNIQUE NOT NULL,
+        family_started_at TIMESTAMP    NOT NULL DEFAULT NOW(),
+        created_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
+        expires_at        TIMESTAMP    NOT NULL,
+        revoked_at        TIMESTAMP,
+        user_agent        VARCHAR(255),
+        ip_address        VARCHAR(45)
+      );
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens(family_id);
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+    `);
+
     // pas de compte par défaut : voir src/auth/setup.js
     console.log('[DB] Base de données "sentys" initialisée');
   } finally {

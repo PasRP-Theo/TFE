@@ -1,3 +1,5 @@
+import { getAccessToken, refreshSession } from './session';
+
 // URL du backend (tunnel HTTPS) pour le frontend hébergé sur Vercel.
 // Vide = même origine (interface servie par le serveur local sur le LAN).
 export const configuredBaseUrl = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
@@ -18,13 +20,20 @@ export function apiUrl(path: string) {
   return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
 }
 
-export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = localStorage.getItem('token');
-  const headers = new Headers(options.headers as HeadersInit | undefined);
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  return fetch(url, { ...options, headers });
+// requête authentifiée : jeton d'accès en mémoire ; sur 401, renouvellement puis nouvel essai
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const send = () => {
+    const headers = new Headers(options.headers as HeadersInit | undefined);
+    const token = getAccessToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    else headers.delete('Authorization');
+    return fetch(url, { ...options, headers });
+  };
+
+  const response = await send();
+  if (response.status !== 401) return response;
+  const renewed = await refreshSession();
+  return renewed ? send() : response;
 }
 
 export async function readJsonResponse<T>(response: Response): Promise<T> {

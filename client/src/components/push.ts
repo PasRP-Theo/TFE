@@ -1,4 +1,4 @@
-import { apiUrl } from '../lib/api';
+import { apiUrl, apiFetch } from '../lib/api';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -52,13 +52,9 @@ export async function subscribeUserToPush(): Promise<PushSubscription> {
     applicationServerKey,
   });
 
-  const token = localStorage.getItem('token');
-  await fetch(apiUrl('/api/notifications/subscribe'), {
+  await apiFetch(apiUrl('/api/notifications/subscribe'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ subscription }),
   });
 

@@ -6,7 +6,6 @@ import { Server }      from "socket.io";
 import cors            from "cors";
 import path            from "path";
 import { fileURLToPath } from "url";
-import jwt             from "jsonwebtoken";
 import rateLimit       from "express-rate-limit";
 import { existsSync, mkdirSync } from "fs";
 import { initDB, pool, scheduleDiscoveryCleanup, scheduleAlertsCleanup } from "./src/db/index.js";
@@ -27,7 +26,8 @@ import { lanOnly, PUBLIC_PORT } from "./src/security/networkZone.js";
 import { securityHeaders, spaCsp, buildCorsOptions } from "./src/security/httpHeaders.js";
 import { startGo2rtc, syncCamerasFromDB, stopGo2rtc, registerStream, unregisterStream } from "./src/go2rtc/manager.js";
 import { startCamera, stopAllCameras, cleanupOldRecordings, getAllStates, setSocketIO } from "./src/camera/manager.js";
-import { JWT_SECRET } from "./src/config/auth.js";
+import { authenticateAccessToken } from "./src/auth/tokens.js";
+import { ALLOWED_ORIGINS } from "./src/security/origins.js";
 import { createAlert } from "./src/alerts/service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,32 +35,34 @@ const app = express();
 app.disable("x-powered-by");
 
 // CORS : liste blanche unique (Express, préflights, Socket.IO)
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
-  : ['http://localhost:5173', 'http://localhost:4000'];
-const corsOptions = buildCorsOptions(allowedOrigins);
+const corsOptions = buildCorsOptions(ALLOWED_ORIGINS);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: corsOptions
 });
 
-// auth Socket.IO
-io.use((socket, next) => {
+// auth Socket.IO : même vérification que l'API (jeton ES256 + état en base)
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("Authentication error"));
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    socket.user = decoded;
+    const user = await authenticateAccessToken(token);
+    if (!user) return next(new Error("Authentication error"));
+    socket.user = user;
     next();
-  } catch (err) {
+  } catch {
     next(new Error("Authentication error"));
   }
 });
 
 io.on("connection", (socket) => {
   console.log(`[SOCKET] Utilisateur connecte : ${socket.user.username} (${socket.id})`);
+  // jeton expiré → déconnexion ; le client se reconnecte avec un jeton renouvelé
+  const msLeft = socket.user.exp * 1000 - Date.now();
+  const expiryTimer = setTimeout(() => socket.disconnect(true), Math.max(msLeft, 0));
   socket.on("disconnect", () => {
+    clearTimeout(expiryTimer);
     console.log(`[SOCKET] Utilisateur deconnecte : ${socket.user.username}`);
   });
 });

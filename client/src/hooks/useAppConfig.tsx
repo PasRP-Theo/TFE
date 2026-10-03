@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { apiUrl, readJsonResponse } from '../lib/api';
+import { apiUrl, apiFetch, readJsonResponse } from '../lib/api';
 
 export interface AppConfig {
   appName: string;
@@ -95,22 +95,17 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function refreshConfig() {
-    const token = localStorage.getItem('token');
-    const response = await fetch(apiUrl('/api/app-config'), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
+    const response = await apiFetch(apiUrl('/api/app-config'));
     const data = await readJsonResponse<AppConfig & { error?: string }>(response);
     if (!response.ok) throw new Error(data.error || 'Impossible de charger la configuration de l\u2019application');
     setConfig(sanitizeConfig(data));
   }
 
   async function updateConfig(token: string, patch: Partial<AppConfig>) {
-    const response = await fetch(apiUrl('/api/app-config'), {
+    void token; // jeton géré par apiFetch (mémoire + renouvellement)
+    const response = await apiFetch(apiUrl('/api/app-config'), {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
     const data = await readJsonResponse<AppConfig & { error?: string }>(response);

@@ -1,24 +1,17 @@
-import jwt from 'jsonwebtoken';
-import { JWT_SECRET } from '../config/auth.js';
+import { authenticateAccessToken } from '../auth/tokens.js';
 
-export function requireAuth(req, res, next) {
+// jeton d'accès ES256 en en-tête Authorization ; rôle relu en base (cache 10 s)
+export async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
-
-  // JWT
-  if (header?.startsWith('Bearer ')) {
-    try {
-      req.user = jwt.verify(header.slice(7), JWT_SECRET);
-      return next();
-    } catch { /* invalide */ }
-  }
-
-  // session
-  if (req.session?.userId) {
-    req.user = { id: req.session.userId, username: req.session.username, role: req.session.role };
+  if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non authentifié' });
+  try {
+    const user = await authenticateAccessToken(header.slice(7));
+    if (!user) return res.status(401).json({ error: 'Session expirée' });
+    req.user = user;
     return next();
+  } catch {
+    return res.status(401).json({ error: 'Session expirée' });
   }
-
-  return res.status(401).json({ error: 'Non authentifié' });
 }
 
 export function requireAdmin(req, res, next) {

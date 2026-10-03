@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { apiUrl } from '../lib/api';
+import { apiUrl, apiFetch } from '../lib/api';
 
 interface ShoppingItem {
   id: number;
@@ -66,7 +66,7 @@ export default function HomePage() {
 
   const loadItems = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl('/api/home/shopping'), { headers });
+      const res = await apiFetch(apiUrl('/api/home/shopping'), { headers });
       if (res.ok) setItems(await res.json());
     } catch { /* ignore */ }
     finally { setItemsLoading(false); }
@@ -76,7 +76,7 @@ export default function HomePage() {
     setWeatherLoading(true);
     setWeatherError(null);
     try {
-      const res = await fetch(apiUrl('/api/home/weather'), { headers });
+      const res = await apiFetch(apiUrl('/api/home/weather'), { headers });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Erreur météo');
       setWeather(data);
@@ -89,7 +89,7 @@ export default function HomePage() {
 
   const loadNotes = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl('/api/home/notes'), { headers });
+      const res = await apiFetch(apiUrl('/api/home/notes'), { headers });
       if (res.ok) setNotes(await res.json());
     } catch { /* ignore */ }
     finally { setNotesLoading(false); }
@@ -106,7 +106,7 @@ export default function HomePage() {
     const text = newItem.trim();
     if (!text) return;
     try {
-      const res = await fetch(apiUrl('/api/home/shopping'), {
+      const res = await apiFetch(apiUrl('/api/home/shopping'), {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
@@ -123,7 +123,7 @@ export default function HomePage() {
   const toggleItem = async (id: number, checked: boolean) => {
     setItems(prev => prev.map(i => i.id === id ? { ...i, checked } : i));
     try {
-      await fetch(apiUrl(`/api/home/shopping/${id}`), {
+      await apiFetch(apiUrl(`/api/home/shopping/${id}`), {
         method: 'PATCH',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ checked }),
@@ -136,14 +136,14 @@ export default function HomePage() {
   const deleteItem = async (id: number) => {
     setItems(prev => prev.filter(i => i.id !== id));
     try {
-      await fetch(apiUrl(`/api/home/shopping/${id}`), { method: 'DELETE', headers });
+      await apiFetch(apiUrl(`/api/home/shopping/${id}`), { method: 'DELETE', headers });
     } catch { loadItems(); }
   };
 
   const clearChecked = async () => {
     setItems(prev => prev.filter(i => !i.checked));
     try {
-      await fetch(apiUrl('/api/home/shopping/checked'), { method: 'DELETE', headers });
+      await apiFetch(apiUrl('/api/home/shopping/checked'), { method: 'DELETE', headers });
     } catch { loadItems(); }
   };
 
@@ -152,7 +152,7 @@ export default function HomePage() {
     const text = newNote.trim();
     if (!text) return;
     try {
-      const res = await fetch(apiUrl('/api/home/notes'), {
+      const res = await apiFetch(apiUrl('/api/home/notes'), {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
@@ -168,7 +168,7 @@ export default function HomePage() {
   const deleteNote = async (id: number) => {
     setNotes(prev => prev.filter(n => n.id !== id));
     try {
-      await fetch(apiUrl(`/api/home/notes/${id}`), { method: 'DELETE', headers });
+      await apiFetch(apiUrl(`/api/home/notes/${id}`), { method: 'DELETE', headers });
     } catch { loadNotes(); }
   };
 

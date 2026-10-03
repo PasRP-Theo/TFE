@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io as ioClient } from 'socket.io-client';
-import { apiUrl, readJsonResponse, API_BASE_URL } from '../lib/api';
+import { apiUrl, apiFetch, readJsonResponse, API_BASE_URL } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
 interface FilterOption {
@@ -189,7 +189,7 @@ export default function AlertsPage() {
     if (status) params.set('status', status);
     if (searchRef.current.trim()) params.set('search', searchRef.current.trim());
 
-    const response = await fetch(apiUrl(`/api/alerts?${params.toString()}`), {
+    const response = await apiFetch(apiUrl(`/api/alerts?${params.toString()}`), {
       headers: authHeaders,
     });
     const data = await readJsonResponse<AlertsResponse & { error?: string }>(response);
@@ -200,7 +200,7 @@ export default function AlertsPage() {
 
   const fetchSummary = useCallback(async () => {
     if (!authHeaders) return;
-    const response = await fetch(apiUrl('/api/alerts/summary'), { headers: authHeaders });
+    const response = await apiFetch(apiUrl('/api/alerts/summary'), { headers: authHeaders });
     const data = await readJsonResponse<AlertSummary & { error?: string }>(response);
     if (!response.ok) throw new Error(data.error || 'Impossible de charger le resume des alertes');
     setSummary(data);
@@ -208,7 +208,7 @@ export default function AlertsPage() {
 
   const fetchAnalytics = useCallback(async () => {
     if (!authHeaders) return;
-    const response = await fetch(apiUrl('/api/alerts/analytics'), { headers: authHeaders });
+    const response = await apiFetch(apiUrl('/api/alerts/analytics'), { headers: authHeaders });
     const data = await readJsonResponse<AnalyticsResponse & { error?: string }>(response);
     if (!response.ok) throw new Error(data.error || 'Impossible de charger les statistiques');
     setAnalytics(data);
@@ -252,7 +252,7 @@ export default function AlertsPage() {
     if (!authHeaders) return;
     setActionLoadingKey(`ack-${id}`);
     try {
-      const response = await fetch(apiUrl(`/api/alerts/${id}/ack`), {
+      const response = await apiFetch(apiUrl(`/api/alerts/${id}/ack`), {
         method: 'PATCH',
         headers: authHeaders,
       });
@@ -271,7 +271,7 @@ export default function AlertsPage() {
     if (!authHeaders) return;
     setActionLoadingKey(`delete-${id}`);
     try {
-      const response = await fetch(apiUrl(`/api/alerts/${id}`), {
+      const response = await apiFetch(apiUrl(`/api/alerts/${id}`), {
         method: 'DELETE',
         headers: authHeaders,
       });
@@ -311,7 +311,7 @@ export default function AlertsPage() {
     if (!authHeaders) return;
     setActionLoadingKey('delete-all');
     try {
-      const response = await fetch(apiUrl('/api/alerts/all'), {
+      const response = await apiFetch(apiUrl('/api/alerts/all'), {
         method: 'DELETE',
         headers: authHeaders,
       });
@@ -342,7 +342,7 @@ export default function AlertsPage() {
     if (level) params.set('level', level);
     if (status) params.set('status', status);
     try {
-      const response = await fetch(apiUrl(`/api/alerts/export?${params.toString()}`), {
+      const response = await apiFetch(apiUrl(`/api/alerts/export?${params.toString()}`), {
         headers: authHeaders,
       });
       if (!response.ok) {

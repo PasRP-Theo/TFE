@@ -11,7 +11,7 @@ import AlertsPage  from './components/AlertsPage';
 import HomePage    from './components/HomePage';
 import BrandLogo from './components/BrandLogo.tsx';
 import { registerSW } from 'virtual:pwa-register';
-import { apiUrl, readJsonResponse } from './lib/api';
+import { apiUrl, apiFetch, readJsonResponse } from './lib/api';
 import './App.css';
 
 // PWA
@@ -200,16 +200,11 @@ function getSystemStatus(
   useEffect(() => {
     if (!user) return;
 
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
     let stopped = false;
 
     const refreshAlertsSummary = async () => {
       try {
-        const response = await fetch(apiUrl('/api/alerts/summary'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await apiFetch(apiUrl('/api/alerts/summary'));
         const data = await readJsonResponse<{ pending_count?: number; critical_pending_count?: number } & { error?: string }>(response);
         if (!response.ok || stopped) {
           if (!stopped) setIsServerReachable(false);
@@ -315,8 +310,6 @@ function getSystemStatus(
 
           <button type="button" className="app-logout-btn" onClick={() => {
             logout();
-            window.localStorage.removeItem('token');
-            window.location.reload();
           }} title="Se déconnecter">⏻</button>
         </div>
       </header>

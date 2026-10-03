@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { hashPassword } from '../auth/passwords.js';
 import { validatePassword } from '../auth/passwordPolicy.js';
+import { revokeAllSessions, invalidateUserState } from '../auth/tokens.js';
 import { pool }    from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { logAudit } from '../audit/log.js';
@@ -116,6 +117,12 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
       values
     );
 
+    // mot de passe ou rôle modifié : toutes les sessions de l'utilisateur sont fermées
+    const passwordChanged = nextPassword !== undefined && nextPassword.length > 0;
+    const roleChanged = nextRole !== undefined && nextRole !== currentUser.role;
+    if (passwordChanged || roleChanged) await revokeAllSessions(userId);
+    else invalidateUserState(userId);
+
     const changes = [];
     if (nextUsername !== undefined && nextUsername !== currentUser.username) changes.push(`nom: ${currentUser.username} -> ${nextUsername}`);
     if (nextRole !== undefined && nextRole !== currentUser.role) changes.push(`rôle: ${currentUser.role} -> ${nextRole}`);
@@ -150,6 +157,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
     }
 
     const { rowCount } = await pool.query('DELETE FROM users WHERE id=$1', [userId]);
+    invalidateUserState(userId);
     if (!rowCount) return res.status(404).json({ error: 'Utilisateur introuvable' });
     await logAudit(req.user?.username || 'admin', 'USER_DELETE', `Suppression de l'utilisateur ${currentUser.username}`, req.ip);
     res.json({ message: 'Supprime' });
