@@ -7,8 +7,8 @@ import os from 'os';
 import multer from 'multer';
 import { pool } from '../db/index.js';
 import { startCamera, startHlsStream, stopHlsStream, getState, triggerMotionRecording, RECORDINGS_DIR } from '../camera/manager.js';
-import { createAlert, isSurveillanceArmed } from '../alerts/service.js';
-import { broadcastPush } from './push.js';
+import { isSurveillanceArmed } from '../alerts/service.js';
+import { raiseAlert } from '../alerts/engine.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
 import { requireDevice, requireDeviceIfPaired, issueDeviceToken, revokeDeviceToken } from '../security/deviceAuth.js';
@@ -271,8 +271,7 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
             return;
           }
           startHlsStream(camRows[0]).catch(err => console.error('[MOTION STREAM START]', err.message));
-          // pas de push ici : celui de l'alerte classifiée (YOLO) suffit
-          setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name, null, { notify: false }), 3000);
+          setTimeout(() => triggerMotionRecording(camRows[0].id, 30), 3000);
         })
         .catch(err => console.error('[MOTION CAM LOOKUP]', err.message));
     } else {
@@ -304,7 +303,6 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
 
         const camId    = linkedCamera ? String(linkedCamera.id) : null;
         const camLabel = linkedCamera ? `CAM ${linkedCamera.id} — ${linkedCamera.name}` : node.name;
-        const dedupeId = camId ? `cam:${camId}` : `node:${deviceId}`;
 
         let classification = { type: 'motion', label: 'Mouvement détecté', confidence: 0 };
         try {
@@ -317,14 +315,17 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
           ? `${classification.label} sur le flux de la caméra (Hôte: ${node.host}). Zone : ${node.location}.`
           : `${classification.label} sur le flux de la caméra (Hôte: ${node.host}).`;
 
-        const result = await createAlert({
+        // même sujet que le détecteur IA (cam:N) : une seule alerte par caméra, quelle que soit la source
+        await raiseAlert({
+          type: 'motion_detected',
+          subject: camId ? `cam:${camId}` : `node:${deviceId}`,
           sourceType: 'camera-node',
           sourceId: camId || deviceId,
           cameraId: camId ? Number(camId) : null,
-          alertType: 'motion_detected',
           level: classification.type === 'person' ? 'critical' : 'warning',
           title: alertTitle,
           message: alertMessage,
+          pushBody: node.location ? `Zone : ${node.location}` : classification.label,
           metadata: {
             deviceId,
             cameraId: camId,
@@ -335,17 +336,7 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
             detectionType: classification.type,
             confidence: classification.confidence,
           },
-          dedupeKey: `motion:${dedupeId}`,
-          cooldownSeconds: 300,
-        }).catch((err) => { console.error('[ALERT MOTION]', err); return { skipped: true }; });
-
-        // alerte en cooldown (même caméra < 5 min) : pas de nouvelle notification
-        if (result.skipped) return;
-        broadcastPush({
-          title: alertTitle,
-          body: node.location ? `Zone : ${node.location}` : classification.label,
-          url: '/alerts',
-        }).catch(err => console.error('[PUSH MOTION]', err.message));
+        }).catch(err => console.error('[ALERT MOTION]', err));
       });
     }
   } catch (err) {
@@ -471,12 +462,11 @@ router.post('/:deviceId/upload-recording', lanOnly, requireDevice({ getDeviceId:
       [deviceId, detectedAt.toISOString(), recordingUrl]
     );
 
-    await createAlert({
+    await raiseAlert({
+      type: 'offline_recording',
       sourceType: 'camera-node',
       sourceId: offlineCamId || deviceId,
       cameraId: linkedCam ? Number(linkedCam.id) : null,
-      alertType: 'offline_recording',
-      level: 'warning',
       title: `Enregistrement hors ligne — ${offlineCamLabel}`,
       message: node.location
         ? `Enregistrement local effectué pendant une déconnexion. Zone : ${node.location}. (${detectedAt.toLocaleString('fr-FR')})`
@@ -491,8 +481,6 @@ router.post('/:deviceId/upload-recording', lanOnly, requireDevice({ getDeviceId:
         recordingFile: finalFilename,
         recordingUrl,
       },
-      dedupeKey: `offline:${offlineCamId || deviceId}:${detectedAt.toISOString()}`,
-      cooldownSeconds: 0,
     }).catch(err => console.error('[ALERT OFFLINE RECORDING]', err));
 
     res.json({ message: 'Enregistrement reçu', filename: finalFilename, url: recordingUrl });

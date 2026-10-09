@@ -18,33 +18,42 @@ export async function createAlert({
     throw new Error('Parametres d’alerte incomplets');
   }
 
-  if (dedupeKey) {
-    const { rows } = await pool.query(
-      `SELECT id, created_at
-       FROM alerts
-       WHERE dedupe_key = $1
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [dedupeKey]
-    );
+  const insertSql =
+    `INSERT INTO alerts (source_type, source_id, camera_id, alert_type, level, title, message, metadata, dedupe_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+     RETURNING *`;
+  const insertValues = [sourceType, sourceId, cameraId, alertType, level, title, message, JSON.stringify(metadata || {}), dedupeKey];
 
-    const lastCreatedAt = rows[0]?.created_at ? new Date(rows[0].created_at).getTime() : null;
-    if (lastCreatedAt && Date.now() - lastCreatedAt < cooldownSeconds * 1000) {
-      return { skipped: true, reason: 'cooldown', alertId: rows[0].id };
-    }
+  if (!dedupeKey) {
+    const { rows } = await pool.query(insertSql, insertValues);
+    return { skipped: false, alert: rows[0] };
   }
 
+  // anti-doublon : verrou par clé le temps de la transaction, pour que deux détections
+  // simultanées ne créent pas deux alertes ; après le cooldown, la même clé est réutilisable
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      `INSERT INTO alerts (source_type, source_id, camera_id, alert_type, level, title, message, metadata, dedupe_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
-       RETURNING *`,
-      [sourceType, sourceId, cameraId, alertType, level, title, message, JSON.stringify(metadata || {}), dedupeKey]
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [dedupeKey]);
+    const { rows: recent } = await client.query(
+      `SELECT id FROM alerts
+       WHERE dedupe_key = $1 AND created_at > NOW() - make_interval(secs => $2)
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [dedupeKey, cooldownSeconds]
     );
+    if (recent[0]) {
+      await client.query('ROLLBACK');
+      return { skipped: true, reason: 'cooldown', alertId: recent[0].id };
+    }
+    const { rows } = await client.query(insertSql, insertValues);
+    await client.query('COMMIT');
     return { skipped: false, alert: rows[0] };
   } catch (err) {
-    if (err.code === '23505') return { skipped: true, reason: 'dedupe-race', alertId: null };
+    await client.query('ROLLBACK').catch(() => {});
     throw err;
+  } finally {
+    client.release();
   }
 }
 

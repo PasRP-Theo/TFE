@@ -60,7 +60,17 @@ Rôles dédiés au moindre privilège (pas de superutilisateur `postgres` pour l
 sudo -u postgres psql -v app_password="'$(openssl rand -base64 32)'" -v ai_password="'$(openssl rand -base64 32)'" -f server/sql/roles.sql
 ```
 
-Les tables sont créées automatiquement au premier démarrage.
+Le schéma est créé et tenu à jour par des **migrations versionnées**
+(`server/src/db/migrations/`), appliquées automatiquement à chaque démarrage du serveur.
+Chaque migration ne s'exécute qu'une fois, dans une transaction ; modifier une migration
+déjà appliquée est refusé (empreinte SHA-256). Toute évolution du schéma = un nouveau fichier
+`NNNN_description.sql` (ou `.js` pour une migration de données).
+
+```bash
+cd server
+npm run migrate              # appliquer sans démarrer le serveur
+npm run migrate -- --status  # état de chaque migration
+```
 
 ### 3. Créer `server/.env`
 
@@ -96,6 +106,35 @@ cd server
 npm start
 ```
 
-Ouvre [http://localhost:4000](http://localhost:4000) — login : `root` / `root`
+Ouvre [http://localhost:4000](http://localhost:4000) et crée l'administrateur avec le jeton
+d'installation affiché dans la console (il n'existe aucun compte par défaut).
+
+## Tests
+
+```bash
+cd server && npm test   # unitaires + intégration sur une vraie base PostgreSQL
+cd client && npm test
+```
+
+Les tests d'intégration (`*.int.test.js`) exécutent réellement le SQL : en local sur
+[PGlite](https://pglite.dev) (PostgreSQL en mémoire, rien à installer), et dans la CI sur un
+serveur PostgreSQL 16 (`TEST_DATABASE_URL`). Voir `server/test/db.js`.
+
+## Alertes : un moteur unique
+
+Toute détection (mouvement d'un Pi ou du détecteur IA, caméra ou Pi hors ligne, démarrage
+d'un flux…) passe par `raiseAlert()` (`server/src/alerts/engine.js`). Ce que déclenche
+chaque type d'alerte est décrit à un seul endroit, `server/src/alerts/rules.js` :
+
+| Règle | Rôle |
+|---|---|
+| `requiresArmed` | ignorée quand la surveillance est désarmée (PIN) |
+| `setting` | réglage qui active ou coupe ce type d'alerte (ex. « Alerter si une caméra se déconnecte ») |
+| `cooldownSeconds` | une seule alerte par sujet (caméra, Pi) pendant ce délai |
+| `push` | notification sur les téléphones abonnés |
+
+Le moteur crée l'alerte puis prévient l'interface en temps réel (si « Alertes en temps réel »
+est activé) et envoie la notification push. Une coupure de caméra ou de Pi n'est signalée
+qu'une fois par coupure (`server/src/alerts/offlineMonitor.js`).
 
 Crée un compte admin dans **Paramètres → Utilisateurs**.

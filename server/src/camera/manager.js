@@ -6,7 +6,6 @@ import { fileURLToPath }          from 'url';
 import { EventEmitter }           from 'events';
 import ffmpegPath                 from 'ffmpeg-static';
 import { pool }                   from '../db/index.js';
-import { broadcastPush }          from '../routes/push.js';
 import { buildChildEnv }          from '../utils/childEnv.js';
 import { getInternalToken }       from '../security/deviceAuth.js';
 import { getRetentionPolicy }     from '../retention/policy.js';
@@ -870,8 +869,8 @@ export async function deleteAllRecordings(cameraId) {
   return { deletedCount };
 }
 
-// enregistrement mouvement + notification push
-export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null, fallbackSourceUrl = null, { notify = true } = {}) {
+// enregistrement sur mouvement (l'alerte et la notification relèvent du moteur d'alertes)
+export function triggerMotionRecording(cameraId, durationSeconds = 30, fallbackSourceUrl = null) {
   const id = String(cameraId);
   const s = states.get(id);
   const sourceUrl = s?.sourceUrl || fallbackSourceUrl;
@@ -911,16 +910,6 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
     broadcast(id);
   }
   console.log(`[CAM ${id}] Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
-
-  if (notify) {
-    const pushTitle = detectionLabel || 'Mouvement détecté';
-    const camLabel = cameraName || `CAM ${id}`;
-    broadcastPush({
-      title: `${pushTitle} — ${camLabel}`,
-      body: detectionLabel ? `${detectionLabel} capté par la caméra.` : 'Un mouvement a été détecté par la caméra.',
-      url: '/videos',
-    }).catch(err => console.error(`[PUSH CAM ${id}]`, err.message));
-  }
 
   const cleanupFailedRecording = () => {
     fsPromises.stat(mp4File)

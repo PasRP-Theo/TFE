@@ -22,7 +22,8 @@ import {
 } from '../camera/manager.js';
 import { logAudit } from '../audit/log.js';
 import { splitStreamCredentials, encryptCameraCredentials, resolveCameraSourceUrl, publicCameraFields } from '../camera/credentials.js';
-import { createAlert, isSurveillanceArmed } from '../alerts/service.js';
+import { isSurveillanceArmed } from '../alerts/service.js';
+import { raiseAlert } from '../alerts/engine.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from '../utils/streamUtils.js';
@@ -460,14 +461,13 @@ router.post('/:id/start', requireAuth, async (req, res) => {
     const camera = rows[0];
 
     const alertBase = {
+      type: 'camera_started',
+      subject: `cam:${req.params.id}`,
       sourceType: 'camera',
       sourceId: String(req.params.id),
-      cameraId: req.params.id,
-      alertType: 'camera_started',
-      level: 'info',
+      cameraId: Number(req.params.id),
+      title: `Stream démarré — ${camera.name}`,
       metadata: { cameraId: req.params.id, cameraName: camera.name, triggeredBy: req.user?.username || 'system' },
-      dedupeKey: `stream:start:${req.params.id}`,
-      cooldownSeconds: 10,
     };
 
     // réveil Pi
@@ -479,24 +479,14 @@ router.post('/:id/start', requireAuth, async (req, res) => {
       if (nodeRows[0]) {
         setPiWaiting(req.params.id);
         requestPiWake(nodeRows[0].device_id);
-        const title = `Stream démarré — ${camera.name}`;
-        createAlert({
-          ...alertBase,
-          title,
-          message: `Réveil du noeud Pi demandé pour la caméra "${camera.name}".`,
-        }).then(() => req.app.get('io')?.emit('new_alert', { level: 'info', title }))
+        raiseAlert({ ...alertBase, message: `Réveil du noeud Pi demandé pour la caméra "${camera.name}".` })
           .catch(err => console.error('[ALERT CAM START]', err));
         return res.json({ message: 'Réveil Pi demandé', ...getState(req.params.id) });
       }
     }
 
     await startHlsStream(camera);
-    const startTitle = `Stream démarré — ${camera.name}`;
-    createAlert({
-      ...alertBase,
-      title: startTitle,
-      message: `Le flux de la caméra "${camera.name}" a été activé.`,
-    }).then(() => req.app.get('io')?.emit('new_alert', { level: 'info', title: startTitle }))
+    raiseAlert({ ...alertBase, message: `Le flux de la caméra "${camera.name}" a été activé.` })
       .catch(err => console.error('[ALERT CAM START]', err));
     res.json({ message: 'Stream démarré', ...getState(req.params.id) });
   } catch {
@@ -554,20 +544,16 @@ router.post('/:id/stop', requireAuth, async (req, res) => {
     const camera = rows[0];
     if (camera?.node_device_id) requestPiSleep(camera.node_device_id);
     if (camera) {
-      const stopTitle = `Stream arrêté — ${camera.name}`;
-      createAlert({
+      raiseAlert({
+        type: 'camera_stopped',
+        subject: `cam:${req.params.id}`,
         sourceType: 'camera',
         sourceId: String(req.params.id),
-        cameraId: req.params.id,
-        alertType: 'camera_stopped',
-        level: 'info',
-        title: stopTitle,
+        cameraId: Number(req.params.id),
+        title: `Stream arrêté — ${camera.name}`,
         message: `Le flux de la caméra "${camera.name}" a été désactivé.`,
         metadata: { cameraId: req.params.id, cameraName: camera.name, triggeredBy: req.user?.username || 'system' },
-        dedupeKey: `stream:stop:${req.params.id}`,
-        cooldownSeconds: 10,
-      }).then(() => req.app.get('io')?.emit('new_alert', { level: 'info', title: stopTitle }))
-        .catch(err => console.error('[ALERT CAM STOP]', err));
+      }).catch(err => console.error('[ALERT CAM STOP]', err));
     }
   } catch { /* non bloquant */ }
   res.json({ message: 'Arrêtée', ...getState(req.params.id) });
@@ -645,59 +631,43 @@ router.post('/:id/motion', lanOnly, requireDevice({ allowInternal: true }), asyn
 
     const detectionLabel = req.body?.label || null;
     const detectionType  = req.body?.type  || null;
-    triggerMotionRecording(req.params.id, 30, detectionLabel, rows[0].name, resolveCameraSourceUrl(rows[0]));
+    triggerMotionRecording(req.params.id, 30, resolveCameraSourceUrl(rows[0]));
 
-    // badge mouvement
-    if (rows[0]) {
-      const host = getHostFromStreamUrl(rows[0].rtsp_url);
-      if (host) {
-        let deviceId = null;
-        // màj noeud
-        const updateRes = await pool.query('UPDATE camera_nodes SET last_motion_at = NOW() WHERE host = $1 RETURNING device_id', [host]);
+    // badge mouvement + historique (statistiques), rattachés au noeud de la caméra
+    const host = getHostFromStreamUrl(rows[0].rtsp_url);
+    if (host) {
+      const updateRes = await pool.query('UPDATE camera_nodes SET last_motion_at = NOW() WHERE host = $1 RETURNING device_id', [host]);
+      let deviceId = updateRes.rows[0]?.device_id || null;
 
-        // noeud virtuel IA
-        if (updateRes.rowCount === 0) {
-          deviceId = `ai_node:${host}`;
-          await pool.query(
-            `INSERT INTO camera_nodes (device_id, name, host, stream_url, source, last_seen_at, last_motion_at)
-             VALUES ($1, $2, $3, $4, 'ia_detector', NOW(), NOW())
-             ON CONFLICT (device_id) DO UPDATE SET name = EXCLUDED.name, stream_url = EXCLUDED.stream_url, last_motion_at = NOW(), last_seen_at = NOW()`,
-            [deviceId, rows[0].name, host, rows[0].rtsp_url]
-          ).catch(err => console.error('[IA MOTION UPDATE ERROR]', err));
-        } else {
-          deviceId = updateRes.rows[0].device_id;
-        }
-
-        // event historique
-        if (deviceId) {
-          await pool.query(
-            `INSERT INTO camera_node_motion_events (device_id, motion, detected_at)
-             VALUES ($1, true, NOW())`,
-            [deviceId]
-          );
-
-          // alerte
-          await createAlert({
-            sourceType: 'camera',
-            sourceId: String(req.params.id),
-            cameraId: req.params.id,
-            alertType: 'motion_detected',
-            level: 'warning',
-            title: `${detectionLabel || 'Mouvement détecté'} - Caméra ${req.params.id}`,
-            message: `${detectionLabel || 'Mouvement'} détecté sur le flux de la caméra (Hôte: ${host}).`,
-            metadata: { deviceId, host, detectedAt: new Date().toISOString() },
-            dedupeKey: `motion:ai:${req.params.id}`,
-            cooldownSeconds: 60, // cooldown 1min
-          }).catch(err => console.error('[ALERT AI MOTION ERROR]', err));
-
-          // socket
-          try {
-            const io = req.app.get('io');
-            if (io) io.emit('new_alert', { level: 'warning', title: `${detectionLabel || 'Mouvement détecté'} - Caméra ${req.params.id}` });
-          } catch (e) {}
-        }
+      // caméra IP sans Pi : noeud virtuel « détecteur IA »
+      if (!deviceId) {
+        deviceId = `ai_node:${host}`;
+        await pool.query(
+          `INSERT INTO camera_nodes (device_id, name, host, stream_url, source, last_seen_at, last_motion_at)
+           VALUES ($1, $2, $3, $4, 'ia_detector', NOW(), NOW())
+           ON CONFLICT (device_id) DO UPDATE SET name = EXCLUDED.name, stream_url = EXCLUDED.stream_url, last_motion_at = NOW(), last_seen_at = NOW()`,
+          [deviceId, rows[0].name, host, rows[0].rtsp_url]
+        ).catch(err => console.error('[IA MOTION UPDATE ERROR]', err));
       }
+
+      await pool.query(
+        'INSERT INTO camera_node_motion_events (device_id, motion, detected_at) VALUES ($1, true, NOW())',
+        [deviceId]
+      );
     }
+
+    // alerte (+ push, temps réel) : même sujet que les Pi, une seule alerte par caméra
+    await raiseAlert({
+      type: 'motion_detected',
+      subject: `cam:${req.params.id}`,
+      sourceType: 'camera',
+      sourceId: String(req.params.id),
+      cameraId: Number(req.params.id),
+      level: detectionType === 'person' ? 'critical' : 'warning',
+      title: `${detectionLabel || 'Mouvement détecté'} — CAM ${req.params.id} — ${rows[0].name}`,
+      message: `${detectionLabel || 'Mouvement'} détecté sur le flux de la caméra${host ? ` (Hôte: ${host})` : ''}.`,
+      metadata: { host, detectionType, detectedAt: new Date().toISOString() },
+    }).catch(err => console.error('[ALERT AI MOTION ERROR]', err));
 
     res.json({ message: 'Mouvement détecté, enregistrement en cours' });
   } catch (err) {
@@ -752,16 +722,14 @@ router.post('/:id/upload-offline', lanOnly, requireDevice(), async (req, res) =>
           const { rows } = await pool.query('SELECT rtsp_url FROM cameras WHERE id=$1', [cameraId]);
           const host = rows[0] ? getHostFromStreamUrl(rows[0].rtsp_url) : 'offline_cam';
 
-          await createAlert({
+          await raiseAlert({
+            type: 'offline_motion_detected',
             sourceType: 'camera',
             sourceId: cameraId,
-            cameraId: cameraId,
-            alertType: 'offline_motion_detected',
-            level: 'warning',
-            title: `Mouvement détecté (Hors-ligne) - Caméra ${cameraId}`,
+            cameraId: Number(cameraId),
+            title: `Mouvement détecté (hors ligne) — CAM ${cameraId}`,
             message: `Un mouvement a été détecté dans la vidéo synchronisée après la coupure réseau (${filename}).`,
             metadata: { host, filename, detectedAt: new Date().toISOString() },
-            dedupeKey: `motion:offline:${cameraId}:${filename}`
           });
         } catch (dbErr) {
           console.error('[OFFLINE SYNC ALERT ERROR]', dbErr);

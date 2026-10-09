@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const client = { query: vi.fn(), release: vi.fn() };
 vi.mock('../db/index.js', () => ({
-  pool: { query: vi.fn() },
+  pool: { query: vi.fn(), connect: vi.fn(async () => client) },
 }));
+
+const sqlCalls = () => client.query.mock.calls.map(([sql]) => sql);
 
 import { createAlert, getAlertsSummary } from './service.js';
 import { pool } from '../db/index.js';
@@ -16,7 +19,7 @@ const BASE_ALERT = {
 };
 
 describe('createAlert', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); client.query.mockReset(); });
 
   it('lève une erreur si les paramètres requis sont manquants', async () => {
     await expect(createAlert({ sourceType: 'camera' })).rejects.toThrow();
@@ -33,37 +36,48 @@ describe('createAlert', () => {
     expect(pool.query).toHaveBeenCalledTimes(1);
   });
 
-  it('saute la création si dans la période de cooldown', async () => {
-    const recentDate = new Date(Date.now() - 60_000); // 1 min ago < 600s cooldown
-    vi.mocked(pool.query).mockResolvedValue({
-      rows: [{ id: 42, created_at: recentDate }],
-    });
+  it('saute la création si une alerte de même clé existe dans le cooldown', async () => {
+    client.query.mockImplementation(async (sql) => (
+      sql.startsWith('SELECT id FROM alerts') ? { rows: [{ id: 42 }] } : { rows: [] }
+    ));
 
     const result = await createAlert({ ...BASE_ALERT, dedupeKey: 'cam-offline-1' });
-    expect(result.skipped).toBe(true);
-    expect(result.reason).toBe('cooldown');
-    expect(result.alertId).toBe(42);
+    expect(result).toEqual({ skipped: true, reason: 'cooldown', alertId: 42 });
+    expect(sqlCalls()).not.toContainEqual(expect.stringContaining('INSERT'));
+    expect(sqlCalls()).toContain('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
   });
 
-  it('crée une alerte si le cooldown est expiré', async () => {
-    const oldDate = new Date(Date.now() - 700_000); // 700s ago > 600s cooldown
-    vi.mocked(pool.query)
-      .mockResolvedValueOnce({ rows: [{ id: 5, created_at: oldDate }] })
-      .mockResolvedValueOnce({ rows: [{ id: 6, ...BASE_ALERT, status: 'new' }] });
+  it('réutilise la même clé après le cooldown (nouvelle alerte créée)', async () => {
+    client.query.mockImplementation(async (sql) => (
+      sql.startsWith('INSERT') ? { rows: [{ id: 6, ...BASE_ALERT, status: 'new' }] } : { rows: [] }
+    ));
 
-    const result = await createAlert({ ...BASE_ALERT, dedupeKey: 'cam-offline-1' });
+    const result = await createAlert({ ...BASE_ALERT, dedupeKey: 'cam-offline-1', cooldownSeconds: 600 });
     expect(result.skipped).toBe(false);
     expect(result.alert.id).toBe(6);
+    // le cooldown est évalué par la base, sur la même clé
+    const [, params] = client.query.mock.calls.find(([sql]) => sql.startsWith('SELECT id FROM alerts'));
+    expect(params).toEqual(['cam-offline-1', 600]);
+    expect(sqlCalls()).toContain('COMMIT');
   });
 
-  it('saute silencieusement en cas de race condition dedupe (erreur 23505)', async () => {
-    vi.mocked(pool.query)
-      .mockResolvedValueOnce({ rows: [] }) // pas d'entrée récente
-      .mockRejectedValueOnce(Object.assign(new Error('unique violation'), { code: '23505' }));
+  it('verrouille la clé avant de vérifier puis d\'insérer (détections simultanées)', async () => {
+    client.query.mockResolvedValue({ rows: [{ id: 7 }] });
+    await createAlert({ ...BASE_ALERT, dedupeKey: 'motion:cam:3' });
+    const calls = sqlCalls();
+    expect(calls[0]).toBe('BEGIN');
+    expect(calls[1]).toContain('pg_advisory_xact_lock');
+  });
 
-    const result = await createAlert({ ...BASE_ALERT, dedupeKey: 'cam-offline-race' });
-    expect(result.skipped).toBe(true);
-    expect(result.reason).toBe('dedupe-race');
+  it('annule la transaction et libère la connexion en cas d\'erreur', async () => {
+    client.query.mockImplementation(async (sql) => {
+      if (sql.startsWith('INSERT')) throw new Error('db down');
+      return { rows: [] };
+    });
+    await expect(createAlert({ ...BASE_ALERT, dedupeKey: 'k' })).rejects.toThrow('db down');
+    expect(sqlCalls()).toContain('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
   });
 
   it('ne fait pas de requête dedupe si dedupeKey est null', async () => {
