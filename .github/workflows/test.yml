@@ -60,6 +60,22 @@ jobs:
     defaults:
       run:
         working-directory: ./server
+    # tests d'intégration : migrations et requêtes exécutées sur un vrai PostgreSQL
+    # (en local, sans TEST_DATABASE_URL, ils tournent sur PGlite — voir server/test/db.js)
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sentys_test
+          POSTGRES_PASSWORD: sentys_test
+          POSTGRES_DB: sentys_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sentys_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -84,6 +100,7 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
           NODE_ENV: "test"
+          TEST_DATABASE_URL: "postgres://sentys_test:sentys_test@localhost:5432/sentys_test"
 
   # CRA annexe I / OWASP A06 : vulnérabilités connues et inventaire des composants
   dependencies:
