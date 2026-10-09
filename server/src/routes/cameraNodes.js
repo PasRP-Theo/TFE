@@ -167,6 +167,7 @@ router.get('/', requireAuth, async (_req, res) => {
     const { rows } = await pool.query(
       `SELECT cn.id, cn.device_id, cn.name, cn.host, cn.stream_url, cn.location, cn.model,
               cn.source, cn.motion_detected, cn.last_motion_at, cn.last_seen_at, cn.created_at,
+              cn.water_low, cn.water_changed_at,
               (c.id IS NOT NULL) AS connected,
               EXISTS (SELECT 1 FROM device_tokens dt WHERE dt.device_id = cn.device_id AND dt.revoked_at IS NULL) AS paired
        FROM camera_nodes cn
@@ -339,6 +340,72 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
   } catch (err) {
     console.error('[CAM NODE MOTION]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la mise a jour du mouvement' });
+  }
+});
+
+// niveau d'eau (sonde à flotteur sur le Pi) : alerte uniquement au changement d'état
+const WATER_ALERT_COOLDOWN_SECONDS = Number(process.env.WATER_ALERT_COOLDOWN_SECONDS || 6 * 3600);
+
+router.post('/water-level', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), async (req, res) => {
+  const deviceId = deviceFromBody(req);
+  const low = req.body?.low;
+  if (!deviceId || typeof low !== 'boolean') {
+    return res.status(400).json({ error: 'deviceId et low (booléen) requis' });
+  }
+
+  try {
+    // prev = état avant mise à jour, pour ne pas réalerter quand le Pi renvoie le même état
+    const { rows } = await pool.query(
+      `UPDATE camera_nodes cn
+       SET water_low = $2,
+           water_changed_at = CASE WHEN prev.water_low IS DISTINCT FROM $2 THEN NOW() ELSE cn.water_changed_at END,
+           last_seen_at = NOW()
+       FROM (SELECT device_id, water_low FROM camera_nodes WHERE device_id = $1) prev
+       WHERE cn.device_id = prev.device_id
+       RETURNING cn.*, prev.water_low AS prev_water_low`,
+      [deviceId, low]
+    );
+    const node = rows[0];
+    if (!node) return res.status(404).json({ error: 'Noeud introuvable' });
+
+    const changed = node.prev_water_low !== low;
+    res.json({ message: 'Niveau d\'eau enregistré', low, changed });
+
+    if (!changed) return;
+    const zone = node.location ? ` Zone : ${node.location}.` : '';
+
+    if (low) {
+      const title = `Citerne presque vide — ${node.name}`;
+      const { skipped } = await createAlert({
+        sourceType: 'camera-node',
+        sourceId: deviceId,
+        alertType: 'water_level_low',
+        level: 'warning',
+        title,
+        message: `Le niveau d'eau est descendu sous le seuil de la sonde.${zone}`,
+        metadata: { deviceId, host: node.host, location: node.location, changedAt: node.water_changed_at },
+        dedupeKey: `water:${deviceId}`,
+        cooldownSeconds: WATER_ALERT_COOLDOWN_SECONDS,
+      }).catch((err) => { console.error('[ALERT WATER]', err); return { skipped: true }; });
+
+      if (!skipped) {
+        broadcastPush({ title, body: 'Niveau d\'eau sous le seuil d\'alerte', url: '/alerts' })
+          .catch(err => console.error('[PUSH WATER]', err.message));
+      }
+    } else if (node.prev_water_low === true) {
+      await createAlert({
+        sourceType: 'camera-node',
+        sourceId: deviceId,
+        alertType: 'water_level_ok',
+        level: 'info',
+        title: `Niveau d'eau rétabli — ${node.name}`,
+        message: `Le niveau d'eau est repassé au-dessus du seuil de la sonde.${zone}`,
+        metadata: { deviceId, host: node.host, location: node.location, changedAt: node.water_changed_at },
+      }).catch(err => console.error('[ALERT WATER]', err));
+    }
+  } catch (err) {
+    console.error('[WATER LEVEL]', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du niveau d\'eau' });
   }
 });
 

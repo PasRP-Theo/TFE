@@ -235,6 +235,9 @@ export async function initDB() {
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_announce_interval INTEGER NOT NULL DEFAULT 30;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_port         INTEGER NOT NULL DEFAULT 8554;
       ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS cfg_rtsp_path         VARCHAR(60) NOT NULL DEFAULT 'cam1';
+      -- sonde de niveau d'eau (interrupteur à flotteur) branchée sur le Pi ; NULL = pas de sonde
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS water_low             BOOLEAN;
+      ALTER TABLE camera_nodes ADD COLUMN IF NOT EXISTS water_changed_at      TIMESTAMP;
 
       -- Contraintes CHECK sur les colonnes source (DROP+CREATE pour mise à jour)
       DO $$ BEGIN

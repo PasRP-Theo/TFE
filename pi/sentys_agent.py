@@ -8,6 +8,7 @@ S'arrête sur signal sleep ou inactivité. Mode hors-ligne : enregistrement loca
 import os
 import time
 import socket
+import threading
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -75,6 +76,14 @@ if DEVICE_TOKEN:
     SERVER.headers["Authorization"] = f"Bearer {DEVICE_TOKEN}"
 else:
     print("[AUTH] DEVICE_TOKEN absent de device.conf — le serveur refusera mouvements et uploads")
+
+# Sonde de niveau d'eau (interrupteur à flotteur entre la GPIO et GND, pull-up interne)
+# WATER_SENSOR_GPIO vide = pas de sonde sur ce Pi
+WATER_SENSOR_GPIO = _conf.get("WATER_SENSOR_GPIO", "").strip()
+WATER_LOW_WHEN    = _conf.get("WATER_LOW_WHEN", "closed").strip().lower()  # 'closed' ou 'open' selon le sens du flotteur
+WATER_DEBOUNCE_SEC = int(_conf.get("WATER_DEBOUNCE_SEC", "30"))  # l'état doit rester stable 30s (vagues lors du remplissage)
+WATER_POLL_SEC     = 2
+WATER_RESEND_SEC   = 3600  # renvoie l'état toutes les heures (le serveur n'alerte qu'au changement)
 
 RECORD_DIR.mkdir(parents=True, exist_ok=True)
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -461,6 +470,58 @@ def upload_pending():
             break  # arrêt si erreur réseau
 
 
+def water_level_loop():
+    """Surveille la sonde à flotteur et envoie l'état au serveur quand il change.
+    Tourne dans son propre thread pour ne pas dépendre des pauses de la boucle caméra."""
+    try:
+        from gpiozero import Button
+        switch = Button(int(WATER_SENSOR_GPIO), pull_up=True)  # contact fermé = is_pressed
+    except Exception as e:
+        print(f"[WATER] Sonde indisponible sur GPIO {WATER_SENSOR_GPIO} : {e}")
+        return
+
+    # session séparée : requests.Session n'est pas garantie thread-safe
+    session = requests.Session()
+    session.headers.update(SERVER.headers)
+
+    stable_low    = None   # dernier état validé après anti-rebond
+    candidate     = None   # état lu, en attente de stabilité
+    candidate_at  = 0.0
+    sent_low      = None   # dernier état accepté par le serveur
+    last_sent     = 0.0
+    last_try      = 0.0
+    print(f"[WATER] Sonde active sur GPIO {WATER_SENSOR_GPIO} (bas quand contact {WATER_LOW_WHEN})")
+
+    while True:
+        now = time.time()
+        low = switch.is_pressed if WATER_LOW_WHEN == "closed" else not switch.is_pressed
+
+        if low != candidate:
+            candidate, candidate_at = low, now
+        elif low != stable_low and now - candidate_at >= WATER_DEBOUNCE_SEC:
+            stable_low = low
+            print(f"[WATER] Niveau {'BAS' if low else 'OK'}")
+
+        # envoi au changement (échec retenté toutes les 30s), ou renvoi périodique
+        due = stable_low != sent_low and now - last_try >= 30
+        if stable_low is not None and (due or now - last_sent >= WATER_RESEND_SEC):
+            last_try = now
+            try:
+                r = session.post(
+                    f"{SERVER_URL}/api/camera-nodes/water-level",
+                    json={"deviceId": DEVICE_ID, "low": stable_low},
+                    timeout=5,
+                )
+                if r.status_code == 200:
+                    sent_low, last_sent = stable_low, now
+                else:
+                    print(f"[WATER] HTTP {r.status_code}")
+            except Exception as e:
+                print(f"[WATER] Impossible de notifier le serveur : {e}")
+
+        time.sleep(WATER_POLL_SEC)
+
+
 # ─── Boucle principale ─────────────────────────────────────────────────────────
 
 def main():
@@ -469,7 +530,10 @@ def main():
     set_mediamtx(False)
     release_camera()
 
-    was_offline        = False   # True si le serveur était injoignable au dernier check
+    if WATER_SENSOR_GPIO:
+        threading.Thread(target=water_level_loop, name="water-level", daemon=True).start()
+
+    was_offline       = False   # True si le serveur était injoignable au dernier check
     last_announce      = 0.0     # timestamp de la dernière annonce
     server_loss_streak = 0       # compteur de checks consécutifs sans serveur
 

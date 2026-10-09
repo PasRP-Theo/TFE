@@ -1221,6 +1221,7 @@ interface DeviceNode {
   model: string;
   last_seen_at: string;
   paired: boolean;
+  water_low: boolean | null; // null = pas de sonde de niveau sur ce Pi
 }
 
 // appairage des appareils (Pi, ESP32) : jeton affiché une seule fois
@@ -1296,13 +1297,14 @@ function TabDevices() {
       ) : (
         <div className="table-scroll-container">
           <table className="ui-table">
-            <thead><tr><th>Appareil</th><th>Adresse</th><th>Vu</th><th>Jeton</th><th></th></tr></thead>
+            <thead><tr><th>Appareil</th><th>Adresse</th><th>Vu</th><th>Citerne</th><th>Jeton</th><th></th></tr></thead>
             <tbody>
               {nodes.map(node => (
                 <tr key={node.device_id}>
                   <td className="ui-td">{node.name}<br /><small>{node.device_id}</small></td>
                   <td className="ui-td">{node.host}</td>
                   <td className="ui-td">{new Date(node.last_seen_at).toLocaleString('fr-FR')}</td>
+                  <td className="ui-td">{node.water_low == null ? '—' : node.water_low ? 'Niveau bas' : 'OK'}</td>
                   <td className="ui-td">{node.paired ? 'Actif' : 'Aucun'}</td>
                   <td className="ui-td">
                     <button type="button" className="ui-confirm-btn" disabled={busy === node.device_id} onClick={() => issueToken(node.device_id)} style={{ marginRight: '6px' }}>
