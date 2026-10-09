@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { apiUrl, apiFetch, readJsonResponse } from '../lib/api';
+import { getAccessToken, onAccessTokenChange } from '../lib/session';
 
 export interface AppConfig {
   appName: string;
@@ -125,6 +126,16 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     refreshConfig()
       .catch(() => setConfig(DEFAULT_CONFIG))
       .finally(() => setLoading(false));
+  }, []);
+
+  // sans session le serveur ne renvoie que l'apparence : on recharge à la connexion / déconnexion
+  useEffect(() => {
+    let signedIn = Boolean(getAccessToken());
+    return onAccessTokenChange((token) => {
+      if (Boolean(token) === signedIn) return;
+      signedIn = Boolean(token);
+      refreshConfig().catch(() => {});
+    });
   }, []);
 
   useEffect(() => {

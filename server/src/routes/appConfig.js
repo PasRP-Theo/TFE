@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { authenticateAccessToken } from '../auth/tokens.js';
 import { isValidPinFormat, hashPin, verifyPin } from '../security/pin.js';
 import { logAudit } from '../audit/log.js';
 import { stopAllCameras, startCamera } from '../camera/manager.js';
@@ -79,11 +80,28 @@ function readInteger(value) {
   return Number.isInteger(value) ? value : undefined;
 }
 
+// sans session : uniquement l'apparence (page de connexion) ; l'état d'armement et les
+// réglages d'alerte ne doivent pas être lisibles depuis Internet
+const PUBLIC_CONFIG_KEYS = [
+  'appName', 'appSubtitle', 'systemVersion', 'loginMessage', 'interfaceLanguage',
+  'timeFormat', 'showSystemVersion', 'uiDensity',
+];
+
+async function isAuthenticated(req) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return false;
+  try {
+    return Boolean(await authenticateAccessToken(header.slice(7)));
+  } catch {
+    return false;
+  }
+}
+
 router.get('/', async (req, res) => {
   try {
-    const row = await getConfigRow();
-    const config = serializeConfig(row);
-    res.json(config);
+    const config = serializeConfig(await getConfigRow());
+    if (await isAuthenticated(req)) return res.json(config);
+    res.json(Object.fromEntries(PUBLIC_CONFIG_KEYS.map(key => [key, config[key]])));
   } catch (err) {
     console.error('[APP CONFIG GET]', err);
     res.status(500).json({ error: 'Erreur serveur' });

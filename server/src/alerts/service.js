@@ -48,6 +48,12 @@ export async function createAlert({
   }
 }
 
+// système désarmé (PIN) : les détections de mouvement ne déclenchent ni enregistrement ni alerte
+export async function isSurveillanceArmed() {
+  const { rows } = await pool.query('SELECT surveillance_mode FROM app_settings WHERE id = 1');
+  return rows[0]?.surveillance_mode !== false;
+}
+
 export async function getAlertsSummary() {
   const { rows } = await pool.query(
     `SELECT

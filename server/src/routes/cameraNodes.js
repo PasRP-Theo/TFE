@@ -7,7 +7,7 @@ import os from 'os';
 import multer from 'multer';
 import { pool } from '../db/index.js';
 import { startCamera, startHlsStream, stopHlsStream, getState, triggerMotionRecording, RECORDINGS_DIR } from '../camera/manager.js';
-import { createAlert } from '../alerts/service.js';
+import { createAlert, isSurveillanceArmed } from '../alerts/service.js';
 import { broadcastPush } from './push.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl } from '../utils/streamUtils.js';
@@ -223,7 +223,7 @@ router.post('/announce', lanOnly, requireDeviceIfPaired(req => normalizeNodePayl
 // mouvement Pi
 router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), async (req, res) => {
   const deviceId = String(req.body.deviceId || req.body.device_id || '').trim();
-  const motion = Boolean(req.body.motion) !== false && req.body.motion !== false;
+  const motion = req.body.motion === true || req.body.motion === 'true';
   const detectedAtInput = String(req.body.detectedAt || req.body.detected_at || '').trim();
   if (!deviceId) {
     return res.status(400).json({ error: 'deviceId requis' });
@@ -247,6 +247,15 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
     );
     if (!rows[0]) return res.status(404).json({ error: 'Noeud camera introuvable' });
 
+    // système désarmé : le badge est mis à jour, mais ni enregistrement, ni alerte, ni push
+    if (motion && !(await isSurveillanceArmed())) {
+      return res.json({
+        message: 'Surveillance désarmée — mouvement ignoré',
+        ignored: true,
+        node: serializeNode(rows[0], await getConnectedHosts()),
+      });
+    }
+
     if (motion) {
       await pool.query(
         `INSERT INTO camera_node_motion_events (device_id, motion, detected_at)
@@ -262,7 +271,8 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
             return;
           }
           startHlsStream(camRows[0]).catch(err => console.error('[MOTION STREAM START]', err.message));
-          setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name), 3000);
+          // pas de push ici : celui de l'alerte classifiée (YOLO) suffit
+          setTimeout(() => triggerMotionRecording(camRows[0].id, 30, null, camRows[0].name, null, { notify: false }), 3000);
         })
         .catch(err => console.error('[MOTION CAM LOOKUP]', err.message));
     } else {
@@ -307,7 +317,7 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
           ? `${classification.label} sur le flux de la caméra (Hôte: ${node.host}). Zone : ${node.location}.`
           : `${classification.label} sur le flux de la caméra (Hôte: ${node.host}).`;
 
-        await createAlert({
+        const result = await createAlert({
           sourceType: 'camera-node',
           sourceId: camId || deviceId,
           cameraId: camId ? Number(camId) : null,
@@ -327,8 +337,10 @@ router.post('/motion', lanOnly, requireDevice({ getDeviceId: deviceFromBody }), 
           },
           dedupeKey: `motion:${dedupeId}`,
           cooldownSeconds: 300,
-        }).catch((err) => console.error('[ALERT MOTION]', err));
+        }).catch((err) => { console.error('[ALERT MOTION]', err); return { skipped: true }; });
 
+        // alerte en cooldown (même caméra < 5 min) : pas de nouvelle notification
+        if (result.skipped) return;
         broadcastPush({
           title: alertTitle,
           body: node.location ? `Zone : ${node.location}` : classification.label,

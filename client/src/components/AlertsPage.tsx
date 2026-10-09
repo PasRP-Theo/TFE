@@ -159,7 +159,9 @@ const STATUS_OPTIONS: FilterOption[] = [
 ];
 
 export default function AlertsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  // suppression réservée aux admins (journalisée côté serveur)
+  const isAdmin = user?.role === 'admin';
   const [alerts, setAlerts] = useState<AlertEntry[]>([]);
   const [summary, setSummary] = useState<AlertSummary | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
@@ -466,16 +468,18 @@ export default function AlertsPage() {
               }}
             />
             <button type="button" className="ui-link-btn" onClick={() => { setPage(1); void fetchAlerts().catch(() => {}); }}>Filtrer</button>
-            <button
-              type="button"
-              className="ui-delete-btn ui-delete-btn--danger"
-              style={{ minWidth: 0, padding: '6px 12px', fontSize: 13 }}
-              onClick={() => setShowDeleteAllConfirm(true)}
-              disabled={loading || alerts.length === 0}
-              title="Supprimer toutes les alertes"
-            >
-              Supprimer tout
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                className="ui-delete-btn ui-delete-btn--danger"
+                style={{ minWidth: 0, padding: '6px 12px', fontSize: 13 }}
+                onClick={() => setShowDeleteAllConfirm(true)}
+                disabled={loading || alerts.length === 0}
+                title="Supprimer toutes les alertes"
+              >
+                Supprimer tout
+              </button>
+            )}
           </div>
         </div>
 
@@ -515,15 +519,17 @@ export default function AlertsPage() {
                       {actionLoadingKey === `ack-${entry.id}` ? 'Confirmation...' : 'Confirmer'}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="ui-delete-btn"
-                    onClick={() => setAlertDeleteTarget(entry)}
-                    disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
-                    title="Supprimer l’alerte"
-                  >
-                    {actionLoadingKey === `delete-${entry.id}` ? 'Suppression...' : 'Supprimer'}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="ui-delete-btn"
+                      onClick={() => setAlertDeleteTarget(entry)}
+                      disabled={actionLoadingKey === `ack-${entry.id}` || actionLoadingKey === `delete-${entry.id}`}
+                      title="Supprimer l’alerte"
+                    >
+                      {actionLoadingKey === `delete-${entry.id}` ? 'Suppression...' : 'Supprimer'}
+                    </button>
+                  )}
                 </div>
               </article>
             ))}

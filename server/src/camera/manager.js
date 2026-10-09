@@ -871,7 +871,7 @@ export async function deleteAllRecordings(cameraId) {
 }
 
 // enregistrement mouvement + notification push
-export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null, fallbackSourceUrl = null) {
+export function triggerMotionRecording(cameraId, durationSeconds = 30, detectionLabel = null, cameraName = null, fallbackSourceUrl = null, { notify = true } = {}) {
   const id = String(cameraId);
   const s = states.get(id);
   const sourceUrl = s?.sourceUrl || fallbackSourceUrl;
@@ -905,17 +905,22 @@ export function triggerMotionRecording(cameraId, durationSeconds = 30, detection
     }
   });
 
-  s.recording = true; // pastille REC
-  broadcast(id);
+  // caméra non démarrée (enregistrement via l'URL de secours) : pas d'état ni de pastille
+  if (s) {
+    s.recording = true; // pastille REC
+    broadcast(id);
+  }
   console.log(`[CAM ${id}] Mouvement détecté ! Enregistrement (${durationSeconds}s).`);
 
-  const pushTitle = detectionLabel || 'Mouvement détecté';
-  const camLabel = cameraName || `CAM ${id}`;
-  broadcastPush({
-    title: `${pushTitle} — ${camLabel}`,
-    body: detectionLabel ? `${detectionLabel} capté par la caméra.` : 'Un mouvement a été détecté par la caméra.',
-    url: '/videos',
-  }).catch(err => console.error(`[PUSH CAM ${id}]`, err.message));
+  if (notify) {
+    const pushTitle = detectionLabel || 'Mouvement détecté';
+    const camLabel = cameraName || `CAM ${id}`;
+    broadcastPush({
+      title: `${pushTitle} — ${camLabel}`,
+      body: detectionLabel ? `${detectionLabel} capté par la caméra.` : 'Un mouvement a été détecté par la caméra.',
+      url: '/videos',
+    }).catch(err => console.error(`[PUSH CAM ${id}]`, err.message));
+  }
 
   const cleanupFailedRecording = () => {
     fsPromises.stat(mp4File)

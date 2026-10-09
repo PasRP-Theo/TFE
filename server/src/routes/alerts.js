@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { pool } from '../db/index.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getAlertsSummary } from '../alerts/service.js';
+import { numericIdParam } from '../utils/validators.js';
+import { logAudit } from '../audit/log.js';
 
 const router = Router();
+router.param('id', numericIdParam);
 
 function parseInteger(value, fallback) {
   const parsed = Number.parseInt(String(value || ''), 10);
@@ -237,7 +240,8 @@ router.patch('/:id/view', requireAuth, async (req, res) => {
 
 router.delete('/all', requireAuth, requireAdmin, async (req, res) => {
   try {
-    await pool.query('DELETE FROM alerts');
+    const { rowCount } = await pool.query('DELETE FROM alerts');
+    await logAudit(req.user.username, 'ALERTS_DELETE_ALL', `${rowCount} alerte(s) supprimée(s)`, req.ip);
     res.json({ deleted: true });
   } catch (err) {
     console.error('[ALERT DELETE ALL]', err);
@@ -245,13 +249,15 @@ router.delete('/all', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.delete('/:id', requireAuth, async (req, res) => {
+// suppression réservée aux admins et journalisée (une alerte peut servir de preuve)
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { rowCount } = await pool.query('DELETE FROM alerts WHERE id = $1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM alerts WHERE id = $1 RETURNING title', [req.params.id]);
 
-    if (rowCount === 0) {
+    if (rows.length === 0) {
       return res.status(404).json({ error: 'Alerte introuvable' });
     }
+    await logAudit(req.user.username, 'ALERT_DELETE', `Alerte #${req.params.id} supprimée : ${rows[0].title}`, req.ip);
 
     res.json({ deleted: true, id: Number(req.params.id) });
   } catch (err) {

@@ -289,14 +289,18 @@ async function start() {
 
   // autostart
   try {
-    const settingsResult = await pool.query('SELECT camera_autostart_enabled FROM app_settings WHERE id = 1');
+    const settingsResult = await pool.query('SELECT camera_autostart_enabled, surveillance_mode FROM app_settings WHERE id = 1');
     const cameraAutostartEnabled = settingsResult.rows[0]?.camera_autostart_enabled ?? true;
+    // désarmé avant le redémarrage : on reste désarmé (même règle que le désarmement par PIN)
+    const surveillanceArmed = settingsResult.rows[0]?.surveillance_mode !== false;
     const { rows } = await pool.query("SELECT * FROM cameras WHERE active = true");
-    if (cameraAutostartEnabled && rows.length > 0) {
+    if (cameraAutostartEnabled && surveillanceArmed && rows.length > 0) {
       console.log(`[CAM] Auto-démarrage de ${rows.length} caméra(s)…`);
       rows.forEach(cam => startCamera(cam));
     } else if (!cameraAutostartEnabled) {
       console.log('[CAM] Auto-démarrage désactivé dans les paramètres.');
+    } else if (!surveillanceArmed) {
+      console.log('[CAM] Surveillance désarmée : caméras non démarrées.');
     }
   } catch (e) {
     console.warn('[CAM] Pas de caméras à démarrer:', e.message);

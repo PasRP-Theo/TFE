@@ -22,7 +22,7 @@ import {
 } from '../camera/manager.js';
 import { logAudit } from '../audit/log.js';
 import { splitStreamCredentials, encryptCameraCredentials, resolveCameraSourceUrl, publicCameraFields } from '../camera/credentials.js';
-import { createAlert } from '../alerts/service.js';
+import { createAlert, isSurveillanceArmed } from '../alerts/service.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { getHostFromStreamUrl, maskStreamUrl, stripStreamCredentials } from '../utils/streamUtils.js';
@@ -639,6 +639,9 @@ router.post('/:id/motion', lanOnly, requireDevice({ allowInternal: true }), asyn
   try {
     const { rows } = await pool.query('SELECT id, rtsp_url, credentials_enc, name FROM cameras WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Caméra introuvable' });
+    if (!(await isSurveillanceArmed())) {
+      return res.json({ message: 'Surveillance désarmée — mouvement ignoré', ignored: true });
+    }
 
     const detectionLabel = req.body?.label || null;
     const detectionType  = req.body?.type  || null;
