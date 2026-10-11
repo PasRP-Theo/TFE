@@ -80,7 +80,8 @@ it('en cas d\'erreur lors de l\'alerte, retente au passage suivant', async () =>
   await monitor.check();
   advance(61_000);
   // la lecture des réglages échoue une fois (base indisponible au moment de l'alerte)
-  const realQuery = pool.query;
+  // bind : pg.Pool.query a besoin de son « this » (PGlite non, d'où un test vert en local)
+  const realQuery = pool.query.bind(pool);
   let failed = false;
   pool.query = async (sql, params) => {
     if (!failed && String(sql).includes('FROM app_settings')) {

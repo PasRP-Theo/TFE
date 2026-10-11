@@ -38,7 +38,8 @@ describe('migrations', () => {
 
   it('remplace l\'index unique de dedupe_key (0003)', async () => {
     const { rows } = await pool.query(
-      `SELECT indexname FROM pg_indexes WHERE tablename = 'alerts' AND indexname LIKE 'idx_alerts_dedupe%'`
+      `SELECT indexname FROM pg_indexes
+       WHERE schemaname = current_schema() AND tablename = 'alerts' AND indexname LIKE 'idx_alerts_dedupe%'`
     );
     expect(rows.map(r => r.indexname)).toEqual(['idx_alerts_dedupe_key_created']);
   });
