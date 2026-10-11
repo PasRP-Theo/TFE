@@ -5985,3 +5985,10 @@ a:focus-visible {
   .hp-weather-emoji { font-size: 2.2rem; }
   .hp-weather-temp { font-size: 1.6rem; }
 }
+/* page en cours de chargement (pages chargées à la demande) */
+.app-page-loading {
+  padding: 32px 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+}

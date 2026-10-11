@@ -1,18 +1,31 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { AppConfigProvider, useAppConfig } from './hooks/useAppConfig';
 import { AppearanceProvider, useAppearance } from './hooks/useAppearance';
 import LoginPage   from './components/LoginPage';
-import CameraFeed  from './components/CameraFeed';
-import Settings    from './components/Settings';
-import SystemInfo  from './components/SystemInfo';
-import AlertsPage  from './components/AlertsPage';
-import HomePage    from './components/HomePage';
+import { usePolling } from './hooks/usePolling';
+import { useRealtimeEvent } from './lib/realtime';
 import BrandLogo from './components/BrandLogo.tsx';
 import { registerSW } from 'virtual:pwa-register';
 import { apiUrl, apiFetch, readJsonResponse } from './lib/api';
 import './App.css';
+
+// pages chargées à la demande (bundle initial réduit), puis préchargées en arrière-plan
+const loadHome = () => import('./components/HomePage');
+const loadCameras = () => import('./components/CameraFeed');
+const loadAlerts = () => import('./components/AlertsPage');
+const loadSystem = () => import('./components/SystemInfo');
+const loadSettings = () => import('./components/Settings');
+const HomePage = lazy(loadHome);
+const CameraFeed = lazy(loadCameras);
+const AlertsPage = lazy(loadAlerts);
+const SystemInfo = lazy(loadSystem);
+const Settings = lazy(loadSettings);
+
+function preloadPages() {
+  for (const load of [loadHome, loadCameras, loadAlerts, loadSystem, loadSettings]) void load().catch(() => {});
+}
 
 // PWA
 if (typeof window !== 'undefined') {
@@ -197,33 +210,31 @@ function getSystemStatus(
     };
   }, []);
 
+  const refreshAlertsSummary = async () => {
+    try {
+      const response = await apiFetch(apiUrl('/api/alerts/summary'));
+      const data = await readJsonResponse<{ pending_count?: number; critical_pending_count?: number } & { error?: string }>(response);
+      if (!response.ok) {
+        setIsServerReachable(false);
+        return;
+      }
+      setIsServerReachable(true);
+      setPendingAlertsCount(data.pending_count || 0);
+      setCriticalAlertsCount(data.critical_pending_count || 0);
+    } catch {
+      setIsServerReachable(false);
+    }
+  };
+
+  // compteur d'alertes : immédiat sur « new_alert », vérification régulière (joignabilité du serveur)
+  usePolling(refreshAlertsSummary, 30_000, { enabled: Boolean(user) });
+  useRealtimeEvent('new_alert', () => { void refreshAlertsSummary(); }, { enabled: Boolean(user) });
+
+  // une fois connecté, les autres pages sont téléchargées pendant que le navigateur est inactif
   useEffect(() => {
     if (!user) return;
-
-    let stopped = false;
-
-    const refreshAlertsSummary = async () => {
-      try {
-        const response = await apiFetch(apiUrl('/api/alerts/summary'));
-        const data = await readJsonResponse<{ pending_count?: number; critical_pending_count?: number } & { error?: string }>(response);
-        if (!response.ok || stopped) {
-          if (!stopped) setIsServerReachable(false);
-          return;
-        }
-        setIsServerReachable(true);
-        setPendingAlertsCount(data.pending_count || 0);
-        setCriticalAlertsCount(data.critical_pending_count || 0);
-      } catch {
-        if (!stopped) setIsServerReachable(false);
-      }
-    };
-
-    refreshAlertsSummary().catch(() => {});
-    const interval = setInterval(() => refreshAlertsSummary().catch(() => {}), 15000);
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-    };
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500));
+    idle(preloadPages);
   }, [user]);
 
 
@@ -315,6 +326,7 @@ function getSystemStatus(
       </header>
 
       <main className="app-main">
+        <Suspense fallback={<div className="app-page-loading" role="status">Chargement…</div>}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/videos"  element={<CameraFeed onStatusChange={setCameraStatus} />} />
@@ -328,6 +340,7 @@ function getSystemStatus(
           } />
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
+        </Suspense>
       </main>
 
     </div>

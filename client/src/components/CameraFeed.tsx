@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import type Hls from "hls.js";
 import type { ErrorData } from "hls.js";
-import { io as ioClient } from "socket.io-client";
-import { apiUrl, apiFetch, API_BASE_URL, readJsonResponse } from "../lib/api";
-import { getAccessToken, refreshSession } from "../lib/session";
+import { apiUrl, apiFetch, readJsonResponse } from "../lib/api";
+import { useRealtimeEvent } from "../lib/realtime";
+import { usePolling } from "../hooks/usePolling";
 import { WebRTCPlayer } from "./WebRTCPlayer";
 import { OnvifWizard } from "./OnvifWizard";
 import { useAppConfig } from "../hooks/useAppConfig";
@@ -150,7 +150,8 @@ function HlsPlayer({ cameraId, streamKey }: { cameraId: number; streamKey: strin
         }
         return;
       }
-      const { default: HlsLib } = await import('hls.js');
+      // version « light » : sans DRM, sous-titres ni pistes audio alternatives (inutiles ici)
+      const { default: HlsLib } = await import('hls.js/light');
       if (disposed) return;
 
       if (HlsLib.isSupported()) {
@@ -319,8 +320,18 @@ function StartingScreen() {
   );
 }
 
-// écran caméra
-function CameraScreen({ cam, time, openKey = 0 }: { cam: Camera; time: Date; openKey?: number }) {
+// horloge autonome : seule elle se redessine chaque seconde (pas la grille de caméras)
+function LiveClock({ className }: { className: string }) {
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span className={className}>{time.toLocaleTimeString('fr-FR')}</span>;
+}
+
+// écran caméra (mémoïsé : ne se redessine que si la caméra change)
+const CameraScreen = memo(function CameraScreen({ cam, openKey = 0 }: { cam: Camera; openKey?: number }) {
   return (
     <div className="cam-screen">
       {cam.status === 'running' && cam.hlsUrl
@@ -334,14 +345,14 @@ function CameraScreen({ cam, time, openKey = 0 }: { cam: Camera; time: Date; ope
           <div className="cam-rec-dot-anim" /> REC
         </div>
       )}
-      <div className="cam-time-overlay">{time.toLocaleTimeString('fr-FR')}</div>
+      <LiveClock className="cam-time-overlay" />
       <div className="cam-corner cam-corner--tl" />
       <div className="cam-corner cam-corner--tr" />
       <div className="cam-corner cam-corner--bl" />
       <div className="cam-corner cam-corner--br" />
     </div>
   );
-}
+});
 
 // badge statut
 function StatusBadge({ status }: { status: Camera["status"] }) {
@@ -432,7 +443,6 @@ export default function CameraFeed({ onStatusChange }: {
   const [discoveriesLoading, setDiscoveriesLoading] = useState(false);
   const [discoveriesError, setDiscoveriesError] = useState<string | null>(null);
   const [discoveriesTtlMinutes, setDiscoveriesTtlMinutes] = useState(10);
-  const [time,    setTime]    = useState(new Date());
   const [historyCameraId, setHistoryCameraId] = useState<number | null>(null);
   const [historyRecords, setHistoryRecords] = useState<RecordingEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -474,11 +484,6 @@ export default function CameraFeed({ onStatusChange }: {
   }
 
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
     if (onStatusChange) {
       const reconnectingCount = cameras.filter(c => c.status === 'reconnecting').length;
       const stoppedCount = cameras.filter(c => c.status === 'stopped').length;
@@ -515,66 +520,40 @@ export default function CameraFeed({ onStatusChange }: {
     };
   }, [showAdd, config.defaultCameraAddMode, config.cameraDiscoveryIntervalSeconds]);
 
+  // réponse identique à la précédente : aucun nouveau rendu de la grille
+  const lastCamerasJsonRef = useRef('');
   async function fetchCameras() {
     try {
       const res  = await apiFetch(apiUrl('/api/cameras'));
       if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) setCameras(data);
+      const text = await res.text();
+      if (text === lastCamerasJsonRef.current) return;
+      const data = JSON.parse(text);
+      if (Array.isArray(data)) {
+        lastCamerasJsonRef.current = text;
+        setCameras(data);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    fetchCameras();
-    const t = setInterval(fetchCameras, config.cameraRefreshSeconds * 1000);
-    return () => clearInterval(t);
-  }, [config.cameraRefreshSeconds]);
+  // filet de sécurité : l'état arrive surtout en temps réel (camera_state), suspendu en arrière-plan
+  usePolling(fetchCameras, config.cameraRefreshSeconds * 1000);
 
-  // poll démarrage (fallback si socket.io manqué)
+  // démarrage en cours : vérification rapprochée tant que le flux n'est pas prêt
   const hasStartingCamera = cameras.some(c => c.status === 'running' && !c.hlsUrl);
-  useEffect(() => {
-    if (!hasStartingCamera) return;
-    const t = setInterval(fetchCameras, 250);
-    return () => clearInterval(t);
-  }, [hasStartingCamera]);
+  usePolling(fetchCameras, 1000, { enabled: hasStartingCamera, immediate: false });
 
-  // socket.io : réaction immédiate quand l'état caméra change côté serveur
-  useEffect(() => {
-    if (!user) return;
-    // jeton relu à chaque (re)connexion : le serveur coupe la socket à l'expiration du jeton
-    const socket = ioClient(API_BASE_URL || window.location.origin, {
-      auth: cb => cb({ token: getAccessToken() }),
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-    });
-    socket.on('disconnect', reason => {
-      if (reason === 'io server disconnect') {
-        refreshSession().then(data => { if (data) socket.connect(); });
-      }
-    });
-    socket.on('camera_state', () => { fetchCameras().catch(() => {}); });
-    return () => { socket.disconnect(); };
-  }, [user]);
+  // temps réel : réaction immédiate quand l'état d'une caméra change côté serveur
+  useRealtimeEvent('camera_state', () => { void fetchCameras(); }, { enabled: Boolean(user) });
 
-  useEffect(() => {
-    let stopped = false;
-    async function fetchSysInfo() {
-      try {
-        const res = await apiFetch(apiUrl('/api/system/info'));
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!stopped) {
-          setSysInfo({ hasBattery: data.battery.hasBattery, isCharging: data.battery.isCharging, percent: data.battery.percent });
-        }
-      } catch {
-        // ignore
-      }
-    }
-    fetchSysInfo();
-    const t = setInterval(fetchSysInfo, 5000);
-    return () => { stopped = true; clearInterval(t); };
-  }, []);
+  // alimentation du serveur (secteur / batterie) : lecture légère toutes les 30 s
+  usePolling(async () => {
+    try {
+      const res = await apiFetch(apiUrl('/api/system/power'));
+      if (res.ok) setSysInfo(await res.json());
+    } catch { /* ignore */ }
+  }, 30_000);
 
   async function handleAction(id: number, action: "start" | "pause" | "resume" | "stop") {
     try {
@@ -887,7 +866,7 @@ export default function CameraFeed({ onStatusChange }: {
           </div>
         </div>
         <div className="cam-header-right">
-          <span className="cam-clock">{time.toLocaleTimeString('fr-FR')}</span>
+          <LiveClock className="cam-clock" />
           {isAdmin && (
             <button
               type="button"
@@ -1087,7 +1066,7 @@ export default function CameraFeed({ onStatusChange }: {
               </div>
             </div>
             <div className="cam-screen-shell cam-screen-shell--focus-mode">
-              <CameraScreen cam={focusedCam} time={time} openKey={focusOpenCountRef.current} />
+              <CameraScreen cam={focusedCam} openKey={focusOpenCountRef.current} />
             </div>
             <CameraControls cam={focusedCam} onAction={handleAction} surveillanceActive={config.surveillanceMode} />
           </div>
@@ -1136,7 +1115,7 @@ export default function CameraFeed({ onStatusChange }: {
                 )}
                 </div>
               </div>
-              <CameraScreen cam={cam} time={time} />
+              <CameraScreen cam={cam} />
               <CameraControls cam={cam} onAction={handleAction} surveillanceActive={config.surveillanceMode} />
             </div>
           ))}

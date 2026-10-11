@@ -33,14 +33,13 @@ vi.mock('../../hooks/useVirtualKeyboard', () => ({
   })
 }));
 
+// vraies réponses HTTP : le composant lit le corps en texte (pas de rendu si rien n'a changé)
+const jsonResponse = (body: unknown) =>
+  Promise.resolve(new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } }));
+
 describe('CameraFeed Component', () => {
   beforeEach(() => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([]) // Retourne un tableau vide de caméras
-      })
-    ) as unknown as typeof fetch;
+    global.fetch = vi.fn(() => jsonResponse([])) as unknown as typeof fetch; // aucune caméra
   });
 
   it('affiche le header et l\'état vide quand il n\'y a pas de caméras', async () => {
@@ -51,14 +50,9 @@ describe('CameraFeed Component', () => {
   });
 
   it('affiche les caméras récupérées par l\'API', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([
-          { id: 1, name: 'Caméra Salon', status: 'running', recording: false, rtsp_url: 'rtsp://test' }
-        ])
-      })
-    ) as unknown as typeof fetch;
+    global.fetch = vi.fn(() => jsonResponse([
+      { id: 1, name: 'Caméra Salon', status: 'running', recording: false, rtsp_url: 'rtsp://test' }
+    ])) as unknown as typeof fetch;
 
     render(<CameraFeed />);
     await waitFor(() => {

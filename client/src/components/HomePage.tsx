@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '../hooks/useAuth';
 import { apiUrl, apiFetch } from '../lib/api';
 
 interface ShoppingItem {
@@ -45,8 +44,7 @@ interface HomeNote {
 type Tab = 'courses' | 'meteo' | 'autres';
 
 export default function HomePage() {
-  const { token } = useAuth();
-  const headers = { Authorization: `Bearer ${token}` };
+  // jeton d'accès ajouté par apiFetch (toujours le jeton courant, renouvelé automatiquement)
 
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [newItem, setNewItem] = useState('');
@@ -66,17 +64,17 @@ export default function HomePage() {
 
   const loadItems = useCallback(async () => {
     try {
-      const res = await apiFetch(apiUrl('/api/home/shopping'), { headers });
+      const res = await apiFetch(apiUrl('/api/home/shopping'));
       if (res.ok) setItems(await res.json());
     } catch { /* ignore */ }
     finally { setItemsLoading(false); }
-  }, [token]);
+  }, []);
 
   const loadWeather = useCallback(async () => {
     setWeatherLoading(true);
     setWeatherError(null);
     try {
-      const res = await apiFetch(apiUrl('/api/home/weather'), { headers });
+      const res = await apiFetch(apiUrl('/api/home/weather'));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Erreur météo');
       setWeather(data);
@@ -85,15 +83,15 @@ export default function HomePage() {
     } finally {
       setWeatherLoading(false);
     }
-  }, [token]);
+  }, []);
 
   const loadNotes = useCallback(async () => {
     try {
-      const res = await apiFetch(apiUrl('/api/home/notes'), { headers });
+      const res = await apiFetch(apiUrl('/api/home/notes'));
       if (res.ok) setNotes(await res.json());
     } catch { /* ignore */ }
     finally { setNotesLoading(false); }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     loadItems();
@@ -108,7 +106,7 @@ export default function HomePage() {
     try {
       const res = await apiFetch(apiUrl('/api/home/shopping'), {
         method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
       if (res.ok) {
@@ -125,7 +123,7 @@ export default function HomePage() {
     try {
       await apiFetch(apiUrl(`/api/home/shopping/${id}`), {
         method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ checked }),
       });
     } catch {
@@ -136,14 +134,14 @@ export default function HomePage() {
   const deleteItem = async (id: number) => {
     setItems(prev => prev.filter(i => i.id !== id));
     try {
-      await apiFetch(apiUrl(`/api/home/shopping/${id}`), { method: 'DELETE', headers });
+      await apiFetch(apiUrl(`/api/home/shopping/${id}`), { method: 'DELETE' });
     } catch { loadItems(); }
   };
 
   const clearChecked = async () => {
     setItems(prev => prev.filter(i => !i.checked));
     try {
-      await apiFetch(apiUrl('/api/home/shopping/checked'), { method: 'DELETE', headers });
+      await apiFetch(apiUrl('/api/home/shopping/checked'), { method: 'DELETE' });
     } catch { loadItems(); }
   };
 
@@ -154,7 +152,7 @@ export default function HomePage() {
     try {
       const res = await apiFetch(apiUrl('/api/home/notes'), {
         method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
       if (res.ok) {
@@ -168,7 +166,7 @@ export default function HomePage() {
   const deleteNote = async (id: number) => {
     setNotes(prev => prev.filter(n => n.id !== id));
     try {
-      await apiFetch(apiUrl(`/api/home/notes/${id}`), { method: 'DELETE', headers });
+      await apiFetch(apiUrl(`/api/home/notes/${id}`), { method: 'DELETE' });
     } catch { loadNotes(); }
   };
 

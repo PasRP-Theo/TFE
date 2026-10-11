@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { io as ioClient } from 'socket.io-client';
-import { apiUrl, apiFetch, readJsonResponse, API_BASE_URL } from '../lib/api';
+import { apiUrl, apiFetch, readJsonResponse } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
+import { usePolling } from '../hooks/usePolling';
+import { useRealtimeEvent } from '../lib/realtime';
 
 interface FilterOption {
   value: string;
@@ -224,31 +225,16 @@ export default function AlertsPage() {
       .finally(() => setLoading(false));
   }, [authHeaders, fetchAlerts, fetchSummary, fetchAnalytics]);
 
-  useEffect(() => {
-    if (!authHeaders) return;
-    const interval = setInterval(() => {
-      fetchSummary().catch(() => {});
-      fetchAnalytics().catch(() => {});
-      fetchAlerts().catch(() => {});
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [authHeaders, fetchAlerts, fetchSummary, fetchAnalytics]);
+  const refreshAll = () => {
+    fetchSummary().catch(() => {});
+    fetchAnalytics().catch(() => {});
+    fetchAlerts().catch(() => {});
+  };
 
-  // Rafraîchissement instantané via socket.io
-  useEffect(() => {
-    if (!token) return;
-    const socket = ioClient(API_BASE_URL || window.location.origin, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-    });
-    socket.on('new_alert', () => {
-      fetchAlerts().catch(() => {});
-      fetchSummary().catch(() => {});
-      fetchAnalytics().catch(() => {});
-    });
-    return () => { socket.disconnect(); };
-  }, [token, fetchAlerts, fetchSummary, fetchAnalytics]);
+  // les nouvelles alertes arrivent en temps réel ; ce rafraîchissement n'est qu'un filet de sécurité
+  usePolling(refreshAll, 60_000, { enabled: Boolean(authHeaders), immediate: false });
+  useRealtimeEvent('new_alert', refreshAll, { enabled: Boolean(token) });
+
 
   async function acknowledgeAlert(id: number) {
     if (!authHeaders) return;

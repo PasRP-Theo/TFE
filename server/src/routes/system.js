@@ -8,8 +8,50 @@ import { stopAllCameras } from '../camera/manager.js';
 
 const router = Router();
 
-router.get('/info', requireAuth, async (req, res) => {
+// lectures système coûteuses (processeur, disques, réseau) : mises en commun quelques secondes,
+// requêtes simultanées comprises, pour que plusieurs onglets ouverts ne les multiplient pas
+function cached(ttlMs, load) {
+  let value = null;
+  let at = 0;
+  let pending = null;
+  return () => {
+    if (value && Date.now() - at < ttlMs) return Promise.resolve(value);
+    pending ??= load()
+      .then(result => { value = result; at = Date.now(); return result; })
+      .finally(() => { pending = null; });
+    return pending;
+  };
+}
+
+function normalizeBattery(batteryData) {
+  return {
+    hasBattery: batteryData.hasbattery === true || batteryData.hasBattery === true,
+    percent: batteryData.percent != null ? Number(batteryData.percent) : undefined,
+    isCharging: batteryData.ischarging === true || batteryData.isCharging === true,
+    timeRemaining: batteryData.timeremaining != null ? Number(batteryData.timeremaining) : batteryData.timeRemaining != null ? Number(batteryData.timeRemaining) : null,
+    model: batteryData.model || null,
+    type: batteryData.type || null,
+    voltage: batteryData.voltage != null ? Number(batteryData.voltage) : null,
+    cycleCount: batteryData.cyclecount != null ? Number(batteryData.cyclecount) : batteryData.cycleCount != null ? Number(batteryData.cycleCount) : null,
+  };
+}
+
+const readPower = cached(10_000, async () => {
+  const battery = normalizeBattery(await si.battery());
+  return { hasBattery: battery.hasBattery, isCharging: battery.isCharging, percent: battery.percent };
+});
+
+// alimentation seule (secteur / batterie) : lecture légère pour la barre d'état des pages
+router.get('/power', requireAuth, async (_req, res) => {
   try {
+    res.json(await readPower());
+  } catch (err) {
+    console.error('[SYSTEM POWER]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+const readInfo = cached(2_000, async () => {
     const [cpuData, loadData, tempData, memData, osData, fsData, netIfaces, batteryData] = await Promise.all([
       si.cpu(),
       si.currentLoad(),
@@ -60,16 +102,7 @@ router.get('/info', requireAuth, async (req, res) => {
         speed: iface.speed != null ? Number(iface.speed) : null,
       }));
 
-    const battery = {
-      hasBattery: batteryData.hasbattery === true || batteryData.hasBattery === true,
-      percent: batteryData.percent != null ? Number(batteryData.percent) : undefined,
-      isCharging: batteryData.ischarging === true || batteryData.isCharging === true,
-      timeRemaining: batteryData.timeremaining != null ? Number(batteryData.timeremaining) : batteryData.timeRemaining != null ? Number(batteryData.timeRemaining) : null,
-      model: batteryData.model || null,
-      type: batteryData.type || null,
-      voltage: batteryData.voltage != null ? Number(batteryData.voltage) : null,
-      cycleCount: batteryData.cyclecount != null ? Number(batteryData.cyclecount) : batteryData.cycleCount != null ? Number(batteryData.cycleCount) : null,
-    };
+    const battery = normalizeBattery(batteryData);
 
     const os = {
       platform: osData.platform || 'unknown',
@@ -80,7 +113,7 @@ router.get('/info', requireAuth, async (req, res) => {
       uptime: Number(osData.uptime) || 0,
     };
 
-    res.json({
+    return {
       cpu,
       ram,
       disks,
@@ -88,7 +121,12 @@ router.get('/info', requireAuth, async (req, res) => {
       os,
       battery,
       fetchedAt: new Date().toISOString(),
-    });
+    };
+});
+
+router.get('/info', requireAuth, async (_req, res) => {
+  try {
+    res.json(await readInfo());
   } catch (err) {
     console.error('[SYSTEM INFO]', err);
     res.status(500).json({ error: 'Erreur serveur lors de la récupération des infos système' });

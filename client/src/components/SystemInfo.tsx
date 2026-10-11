@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch, apiUrl } from "../lib/api";
+import { usePolling } from "../hooks/usePolling";
 
 // types
 
@@ -197,11 +198,8 @@ export default function SystemInfo() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchInfo();
-    const interval = setInterval(fetchInfo, POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, [fetchInfo]);
+  // suspendu quand l'onglet est caché (lecture système coûteuse côté serveur)
+  usePolling(fetchInfo, POLL_INTERVAL);
 
   const handleArmClick = () => {
     setShowPinPad(true);
