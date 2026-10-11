@@ -23,6 +23,9 @@ import {
 import { logAudit } from '../audit/log.js';
 import { splitStreamCredentials, encryptCameraCredentials, resolveCameraSourceUrl, publicCameraFields } from '../camera/credentials.js';
 import { isSurveillanceArmed } from '../alerts/service.js';
+import { discoverOnvifDevices } from '../camera/onvif.js';
+import { connectCamera, CameraConnectError, CAMERA_BRANDS } from '../camera/connectCamera.js';
+import { go2rtcSource } from '../go2rtc/manager.js';
 import { raiseAlert } from '../alerts/engine.js';
 import { requestPiWake, requestPiSleep } from './cameraNodes.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
@@ -85,6 +88,8 @@ async function getCameraNodesByHost() {
   return new Map(rows.map(row => [row.host, row]));
 }
 
+const optionalText = (value, max) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null);
+
 function normalizeCreateCameraPayload(body = {}) {
   const name = String(body.name || '').trim();
   const location = String(body.location || '').trim();
@@ -98,6 +103,13 @@ function normalizeCreateCameraPayload(body = {}) {
     name,
     rtspUrl,
     location,
+    // assistant ONVIF : identifiants transmis à part (jamais dans l'URL), métadonnées relevées
+    username: typeof body.username === 'string' ? body.username : null,
+    password: typeof body.password === 'string' ? body.password : null,
+    transcode: body.transcode === true,
+    videoCodec: optionalText(body.video_codec, 20),
+    manufacturer: optionalText(body.manufacturer, 80),
+    model: optionalText(body.model, 120),
     discoverySource: 'manual',
   };
 }
@@ -177,6 +189,49 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// ── assistant d'ajout multi-marques (ONVIF, puis chemins connus par marque) ──
+// recherche : caméras ONVIF qui répondent sur le réseau local
+router.get('/onvif/discover', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const [devices, { rows }] = await Promise.all([
+      discoverOnvifDevices({ timeoutMs: 3000 }),
+      pool.query('SELECT rtsp_url FROM cameras'),
+    ]);
+    const knownHosts = new Set(rows.map(row => getHostFromStreamUrl(row.rtsp_url)).filter(Boolean));
+    res.json({
+      devices: devices.map(device => ({ ...device, alreadyAdded: knownHosts.has(device.host) })),
+      brands: CAMERA_BRANDS.map(({ id, label }) => ({ id, label })),
+    });
+  } catch (err) {
+    console.error('[ONVIF DISCOVER]', err.message);
+    res.status(500).json({ error: 'Erreur lors de la recherche des caméras' });
+  }
+});
+
+const CONNECT_ERROR_STATUS = { invalid_host: 400, invalid_brand: 400 };
+
+// connexion : identifiants vérifiés, flux et codec relevés — rien n'est encore enregistré
+router.post('/onvif/connect', requireAuth, requireAdmin, async (req, res) => {
+  const { host, xaddr, username, password, brand } = req.body || {};
+  try {
+    const result = await connectCamera({
+      host: typeof host === 'string' ? host : '',
+      xaddr: typeof xaddr === 'string' ? xaddr : null,
+      username: typeof username === 'string' ? username : '',
+      password: typeof password === 'string' ? password : '',
+      brand: typeof brand === 'string' && brand ? brand : null,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof CameraConnectError) {
+      // 422 et non 401 : l'interface ne doit pas confondre avec une session expirée
+      return res.status(CONNECT_ERROR_STATUS[err.code] || 422).json({ error: err.message, code: err.code, brands: err.brands });
+    }
+    console.error('[ONVIF CONNECT]', err.message);
+    res.status(500).json({ error: 'Erreur lors de la connexion à la caméra' });
+  }
+});
+
 // ajout
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const normalized = normalizeCreateCameraPayload(req.body);
@@ -187,10 +242,14 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { name, rtspUrl, location, discoverySource } = normalized;
   try {
     // identifiants retirés de l'URL et chiffrés (AES-256-GCM, liés à la caméra)
-    const { cleanUrl, username, password } = splitStreamCredentials(rtspUrl);
+    const split = splitStreamCredentials(rtspUrl);
+    const cleanUrl = split.cleanUrl;
+    const username = normalized.username ?? split.username;
+    const password = normalized.password ?? split.password;
     const { rows: inserted } = await pool.query(
-      'INSERT INTO cameras (name, rtsp_url, location) VALUES ($1,$2,$3) RETURNING id',
-      [name, cleanUrl, location || '']
+      `INSERT INTO cameras (name, rtsp_url, location, transcode, video_codec, manufacturer, model)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [name, cleanUrl, location || '', normalized.transcode, normalized.videoCodec, normalized.manufacturer, normalized.model]
     );
     const { rows } = await pool.query(
       'UPDATE cameras SET credentials_enc = $2 WHERE id = $1 RETURNING *',
@@ -200,7 +259,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     await logAudit(req.user.username, 'CAMERA_CREATE', `Caméra ${camera.id} « ${name} »${username ? ' (identifiants chiffrés)' : ''}`, req.ip);
     // veille
     await startCamera(camera).catch(err => console.error('[CAM ADD START]', err));
-    req.app.get('go2rtc:register')?.(camera.id, resolveCameraSourceUrl(camera))
+    req.app.get('go2rtc:register')?.(camera.id, go2rtcSource(camera))
       .catch(err => console.error('[go2rtc ADD]', err));
     const host = getHostFromStreamUrl(rtspUrl);
     if (host) {
@@ -208,7 +267,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
         deviceId: `manual:${host}`,
         name,
         host,
-        streamUrl: rtspUrl,
+        streamUrl: cleanUrl,
         location: location || '',
         source: discoverySource,
       }).catch(err => console.error('[CAM DISCOVERY UPSERT]', err));

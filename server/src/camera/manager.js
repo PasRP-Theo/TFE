@@ -589,7 +589,8 @@ export async function startHlsStream(camera) {
   }
   args.push('-y', '-i', sourceUrl);
 
-  const videoCodecArgs = isRtsp
+  // flux RTSP H.264 copié tel quel ; H.265 (camera.transcode) et autres sources réencodés
+  const videoCodecArgs = isRtsp && !camera.transcode
     ? ['-c:v', 'copy']
     : ['-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-crf', '23', '-pix_fmt', 'yuv420p'];
 

@@ -12,6 +12,15 @@ const GO2RTC_BIN   = process.env.GO2RTC_BIN  || 'go2rtc';
 let proc  = null;
 let ready = false;
 
+/**
+ * Source go2rtc d'une caméra : son flux RTSP tel quel, ou converti en H.264 par ffmpeg
+ * quand la caméra n'émet que du H.265 (illisible en WebRTC par la plupart des navigateurs).
+ */
+export function go2rtcSource(camera) {
+  const url = resolveCameraSourceUrl(camera);
+  return camera?.transcode ? `ffmpeg:${url}#video=h264` : url;
+}
+
 // nommage
 export function streamName(cameraId) {
   return `cam${cameraId}`;
@@ -135,9 +144,9 @@ export async function syncCamerasFromDB(pool, { retries = 5, delayMs = 2000 } = 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const { rows } = await pool.query(
-        "SELECT id, rtsp_url, credentials_enc FROM cameras WHERE active = true"
+        "SELECT id, rtsp_url, credentials_enc, transcode FROM cameras WHERE active = true"
       );
-      await Promise.all(rows.map((cam) => registerStream(cam.id, resolveCameraSourceUrl(cam))));
+      await Promise.all(rows.map((cam) => registerStream(cam.id, go2rtcSource(cam))));
       console.log(`[go2rtc] ${rows.length} caméra(s) synchronisée(s) depuis la base`);
       return;
     } catch (err) {

@@ -5,6 +5,7 @@ import { io as ioClient } from "socket.io-client";
 import { apiUrl, apiFetch, API_BASE_URL, readJsonResponse } from "../lib/api";
 import { getAccessToken, refreshSession } from "../lib/session";
 import { WebRTCPlayer } from "./WebRTCPlayer";
+import { OnvifWizard } from "./OnvifWizard";
 import { useAppConfig } from "../hooks/useAppConfig";
 import { useAuth } from "../hooks/useAuth";
 
@@ -62,7 +63,9 @@ interface MotionEventEntry {
   recording_path?: string | null;
 }
 
-type AddMode = 'discover' | 'manual';
+type AddMode = 'onvif' | 'discover' | 'manual';
+// assistant multi-marques par défaut, sauf si l'ajout manuel est préféré dans les réglages
+const defaultAddMode = (mode: string): AddMode => (mode === 'manual' ? 'manual' : 'onvif');
 type HistorySort = 'recent' | 'oldest' | 'largest';
 
 function formatStorageSize(sizeInBytes: number) {
@@ -422,7 +425,7 @@ export default function CameraFeed({ onStatusChange }: {
   const [newRtsp, setNewRtsp] = useState('');
   const [newLoc,  setNewLoc]  = useState('');
   const [loading, setLoading] = useState(true);
-  const [addMode, setAddMode] = useState<AddMode>('discover');
+  const [addMode, setAddMode] = useState<AddMode>('onvif');
   const [searchingNetwork, setSearchingNetwork] = useState(false);
   const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredCamera[]>([]);
@@ -497,7 +500,7 @@ export default function CameraFeed({ onStatusChange }: {
     if (!showAdd) return;
 
     let stopped = false;
-    setAddMode(config.defaultCameraAddMode === 'manual' ? 'manual' : 'discover');
+    setAddMode(defaultAddMode(config.defaultCameraAddMode));
 
     fetchDiscoveries();
     const interval = setInterval(() => {
@@ -838,7 +841,7 @@ export default function CameraFeed({ onStatusChange }: {
     setShowAdd((current) => {
       const next = !current;
       if (next) {
-            setAddMode((config.defaultCameraAddMode === 'node' || config.defaultCameraAddMode as string === 'scan') ? 'discover' : config.defaultCameraAddMode as AddMode);
+            setAddMode(defaultAddMode(config.defaultCameraAddMode));
       } else {
         setDiscoverMessage(null);
       }
@@ -905,10 +908,17 @@ export default function CameraFeed({ onStatusChange }: {
             <div className="cam-add-topbar">
               <div>
                 <h3 className="cam-add-title">Ajouter une caméra</h3>
-              <p className="cam-add-subtitle">Annonces réseau ou flux manuel.</p>
+              <p className="cam-add-subtitle">Toutes marques : recherche automatique, annonces des Pi ou flux manuel.</p>
               </div>
               <div className="cam-add-topbar-actions">
                 <div className="cam-add-mode-switch">
+                  <button
+                    type="button"
+                    className={`cam-add-mode-btn ${addMode === 'onvif' ? 'cam-add-mode-btn--active' : ''}`}
+                    onClick={() => setAddMode('onvif')}
+                  >
+                    Assistant
+                  </button>
                   <button
                     type="button"
                     className={`cam-add-mode-btn ${addMode === 'discover' ? 'cam-add-mode-btn--active' : ''}`}
@@ -929,6 +939,16 @@ export default function CameraFeed({ onStatusChange }: {
                 </button>
               </div>
             </div>
+
+            {addMode === 'onvif' && (
+              <OnvifWizard
+                onAdded={(camera) => {
+                  setCameras(prev => [...prev, camera as Camera]);
+                  setShowAdd(false);
+                  setDiscoverMessage(null);
+                }}
+              />
+            )}
 
             {addMode === 'discover' && (
               <section className="cam-discovery-panel">

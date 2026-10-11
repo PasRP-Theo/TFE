@@ -120,6 +120,31 @@ Les tests d'intégration (`*.int.test.js`) exécutent réellement le SQL : en lo
 [PGlite](https://pglite.dev) (PostgreSQL en mémoire, rien à installer), et dans la CI sur un
 serveur PostgreSQL 16 (`TEST_DATABASE_URL`). Voir `server/test/db.js`.
 
+## Ajouter une caméra (toutes marques)
+
+Sentys réunit des caméras de marques différentes dans une seule interface : il lit tout flux
+**RTSP**. L'assistant (bouton « Ajouter une caméra » → onglet **Assistant**) évite de chercher
+l'adresse du flux de chaque marque :
+
+1. **Recherche** : les caméras compatibles ONVIF du réseau local répondent (WS-Discovery).
+2. **Connexion** : identifiant et mot de passe de la caméra. Sentys lui demande son adresse RTSP
+   exacte (ONVIF, mot de passe signé — jamais envoyé en clair), puis ouvre le flux pour vérifier
+   les identifiants et lire le codec.
+3. **Ajout** : les identifiants sont stockés chiffrés, hors de l'URL.
+
+Caméra sans ONVIF : choisir sa marque (Reolink, Tapo, Hikvision/Ezviz, Dahua/Imou/Amcrest, Eufy)
+pour essayer ses chemins RTSP connus. Une caméra qui n'émet que du **H.265** est marquée
+« à convertir » : go2rtc et ffmpeg la réencodent en H.264 pour les navigateurs (ffmpeg doit être
+dans le `PATH` du serveur ; charge processeur plus élevée). Par sécurité, l'assistant ne contacte
+que des adresses du réseau local (`10.x`, `172.16-31.x`, `192.168.x`).
+
+Avant l'ajout : activer l'ONVIF dans l'application du fabricant si besoin (Tapo : *Paramètres
+avancés → Compte caméra* ; Hikvision : créer un utilisateur ONVIF). L'application du fabricant
+n'est ensuite plus nécessaire, et l'accès Internet de la caméra peut être bloqué au pare-feu.
+
+Code : `server/src/camera/onvif.js` (protocole), `connectCamera.js` (ONVIF puis marques),
+`streamProbe.js` (vérification ffmpeg), `client/src/components/OnvifWizard.tsx`.
+
 ## Alertes : un moteur unique
 
 Toute détection (mouvement d'un Pi ou du détecteur IA, caméra ou Pi hors ligne, démarrage
